@@ -46,8 +46,9 @@ export default function LoginPage() {
         toast.success("Sign up successful! You can now log in.");
         setIsLogin(true); // Switch to login view
       }
-    } catch (err: any) {
-      toast.error(err.message || "An error occurred during authentication.");
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : "An error occurred during authentication.";
+      toast.error(errorMessage);
     } finally {
       setIsSubmitting(false);
     }
