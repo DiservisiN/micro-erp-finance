@@ -57,7 +57,7 @@ export function TopHeader() {
             className={cn(
               "rounded-md px-3 py-1.5 md:px-6 md:py-2 text-xs md:text-sm font-medium transition-all duration-300",
               isBusiness
-                ? "bg-emerald-500 text-white shadow-sm hover:bg-emerald-600 dark:shadow-[0_0_10px_rgba(16,185,129,0.3)]"
+                ? "bg-orange-500 text-white shadow-[0_0_10px_rgba(249,115,22,0.5)] hover:bg-orange-600"
                 : "text-muted-foreground hover:bg-muted"
             )}
           >
@@ -68,7 +68,7 @@ export function TopHeader() {
             className={cn(
               "rounded-md px-3 py-1.5 md:px-6 md:py-2 text-xs md:text-sm font-medium transition-all duration-300",
               !isBusiness
-                ? "bg-sky-500 text-white shadow-sm hover:bg-sky-600 dark:shadow-[0_0_10px_rgba(14,165,233,0.3)]"
+                ? "bg-orange-500 text-white shadow-[0_0_10px_rgba(249,115,22,0.5)] hover:bg-orange-600"
                 : "text-muted-foreground hover:bg-muted"
             )}
           >
