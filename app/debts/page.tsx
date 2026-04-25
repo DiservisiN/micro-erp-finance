@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { Pencil } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -30,6 +31,12 @@ import {
 } from "@/components/ui/table";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { formatRupiah } from "@/lib/utils";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 type DebtType = "receivable" | "payable";
 
@@ -53,6 +60,14 @@ export default function DebtsPage() {
   const [type, setType] = useState<DebtType>("receivable");
   const [amount, setAmount] = useState("");
   const [notes, setNotes] = useState("");
+
+  // Edit state
+  const [editTarget, setEditTarget] = useState<Debt | null>(null);
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
+  const [editPerson, setEditPerson] = useState("");
+  const [editAmount, setEditAmount] = useState("");
+  const [editNotes, setEditNotes] = useState("");
 
   const supabase = useMemo(() => {
     try {
@@ -150,7 +165,40 @@ export default function DebtsPage() {
   const receivables = debts.filter((item) => item.type === "receivable");
   const payables = debts.filter((item) => item.type === "payable");
 
+  function openEditDebt(debt: Debt) {
+    setEditTarget(debt);
+    setEditPerson(debt.person_name);
+    setEditAmount(String(typeof debt.amount === "number" ? debt.amount : Number(debt.amount) || 0));
+    setEditNotes(debt.notes || "");
+    setIsEditOpen(true);
+  }
+
+  async function handleEditDebt() {
+    if (!supabase || !editTarget) return;
+    setIsSavingEdit(true);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const sb: any = supabase;
+    const { error } = await sb.from("debts").update({
+      person_name: editPerson.trim(),
+      amount: Number(editAmount),
+      notes: editNotes.trim() || null,
+    } as any).eq("id", editTarget.id);
+
+    if (error) {
+      toast.error("Failed to update debt", { description: error.message });
+      setIsSavingEdit(false);
+      return;
+    }
+
+    toast.success("Debt record updated");
+    setIsSavingEdit(false);
+    setIsEditOpen(false);
+    setEditTarget(null);
+    await loadDebts();
+  }
+
   return (
+    <>
     <section className="space-y-5">
       <div className="space-y-1">
         <h2 className="text-2xl font-semibold">Debts</h2>
@@ -236,16 +284,48 @@ export default function DebtsPage() {
             </TabsList>
 
             <TabsContent value="receivable" className="pt-4">
-              <DebtTable rows={receivables} isLoading={isLoading} onMarkAsPaid={markAsPaid} />
+              <DebtTable rows={receivables} isLoading={isLoading} onMarkAsPaid={markAsPaid} onEdit={openEditDebt} />
             </TabsContent>
 
             <TabsContent value="payable" className="pt-4">
-              <DebtTable rows={payables} isLoading={isLoading} onMarkAsPaid={markAsPaid} />
+              <DebtTable rows={payables} isLoading={isLoading} onMarkAsPaid={markAsPaid} onEdit={openEditDebt} />
             </TabsContent>
           </Tabs>
         </CardContent>
       </Card>
     </section>
+
+      {/* Edit Debt Dialog */}
+      <Dialog open={isEditOpen} onOpenChange={(v) => { setIsEditOpen(v); if (!v) setEditTarget(null); }}>
+        <DialogContent className="sm:max-w-[420px]">
+          <DialogHeader>
+            <DialogTitle>Edit Debt Record</DialogTitle>
+          </DialogHeader>
+          {editTarget && (
+            <div className="space-y-4">
+              <div className="grid gap-2">
+                <Label htmlFor="edit-person">Person Name</Label>
+                <Input id="edit-person" value={editPerson} onChange={(e) => setEditPerson(e.target.value)} />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="edit-debt-amount">Amount</Label>
+                <Input id="edit-debt-amount" type="number" min="0" step="0.01" value={editAmount} onChange={(e) => setEditAmount(e.target.value)} />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="edit-debt-notes">Notes</Label>
+                <Input id="edit-debt-notes" value={editNotes} onChange={(e) => setEditNotes(e.target.value)} placeholder="Optional notes" />
+              </div>
+              <div className="flex justify-end gap-3">
+                <Button variant="outline" onClick={() => { setIsEditOpen(false); setEditTarget(null); }} disabled={isSavingEdit}>Cancel</Button>
+                <Button onClick={handleEditDebt} disabled={isSavingEdit} className="bg-orange-500 text-white hover:bg-orange-600 shadow-[0_0_10px_rgba(249,115,22,0.3)] transition-all">
+                  {isSavingEdit ? "Saving..." : "Save Changes"}
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 
@@ -253,10 +333,12 @@ function DebtTable({
   rows,
   isLoading,
   onMarkAsPaid,
+  onEdit,
 }: {
   rows: Debt[];
   isLoading: boolean;
   onMarkAsPaid: (debtId: string) => Promise<void>;
+  onEdit: (debt: Debt) => void;
 }) {
   return (
     <Table>
@@ -288,9 +370,19 @@ function DebtTable({
               <TableCell>{formatRupiah(item.amount)}</TableCell>
               <TableCell>{item.notes ?? "-"}</TableCell>
               <TableCell>
-                <Button size="sm" variant="outline" onClick={() => onMarkAsPaid(item.id)}>
-                  Mark as Paid
-                </Button>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    title="Edit"
+                    onClick={() => onEdit(item)}
+                    className="inline-flex items-center justify-center rounded-md p-1.5 text-muted-foreground transition-all duration-200 hover:text-orange-500 hover:bg-orange-500/10"
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                  </button>
+                  <Button size="sm" variant="outline" onClick={() => onMarkAsPaid(item.id)}>
+                    Mark as Paid
+                  </Button>
+                </div>
               </TableCell>
             </TableRow>
           ))

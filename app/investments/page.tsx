@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
-import { AlertCircleIcon } from "lucide-react";
+import { AlertCircleIcon, WalletIcon, TrendingUpIcon } from "lucide-react";
 import { toast } from "sonner";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -282,7 +282,11 @@ export default function InvestmentsPage() {
               />
             </div>
             <div className="md:col-span-5">
-              <Button type="submit" disabled={isSaving}>
+              <Button 
+                type="submit" 
+                disabled={isSaving}
+                className="bg-orange-500 text-white hover:bg-orange-600 shadow-[0_0_10px_rgba(249,115,22,0.3)] transition-all"
+              >
                 {isSaving ? "Saving..." : "Add Investment"}
               </Button>
             </div>
@@ -290,65 +294,89 @@ export default function InvestmentsPage() {
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Current Investments</CardTitle>
-          <CardDescription>Monitor total value and gain/loss for each item.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead>Quantity</TableHead>
-                <TableHead>Average Buy Price</TableHead>
-                <TableHead>Current Price</TableHead>
-                <TableHead>Total Value</TableHead>
-                <TableHead>Total Gain/Loss</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {isLoading ? (
-                <TableRow>
-                  <TableCell colSpan={7} className="text-center text-muted-foreground">
-                    Loading investments...
-                  </TableCell>
-                </TableRow>
-              ) : investments.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={7} className="text-center text-muted-foreground">
-                    No investments found.
-                  </TableCell>
-                </TableRow>
-              ) : (
-                investments.map((item) => {
-                  const qty = safeNumber(item.quantity);
-                  const buy = safeNumber(item.average_buy_price);
-                  const current = safeNumber(item.current_price);
-                  const totalValue = qty * current;
-                  const totalCost = qty * buy;
-                  const gainLoss = totalValue - totalCost;
+      <div className="space-y-4">
+        <div className="flex flex-col gap-1">
+          <h3 className="text-xl font-semibold tracking-tight">Digital Wallets & Investments</h3>
+          <p className="text-sm text-muted-foreground">Monitor your active accounts and investment performance.</p>
+        </div>
 
-                  return (
-                    <TableRow key={item.id}>
-                      <TableCell>{item.name}</TableCell>
-                      <TableCell className="capitalize">{item.type}</TableCell>
-                      <TableCell>{qty}</TableCell>
-                      <TableCell>{formatRupiah(buy)}</TableCell>
-                      <TableCell>{formatRupiah(current)}</TableCell>
-                      <TableCell>{formatRupiah(totalValue)}</TableCell>
-                      <TableCell className={gainLoss >= 0 ? "text-emerald-600" : "text-destructive"}>
-                        {formatRupiah(gainLoss)}
-                      </TableCell>
-                    </TableRow>
-                  );
-                })
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+        {isLoading ? (
+          <div className="text-center text-muted-foreground py-8">Loading accounts...</div>
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {wallets.map((wallet) => (
+              <div 
+                key={wallet.id} 
+                className="relative overflow-hidden rounded-xl bg-slate-900/50 p-6 backdrop-blur-md border border-slate-800 transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_0_15px_rgba(249,115,22,0.3)]"
+              >
+                <div className="flex flex-col justify-between h-full space-y-4">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                      {wallet.type} Wallet
+                    </span>
+                    <WalletIcon className="h-5 w-5 text-orange-500" />
+                  </div>
+                  <div>
+                    <p className="text-3xl font-bold tracking-tight text-foreground">
+                      {formatRupiah(wallet.balance)}
+                    </p>
+                  </div>
+                  <div className="flex items-center justify-between pt-4 border-t border-slate-800/50">
+                    <span className="text-xs text-orange-500/80 font-medium tracking-wide">Active Balance</span>
+                  </div>
+                </div>
+              </div>
+            ))}
+
+            {investments.map((item) => {
+              const qty = safeNumber(item.quantity);
+              const buy = safeNumber(item.average_buy_price);
+              const current = safeNumber(item.current_price);
+              const totalValue = qty * current;
+              const totalCost = qty * buy;
+              const gainLoss = totalValue - totalCost;
+
+              return (
+                <div 
+                  key={item.id} 
+                  className="relative overflow-hidden rounded-xl bg-slate-900/50 p-6 backdrop-blur-md border border-slate-800 transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_0_15px_rgba(249,115,22,0.3)]"
+                >
+                  <div className="flex flex-col justify-between h-full space-y-4">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                        {item.name} ({item.type})
+                      </span>
+                      <TrendingUpIcon className="h-5 w-5 text-orange-500" />
+                    </div>
+                    <div>
+                      <p className="text-3xl font-bold tracking-tight text-foreground">
+                        {formatRupiah(totalValue)}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Qty: {qty} • Avg: {formatRupiah(buy)}
+                      </p>
+                    </div>
+                    <div className="flex items-center justify-between pt-4 border-t border-slate-800/50">
+                      <span className="text-xs font-medium text-slate-400">Gain/Loss</span>
+                      <span 
+                        className={`text-sm font-semibold ${gainLoss >= 0 ? "text-emerald-500" : "text-destructive"}`}
+                      >
+                        {gainLoss >= 0 ? "+" : ""}{formatRupiah(gainLoss)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+            
+            {!isLoading && wallets.length === 0 && investments.length === 0 && (
+              <div className="col-span-full text-center text-muted-foreground py-8 border border-dashed border-slate-800 rounded-xl">
+                No wallets or investments found.
+              </div>
+            )}
+          </div>
+        )}
+      </div>
     </section>
   );
 }

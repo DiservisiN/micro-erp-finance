@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { Pencil } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -13,13 +14,6 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
   Table,
   TableBody,
   TableCell,
@@ -29,6 +23,12 @@ import {
 } from "@/components/ui/table";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { formatRupiah } from "@/lib/utils";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 type WalletType = "business" | "personal";
 
@@ -48,6 +48,13 @@ export default function SettingsPage() {
   const [name, setName] = useState("");
   const [type, setType] = useState<WalletType>("business");
   const [balance, setBalance] = useState("");
+
+  // Edit state
+  const [editTarget, setEditTarget] = useState<Wallet | null>(null);
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
+  const [editName, setEditName] = useState("");
+  const [editType, setEditType] = useState<WalletType>("business");
 
   const supabase = useMemo(() => {
     try {
@@ -120,7 +127,38 @@ export default function SettingsPage() {
     await loadWallets();
   }
 
+  function openEditWallet(wallet: Wallet) {
+    setEditTarget(wallet);
+    setEditName(wallet.name);
+    setEditType(wallet.type);
+    setIsEditOpen(true);
+  }
+
+  async function handleEditWallet() {
+    if (!supabase || !editTarget) return;
+    setIsSavingEdit(true);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const sb: any = supabase;
+    const { error } = await sb.from("wallets").update({
+      name: editName.trim(),
+      type: editType,
+    } as any).eq("id", editTarget.id);
+
+    if (error) {
+      toast.error("Failed to update wallet", { description: error.message });
+      setIsSavingEdit(false);
+      return;
+    }
+
+    toast.success("Wallet updated successfully");
+    setIsSavingEdit(false);
+    setIsEditOpen(false);
+    setEditTarget(null);
+    await loadWallets();
+  }
+
   return (
+    <>
     <section className="space-y-5">
       <div className="space-y-1">
         <h2 className="text-2xl font-semibold">Settings</h2>
@@ -149,15 +187,15 @@ export default function SettingsPage() {
 
             <div className="grid gap-2">
               <Label htmlFor="wallet-type">Type</Label>
-              <Select value={type} onValueChange={(value) => setType((value as WalletType) ?? "business")}>
-                <SelectTrigger id="wallet-type" className="w-full">
-                  <SelectValue placeholder="Select wallet type" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="business">Business</SelectItem>
-                  <SelectItem value="personal">Personal</SelectItem>
-                </SelectContent>
-              </Select>
+              <select
+                id="wallet-type"
+                value={type}
+                onChange={(e) => setType(e.target.value as WalletType)}
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+              >
+                <option value="business">Business</option>
+                <option value="personal">Personal</option>
+              </select>
             </div>
 
             <div className="grid gap-2">
@@ -195,18 +233,19 @@ export default function SettingsPage() {
                 <TableHead>Name</TableHead>
                 <TableHead>Type</TableHead>
                 <TableHead>Balance</TableHead>
+                <TableHead className="w-[80px]">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={3} className="text-center text-muted-foreground">
+                  <TableCell colSpan={4} className="text-center text-muted-foreground">
                     Loading wallets...
                   </TableCell>
                 </TableRow>
               ) : wallets.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={3} className="text-center text-muted-foreground">
+                  <TableCell colSpan={4} className="text-center text-muted-foreground">
                     No wallets found.
                   </TableCell>
                 </TableRow>
@@ -216,6 +255,16 @@ export default function SettingsPage() {
                     <TableCell>{wallet.name}</TableCell>
                     <TableCell className="capitalize">{wallet.type}</TableCell>
                     <TableCell>{formatRupiah(wallet.balance)}</TableCell>
+                    <TableCell>
+                      <button
+                        type="button"
+                        title="Edit Wallet"
+                        onClick={() => openEditWallet(wallet)}
+                        className="inline-flex items-center justify-center rounded-md p-1.5 text-muted-foreground transition-all duration-200 hover:text-orange-500 hover:bg-orange-500/10"
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </button>
+                    </TableCell>
                   </TableRow>
                 ))
               )}
@@ -224,5 +273,41 @@ export default function SettingsPage() {
         </CardContent>
       </Card>
     </section>
+
+      {/* Edit Wallet Dialog */}
+      <Dialog open={isEditOpen} onOpenChange={(v) => { setIsEditOpen(v); if (!v) setEditTarget(null); }}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle>Edit Wallet</DialogTitle>
+          </DialogHeader>
+          {editTarget && (
+            <div className="space-y-4">
+              <div className="grid gap-2">
+                <Label htmlFor="edit-wallet-name">Name</Label>
+                <Input id="edit-wallet-name" value={editName} onChange={(e) => setEditName(e.target.value)} />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="edit-wallet-type">Type</Label>
+                <select
+                  id="edit-wallet-type"
+                  value={editType}
+                  onChange={(e) => setEditType(e.target.value as WalletType)}
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                >
+                  <option value="business">Business</option>
+                  <option value="personal">Personal</option>
+                </select>
+              </div>
+              <div className="flex justify-end gap-3">
+                <Button variant="outline" onClick={() => { setIsEditOpen(false); setEditTarget(null); }} disabled={isSavingEdit}>Cancel</Button>
+                <Button onClick={handleEditWallet} disabled={isSavingEdit} className="bg-orange-500 text-white hover:bg-orange-600 shadow-[0_0_10px_rgba(249,115,22,0.3)] transition-all">
+                  {isSavingEdit ? "Saving..." : "Save Changes"}
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

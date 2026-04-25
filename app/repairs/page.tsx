@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Pencil, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,6 +14,13 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { formatRupiah } from "@/lib/utils";
@@ -41,6 +49,20 @@ export default function RepairsPage() {
   const [deviceName, setDeviceName] = useState("");
   const [problem, setProblem] = useState("");
   const [estimatedCost, setEstimatedCost] = useState("");
+
+  // Cancel state
+  const [cancelTarget, setCancelTarget] = useState<Repair | null>(null);
+  const [isCancelOpen, setIsCancelOpen] = useState(false);
+  const [isCancelling, setIsCancelling] = useState(false);
+
+  // Edit state
+  const [editTarget, setEditTarget] = useState<Repair | null>(null);
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
+  const [editCustomer, setEditCustomer] = useState("");
+  const [editDevice, setEditDevice] = useState("");
+  const [editProblem, setEditProblem] = useState("");
+  const [editCost, setEditCost] = useState("");
 
   const supabase = useMemo(() => {
     try {
@@ -156,6 +178,66 @@ export default function RepairsPage() {
     router.push(`/transactions?${params.toString()}`);
   }
 
+  async function handleCancelRepair() {
+    if (!supabase || !cancelTarget) return;
+    setIsCancelling(true);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const sb = supabase as any;
+
+    try {
+      const { error } = await sb.from("repairs").delete().eq("id", cancelTarget.id);
+
+      if (error) {
+        toast.error("Failed to cancel service", { description: error.message });
+        setIsCancelling(false);
+        return;
+      }
+
+      toast.success("Service cancelled successfully");
+      setIsCancelling(false);
+      setIsCancelOpen(false);
+      setCancelTarget(null);
+      await loadRepairs();
+    } catch {
+      toast.error("An unexpected error occurred");
+      setIsCancelling(false);
+    }
+  }
+
+  function openEditRepair(repair: Repair) {
+    setEditTarget(repair);
+    setEditCustomer(repair.customer_name);
+    setEditDevice(repair.device_name);
+    setEditProblem(repair.problem_description);
+    setEditCost(String(repair.estimated_cost));
+    setIsEditOpen(true);
+  }
+
+  async function handleEditRepair() {
+    if (!supabase || !editTarget) return;
+    setIsSavingEdit(true);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const sb = supabase as any;
+    const { error } = await sb.from("repairs").update({
+      customer_name: editCustomer.trim(),
+      device_name: editDevice.trim(),
+      problem_description: editProblem.trim(),
+      estimated_cost: Number(editCost),
+    } as any).eq("id", editTarget.id);
+
+    if (error) {
+      toast.error("Failed to update repair", { description: error.message });
+      setIsSavingEdit(false);
+      return;
+    }
+
+    toast.success("Repair updated successfully");
+    setIsSavingEdit(false);
+    setIsEditOpen(false);
+    setEditTarget(null);
+    await loadRepairs();
+  }
+
   return (
     <section className="space-y-5">
       <div className="space-y-1">
@@ -238,20 +320,109 @@ export default function RepairsPage() {
                   </select>
                 </div>
 
-                {repair.status === "picked_up" && (
-                  <Button 
-                    className="w-full mt-4" 
-                    variant="default"
-                    onClick={() => handleProcessPayment(repair)}
+                <div className="flex flex-wrap gap-2 mt-4">
+                  <button
+                    type="button"
+                    onClick={() => openEditRepair(repair)}
+                    className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium text-slate-400 border border-slate-700 bg-slate-800/50 transition-all duration-200 hover:text-orange-500 hover:border-orange-500/50 hover:bg-orange-500/10 hover:shadow-[0_0_10px_rgba(249,115,22,0.3)]"
                   >
-                    Process Payment
-                  </Button>
-                )}
+                    <Pencil className="h-3.5 w-3.5" />
+                    Edit
+                  </button>
+                  {repair.status === "picked_up" && (
+                    <Button 
+                      className="flex-1" 
+                      variant="default"
+                      onClick={() => handleProcessPayment(repair)}
+                    >
+                      Process Payment
+                    </Button>
+                  )}
+                  {(repair.status === "pending" || repair.status === "processing") && (
+                    <button
+                      type="button"
+                      onClick={() => { setCancelTarget(repair); setIsCancelOpen(true); }}
+                      className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium text-slate-400 border border-slate-700 bg-slate-800/50 transition-all duration-200 hover:text-red-500 hover:border-red-500/50 hover:bg-red-500/10 hover:shadow-[0_0_10px_rgba(239,68,68,0.4)]"
+                    >
+                      <XCircle className="h-3.5 w-3.5" />
+                      Cancel Service
+                    </button>
+                  )}
+                </div>
               </CardContent>
             </Card>
           ))
         )}
       </div>
+
+      {/* Cancel Service Confirmation Dialog */}
+      <Dialog open={isCancelOpen} onOpenChange={(v) => { setIsCancelOpen(v); if (!v) setCancelTarget(null); }}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle>Cancel Service</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to cancel this service? Any allocated spare parts will be restocked.
+            </DialogDescription>
+          </DialogHeader>
+
+          {cancelTarget && (
+            <div className="rounded-md border border-slate-800 bg-slate-900/50 p-3 text-sm space-y-1">
+              <p><span className="text-muted-foreground">Customer:</span> {cancelTarget.customer_name}</p>
+              <p><span className="text-muted-foreground">Device:</span> {cancelTarget.device_name}</p>
+              <p><span className="text-muted-foreground">Problem:</span> {cancelTarget.problem_description}</p>
+              <p><span className="text-muted-foreground">Est. Cost:</span> {formatRupiah(cancelTarget.estimated_cost)}</p>
+            </div>
+          )}
+
+          <div className="flex justify-end gap-3 mt-2">
+            <Button variant="outline" onClick={() => { setIsCancelOpen(false); setCancelTarget(null); }} disabled={isCancelling}>
+              Go Back
+            </Button>
+            <Button
+              onClick={handleCancelRepair}
+              disabled={isCancelling}
+              className="bg-red-600 text-white hover:bg-red-700 shadow-[0_0_10px_rgba(239,68,68,0.3)] transition-all"
+            >
+              {isCancelling ? "Cancelling..." : "Cancel Service"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Repair Dialog */}
+      <Dialog open={isEditOpen} onOpenChange={(v) => { setIsEditOpen(v); if (!v) setEditTarget(null); }}>
+        <DialogContent className="sm:max-w-[420px]">
+          <DialogHeader>
+            <DialogTitle>Edit Repair</DialogTitle>
+          </DialogHeader>
+          {editTarget && (
+            <div className="space-y-4">
+              <div className="grid gap-2">
+                <Label htmlFor="edit-customer">Customer Name</Label>
+                <Input id="edit-customer" value={editCustomer} onChange={(e) => setEditCustomer(e.target.value)} />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="edit-device">Device</Label>
+                <Input id="edit-device" value={editDevice} onChange={(e) => setEditDevice(e.target.value)} />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="edit-problem">Problem</Label>
+                <Input id="edit-problem" value={editProblem} onChange={(e) => setEditProblem(e.target.value)} />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="edit-cost">Estimated Cost</Label>
+                <Input id="edit-cost" type="number" min="0" step="0.01" value={editCost} onChange={(e) => setEditCost(e.target.value)} />
+              </div>
+              <div className="flex justify-end gap-3">
+                <Button variant="outline" onClick={() => { setIsEditOpen(false); setEditTarget(null); }} disabled={isSavingEdit}>Cancel</Button>
+                <Button onClick={handleEditRepair} disabled={isSavingEdit} className="bg-orange-500 text-white hover:bg-orange-600 shadow-[0_0_10px_rgba(249,115,22,0.3)] transition-all">
+                  {isSavingEdit ? "Saving..." : "Save Changes"}
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </section>
   );
 }

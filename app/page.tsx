@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { WalletIcon, ArrowRightIcon, AlertTriangle, CheckCircle2 } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -28,14 +30,17 @@ import {
 /* ---------- types ---------- */
 type WalletRow = {
   id: string;
+  name: string;
   balance: number | string;
   type: "business" | "personal";
 };
 
 type ProductRow = {
   id: string;
+  name: string;
   cost_price: number | string;
   stock: number;
+  status: string;
 };
 
 type InvestmentRow = {
@@ -100,8 +105,8 @@ export default function Home() {
       const sb: any = supabase;
       const [walletsResult, productsResult, investmentsResult, debtsResult, transactionsResult] =
         await Promise.all([
-          sb.from("wallets").select("id, balance, type"),
-          sb.from("products").select("id, cost_price, stock"),
+          sb.from("wallets").select("id, name, balance, type"),
+          sb.from("products").select("id, name, cost_price, stock, status"),
           sb.from("investments").select("id, quantity, current_price"),
           sb.from("debts").select("id, type, status, amount"),
           sb.from("transactions").select("id, type, amount, admin_fee, date").order("date", { ascending: false }).limit(200),
@@ -143,10 +148,18 @@ export default function Home() {
   const personalWalletsTotal = wallets
     .filter((wallet) => wallet.type === "personal")
     .reduce((sum, wallet) => sum + safeNumber(wallet.balance), 0);
-  const inventoryAsset = products.reduce(
-    (sum, product) => sum + safeNumber(product.stock) * safeNumber(product.cost_price),
-    0,
-  );
+  const inventoryAsset = products
+    .filter((product) => (product.status ?? "in_stock") === "in_stock")
+    .reduce(
+      (sum, product) => sum + safeNumber(product.stock) * safeNumber(product.cost_price),
+      0,
+    );
+  const inventoryInTransit = products
+    .filter((product) => product.status === "in_transit")
+    .reduce(
+      (sum, product) => sum + safeNumber(product.stock) * safeNumber(product.cost_price),
+      0,
+    );
   const investmentAsset = investments.reduce(
     (sum, investment) =>
       sum + safeNumber(investment.quantity) * safeNumber(investment.current_price),
@@ -161,10 +174,10 @@ export default function Home() {
 
   const modeLiquidAssets = mode === "business" ? businessWalletsTotal : personalWalletsTotal;
   const modeSpecificAsset = mode === "business" ? inventoryAsset : investmentAsset;
-  const totalAssets = modeLiquidAssets + modeSpecificAsset + receivables;
+  const totalAssets = modeLiquidAssets + modeSpecificAsset + receivables + inventoryInTransit;
 
   const combinedAssets =
-    businessWalletsTotal + personalWalletsTotal + inventoryAsset + investmentAsset + receivables;
+    businessWalletsTotal + personalWalletsTotal + inventoryAsset + investmentAsset + receivables + inventoryInTransit;
   const netWorth = combinedAssets - liabilities;
 
   /* ---------- pie chart data (Asset Distribution) ---------- */
@@ -437,6 +450,59 @@ export default function Home() {
         </Card>
       </div>
 
+      {/* Digital Wallets Panel */}
+      <Card className="border-slate-800">
+        <CardHeader className="flex flex-row items-center justify-between pb-2">
+          <div className="space-y-1">
+            <CardTitle>Digital Wallets / Accounts</CardTitle>
+            <CardDescription>Compact overview of all active wallet balances.</CardDescription>
+          </div>
+          <Link href="/investments" className="flex items-center gap-1 text-xs font-medium text-orange-500 hover:text-orange-400 transition-colors">
+            Manage Wallets <ArrowRightIcon className="h-4 w-4" />
+          </Link>
+        </CardHeader>
+        <CardContent>
+          <div className="max-h-64 overflow-y-auto space-y-2 pr-2 custom-scrollbar">
+            {wallets.map((wallet) => (
+              <div 
+                key={wallet.id} 
+                className="flex items-center justify-between p-3 rounded-md bg-slate-900 border border-slate-800 transition-all duration-300 hover:shadow-[0_0_10px_rgba(249,115,22,0.3)] hover:border-orange-500/50 group"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="p-1.5 rounded-full bg-slate-800 group-hover:bg-orange-500/10 transition-colors">
+                    <WalletIcon className="h-4 w-4 text-orange-500" />
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-sm font-semibold tracking-wide text-foreground group-hover:text-orange-500 transition-colors">
+                      {wallet.name}
+                    </span>
+                    <span className="text-xs text-slate-400 capitalize">
+                      {wallet.type} Wallet
+                    </span>
+                  </div>
+                </div>
+                <span className="font-semibold text-sm tracking-tight">
+                  {formatRupiah(wallet.balance)}
+                </span>
+              </div>
+            ))}
+            {wallets.length === 0 && !isLoading && (
+              <div className="text-center py-6 text-sm text-muted-foreground border border-dashed border-slate-800 rounded-md">
+                No wallets found.
+              </div>
+            )}
+            {isLoading && (
+              <div className="text-center py-6 text-sm text-muted-foreground border border-dashed border-slate-800 rounded-md">
+                Loading wallets...
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Low Stock Alert Panel */}
+      <LowStockPanel products={products} isLoading={isLoading} />
+
       {/* Assets Breakdown table card */}
       <Card>
         <CardHeader>
@@ -453,6 +519,15 @@ export default function Home() {
           </p>
           <p className="text-sm">
             Receivables (Piutang): <span className="font-semibold">{formatRupiah(receivables)}</span>
+          </p>
+          <p className="text-sm flex items-center gap-2">
+            Inventory in Transit:{" "}
+            <span className="font-semibold">{formatRupiah(inventoryInTransit)}</span>
+            {inventoryInTransit > 0 && (
+              <span className="inline-flex items-center rounded-full bg-orange-500/15 px-2 py-0.5 text-[10px] font-semibold text-orange-500 animate-pulse shadow-[0_0_8px_rgba(249,115,22,0.4)]">
+                On The Way
+              </span>
+            )}
           </p>
           <p className="text-sm">
             Combined Assets (All Modules): <span className="font-semibold">{formatRupiah(combinedAssets)}</span>
@@ -489,6 +564,84 @@ function MetricCard({
       </CardHeader>
       <CardContent>
         <p className="text-3xl font-semibold tracking-tight">{value}</p>
+      </CardContent>
+    </Card>
+  );
+}
+
+/* ---------- Low Stock Alert ---------- */
+const LOW_STOCK_THRESHOLD = 5;
+
+function LowStockPanel({ products, isLoading }: { products: ProductRow[]; isLoading: boolean }) {
+  const lowStockItems = useMemo(
+    () =>
+      products.filter(
+        (p) => (p.status ?? "in_stock") === "in_stock" && safeNumber(p.stock) <= LOW_STOCK_THRESHOLD && safeNumber(p.stock) >= 0,
+      ).sort((a, b) => safeNumber(a.stock) - safeNumber(b.stock)),
+    [products],
+  );
+
+  return (
+    <Card className="border-slate-800">
+      <CardHeader className="flex flex-row items-center justify-between pb-2">
+        <div className="space-y-1">
+          <CardTitle className="flex items-center gap-2">
+            {lowStockItems.length > 0 ? (
+              <AlertTriangle className="h-4 w-4 text-amber-500 animate-pulse" />
+            ) : (
+              <CheckCircle2 className="h-4 w-4 text-green-500" />
+            )}
+            Low Stock Alert
+          </CardTitle>
+          <CardDescription>
+            Products with stock ≤ {LOW_STOCK_THRESHOLD} units need restocking.
+          </CardDescription>
+        </div>
+        {lowStockItems.length > 0 && (
+          <span className="inline-flex items-center rounded-full bg-red-500/15 px-2 py-0.5 text-xs font-semibold text-red-400 animate-pulse shadow-[0_0_8px_rgba(239,68,68,0.3)]">
+            {lowStockItems.length} item{lowStockItems.length > 1 ? "s" : ""}
+          </span>
+        )}
+      </CardHeader>
+      <CardContent>
+        {isLoading ? (
+          <div className="text-center py-6 text-sm text-muted-foreground border border-dashed border-slate-800 rounded-md">
+            Checking stock levels...
+          </div>
+        ) : lowStockItems.length === 0 ? (
+          <div className="flex items-center gap-3 py-6 justify-center text-sm text-green-500 border border-dashed border-green-900/50 bg-green-500/5 rounded-md">
+            <CheckCircle2 className="h-5 w-5" />
+            All inventory levels are healthy.
+          </div>
+        ) : (
+          <div className="max-h-64 overflow-y-auto space-y-2 pr-2 custom-scrollbar">
+            {lowStockItems.map((product) => {
+              const stockCount = safeNumber(product.stock);
+              const isCritical = stockCount <= 2;
+              return (
+                <div
+                  key={product.id}
+                  className="flex items-center justify-between p-3 rounded-md bg-slate-900 border border-slate-800 transition-all duration-300 hover:shadow-[0_0_10px_rgba(239,68,68,0.25)] hover:border-red-500/40 group"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className={`p-1.5 rounded-full transition-colors ${isCritical ? "bg-red-500/15" : "bg-amber-500/15"}`}>
+                      <AlertTriangle className={`h-4 w-4 ${isCritical ? "text-red-400 animate-pulse" : "text-amber-500"}`} />
+                    </div>
+                    <span className="text-sm font-medium text-foreground group-hover:text-red-400 transition-colors">
+                      {product.name}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className={`text-sm font-bold tabular-nums ${isCritical ? "text-red-400" : "text-amber-500"}`}>
+                      {stockCount}
+                    </span>
+                    <span className="text-[11px] text-slate-500">left</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </CardContent>
     </Card>
   );
