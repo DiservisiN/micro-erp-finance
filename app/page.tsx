@@ -204,11 +204,9 @@ export default function Home() {
       "affiliate_passive_income",
       "internet_sharing_biznet",
     ]);
-    // Expense transaction types
+    // Expense transaction types - ONLY pure operating expenses
     const expenseTypes = new Set([
-      "money_transfer_or_cash_withdrawal",
       "expense",
-      "purchase",
     ]);
 
     for (const tx of transactions) {
@@ -224,10 +222,8 @@ export default function Home() {
         entry.income += amount;
       } else if (expenseTypes.has(tx.type)) {
         entry.expenses += amount + adminFee;
-      } else {
-        // Treat transfers as expenses (outflow)
-        entry.expenses += amount;
       }
+      // Asset exchanges (inventory_purchase, money_transfer) are excluded from both income and expenses
 
       monthMap.set(key, entry);
     }

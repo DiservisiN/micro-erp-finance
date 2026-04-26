@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Dialog,
   DialogContent,
@@ -43,10 +44,96 @@ type Transaction = {
   product_id: string | null;
 };
 
+function TransactionTable({ 
+  transactions, 
+  isLoading, 
+  formatDate, 
+  formatType,
+  onPrint,
+  onEdit,
+  onDelete 
+}: { 
+  transactions: Transaction[]; 
+  isLoading: boolean; 
+  formatDate: (date: string) => string; 
+  formatType: (type: string) => string;
+  onPrint: (tx: Transaction) => void;
+  onEdit: (tx: Transaction) => void;
+  onDelete: (tx: Transaction) => void;
+}) {
+  return (
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <TableHead>Date</TableHead>
+          <TableHead>Type</TableHead>
+          <TableHead>Amount</TableHead>
+          <TableHead>Admin Fee</TableHead>
+          <TableHead>Notes</TableHead>
+          <TableHead className="text-right">Actions</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {isLoading ? (
+          <TableRow>
+            <TableCell colSpan={6} className="text-center text-muted-foreground">
+              Loading transactions...
+            </TableCell>
+          </TableRow>
+        ) : transactions.length === 0 ? (
+          <TableRow>
+            <TableCell colSpan={6} className="text-center text-muted-foreground">
+              No transactions found.
+            </TableCell>
+          </TableRow>
+        ) : (
+          transactions.map((tx) => (
+            <TableRow key={tx.id}>
+              <TableCell className="whitespace-nowrap">{formatDate(tx.created_at || tx.date)}</TableCell>
+              <TableCell className="capitalize">{formatType(tx.type)}</TableCell>
+              <TableCell className={`font-medium ${tx.type === 'expense' ? 'text-red-500' : 'text-emerald-600 dark:text-emerald-400'}`}>
+                {tx.type === 'expense' ? '-' : ''}{formatRupiah(tx.amount)}
+              </TableCell>
+              <TableCell>{tx.admin_fee ? formatRupiah(tx.admin_fee) : "-"}</TableCell>
+              <TableCell className="max-w-xs truncate" title={tx.notes || ""}>
+                {tx.notes || "-"}
+              </TableCell>
+              <TableCell className="text-right">
+                <div className="flex items-center justify-end gap-1">
+                  <Button variant="ghost" size="icon" onClick={() => onPrint(tx)} title="Print Receipt">
+                    <Printer className="h-4 w-4 text-muted-foreground" />
+                  </Button>
+                  <button
+                    type="button"
+                    title="Edit Transaction"
+                    onClick={() => onEdit(tx)}
+                    className="inline-flex items-center justify-center rounded-md p-2 text-muted-foreground transition-all duration-200 hover:text-orange-500 hover:bg-orange-500/10"
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </button>
+                  <button
+                    type="button"
+                    title="Delete Transaction"
+                    onClick={() => onDelete(tx)}
+                    className="inline-flex items-center justify-center rounded-md p-2 text-muted-foreground transition-all duration-200 hover:text-red-500 hover:bg-red-500/10"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
+              </TableCell>
+            </TableRow>
+          ))
+        )}
+      </TableBody>
+    </Table>
+  );
+}
+
 export default function ReportsPage() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState("all");
 
   const [selectedReceipt, setSelectedReceipt] = useState<Transaction | null>(null);
   const [isReceiptOpen, setIsReceiptOpen] = useState(false);
@@ -227,6 +314,35 @@ export default function ReportsPage() {
       .join(" ");
   }
 
+  // Filter transactions based on type
+  const incomeTypes = [
+    "physical_sale",
+    "electronic_service",
+    "digital_ppob",
+    "affiliate_passive_income",
+    "internet_sharing_biznet",
+    "income",
+  ];
+
+  const operatingExpenseTypes = [
+    "expense",
+  ];
+
+  const assetTransferTypes = [
+    "inventory_purchase",
+    "money_transfer",
+    "cash_withdrawal",
+    "kasbon",
+  ];
+
+  const filteredTransactions = useMemo(() => {
+    if (activeTab === "all") return transactions;
+    if (activeTab === "income") return transactions.filter((tx) => incomeTypes.includes(tx.type));
+    if (activeTab === "operating-expenses") return transactions.filter((tx) => operatingExpenseTypes.includes(tx.type));
+    if (activeTab === "assets-transfers") return transactions.filter((tx) => assetTransferTypes.includes(tx.type));
+    return transactions;
+  }, [transactions, activeTab]);
+
   function handleExportCSV() {
     if (transactions.length === 0) return;
 
@@ -265,83 +381,101 @@ export default function ReportsPage() {
 
       {errorMessage ? <p className="text-sm text-destructive">{errorMessage}</p> : null}
 
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
-          <div className="space-y-1">
-            <CardTitle>Transaction History</CardTitle>
-            <CardDescription>A complete log of all module activities.</CardDescription>
-          </div>
+      <Tabs defaultValue="all" value={activeTab} onValueChange={setActiveTab} className="w-full">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
+          <TabsList className="grid w-full sm:w-fit grid-cols-2 sm:grid-cols-4 gap-2 bg-muted/50 backdrop-blur-sm border border-border/50 h-auto p-1">
+            <TabsTrigger value="all" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white">All</TabsTrigger>
+            <TabsTrigger value="income" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white">Income</TabsTrigger>
+            <TabsTrigger value="operating-expenses" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white">Operating Expenses</TabsTrigger>
+            <TabsTrigger value="assets-transfers" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white">Assets & Transfers</TabsTrigger>
+          </TabsList>
           <Button onClick={handleExportCSV} variant="outline" size="sm" className="shrink-0" disabled={isLoading || transactions.length === 0}>
             <Download className="mr-2 h-4 w-4" />
             <span className="hidden sm:inline">Export to CSV</span>
             <span className="sm:hidden">CSV</span>
           </Button>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Date</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead>Amount</TableHead>
-                <TableHead>Admin Fee</TableHead>
-                <TableHead>Notes</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {isLoading ? (
-                <TableRow>
-                  <TableCell colSpan={6} className="text-center text-muted-foreground">
-                    Loading transactions...
-                  </TableCell>
-                </TableRow>
-              ) : transactions.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={6} className="text-center text-muted-foreground">
-                    No transactions found.
-                  </TableCell>
-                </TableRow>
-              ) : (
-                transactions.map((tx) => (
-                  <TableRow key={tx.id}>
-                    <TableCell className="whitespace-nowrap">{formatDate(tx.created_at || tx.date)}</TableCell>
-                    <TableCell className="capitalize">{formatType(tx.type)}</TableCell>
-                    <TableCell className="font-medium text-emerald-600 dark:text-emerald-400">{formatRupiah(tx.amount)}</TableCell>
-                    <TableCell>{tx.admin_fee ? formatRupiah(tx.admin_fee) : "-"}</TableCell>
-                    <TableCell className="max-w-xs truncate" title={tx.notes || ""}>
-                      {tx.notes || "-"}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex items-center justify-end gap-1">
-                        <Button variant="ghost" size="icon" onClick={() => { setSelectedReceipt(tx); setIsReceiptOpen(true); }} title="Print Receipt">
-                          <Printer className="h-4 w-4 text-muted-foreground" />
-                        </Button>
-                        <button
-                          type="button"
-                          title="Edit Transaction"
-                          onClick={() => openEdit(tx)}
-                          className="inline-flex items-center justify-center rounded-md p-2 text-muted-foreground transition-all duration-200 hover:text-orange-500 hover:bg-orange-500/10"
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </button>
-                        <button
-                          type="button"
-                          title="Delete Transaction"
-                          onClick={() => { setDeleteTarget(tx); setIsDeleteOpen(true); }}
-                          className="inline-flex items-center justify-center rounded-md p-2 text-muted-foreground transition-all duration-200 hover:text-red-500 hover:bg-red-500/10"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+        </div>
+
+        <TabsContent value="all">
+          <Card className="backdrop-blur-sm bg-card/50 border-border/50">
+            <CardHeader>
+              <CardTitle>All Transactions</CardTitle>
+              <CardDescription>A complete log of all module activities.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <TransactionTable 
+                transactions={filteredTransactions} 
+                isLoading={isLoading} 
+                formatDate={formatDate}
+                formatType={formatType}
+                onPrint={(tx) => { setSelectedReceipt(tx); setIsReceiptOpen(true); }}
+                onEdit={openEdit}
+                onDelete={(tx) => { setDeleteTarget(tx); setIsDeleteOpen(true); }}
+              />
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="income">
+          <Card className="backdrop-blur-sm bg-card/50 border-border/50">
+            <CardHeader>
+              <CardTitle>Income Transactions</CardTitle>
+              <CardDescription>Pure revenue from sales, services, commissions, and other income sources.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <TransactionTable 
+                transactions={filteredTransactions} 
+                isLoading={isLoading} 
+                formatDate={formatDate}
+                formatType={formatType}
+                onPrint={(tx) => { setSelectedReceipt(tx); setIsReceiptOpen(true); }}
+                onEdit={openEdit}
+                onDelete={(tx) => { setDeleteTarget(tx); setIsDeleteOpen(true); }}
+              />
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="operating-expenses">
+          <Card className="backdrop-blur-sm bg-card/50 border-border/50">
+            <CardHeader>
+              <CardTitle>Operating Expenses</CardTitle>
+              <CardDescription>Pure operational expenses (e.g., rent, utilities, supplies, etc.).</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <TransactionTable 
+                transactions={filteredTransactions} 
+                isLoading={isLoading} 
+                formatDate={formatDate}
+                formatType={formatType}
+                onPrint={(tx) => { setSelectedReceipt(tx); setIsReceiptOpen(true); }}
+                onEdit={openEdit}
+                onDelete={(tx) => { setDeleteTarget(tx); setIsDeleteOpen(true); }}
+              />
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="assets-transfers">
+          <Card className="backdrop-blur-sm bg-card/50 border-border/50">
+            <CardHeader>
+              <CardTitle>Assets & Transfers</CardTitle>
+              <CardDescription>Asset exchanges and wallet movements (e.g., inventory purchases, money transfers).</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <TransactionTable 
+                transactions={filteredTransactions} 
+                isLoading={isLoading} 
+                formatDate={formatDate}
+                formatType={formatType}
+                onPrint={(tx) => { setSelectedReceipt(tx); setIsReceiptOpen(true); }}
+                onEdit={openEdit}
+                onDelete={(tx) => { setDeleteTarget(tx); setIsDeleteOpen(true); }}
+              />
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
 
       <Dialog open={isReceiptOpen} onOpenChange={setIsReceiptOpen}>
         <DialogContent className="sm:max-w-[425px]">
