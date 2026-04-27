@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
-import { AlertCircleIcon, WalletIcon, TrendingUpIcon } from "lucide-react";
+import { AlertCircleIcon, WalletIcon, TrendingUpIcon, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -142,6 +142,27 @@ export default function InvestmentsPage() {
     setAverageBuyPrice("");
     setCurrentPrice("");
     setIsSaving(false);
+    await loadData();
+  }
+
+  async function handleDeleteInvestment(id: string) {
+    if (!supabase) {
+      toast.error("Supabase is not configured.");
+      return;
+    }
+
+    if (!confirm("Are you sure you want to delete this investment?")) {
+      return;
+    }
+
+    const { error } = await supabase.from("investments").delete().eq("id", id);
+
+    if (error) {
+      toast.error("Failed to delete investment", { description: error.message });
+      return;
+    }
+
+    toast.success("Investment deleted");
     await loadData();
   }
 
@@ -346,7 +367,17 @@ export default function InvestmentsPage() {
                       <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                         {item.name} ({item.type})
                       </span>
-                      <TrendingUpIcon className="h-5 w-5 text-orange-500" />
+                      <div className="flex items-center gap-2">
+                        <TrendingUpIcon className="h-5 w-5 text-orange-500" />
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteInvestment(item.id)}
+                          className="inline-flex items-center justify-center rounded-md p-1.5 text-muted-foreground transition-all duration-200 hover:text-red-500 hover:bg-red-500/10"
+                          title="Delete Investment"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
                     </div>
                     <div>
                       <p className="text-3xl font-bold tracking-tight text-foreground">

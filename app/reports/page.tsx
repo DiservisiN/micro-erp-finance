@@ -30,6 +30,7 @@ import {
 } from "@/components/ui/table";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { formatRupiah } from "@/lib/utils";
+import { reportsLabels } from "@/config/reports-labels";
 
 type Transaction = {
   id: string;
@@ -64,58 +65,62 @@ function TransactionTable({
   return (
     <Table>
       <TableHeader>
-        <TableRow>
-          <TableHead>Date</TableHead>
-          <TableHead>Type</TableHead>
-          <TableHead>Amount</TableHead>
-          <TableHead>Admin Fee</TableHead>
-          <TableHead>Notes</TableHead>
-          <TableHead className="text-right">Actions</TableHead>
+        <TableRow className="border-slate-800/50">
+          <TableHead className="text-slate-300">{reportsLabels.tableHeaders.date}</TableHead>
+          <TableHead className="text-slate-300">{reportsLabels.tableHeaders.type}</TableHead>
+          <TableHead className="text-slate-300">{reportsLabels.tableHeaders.amount}</TableHead>
+          <TableHead className="text-slate-300">{reportsLabels.tableHeaders.adminFee}</TableHead>
+          <TableHead className="text-slate-300">{reportsLabels.tableHeaders.notes}</TableHead>
+          <TableHead className="text-right text-slate-300">{reportsLabels.tableHeaders.actions}</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
         {isLoading ? (
           <TableRow>
-            <TableCell colSpan={6} className="text-center text-muted-foreground">
-              Loading transactions...
+            <TableCell colSpan={6} className="text-center text-slate-500">
+              {reportsLabels.messages.loading}
             </TableCell>
           </TableRow>
         ) : transactions.length === 0 ? (
           <TableRow>
-            <TableCell colSpan={6} className="text-center text-muted-foreground">
-              No transactions found.
+            <TableCell colSpan={6} className="text-center text-slate-500">
+              {reportsLabels.messages.noTransactions}
             </TableCell>
           </TableRow>
         ) : (
           transactions.map((tx) => (
-            <TableRow key={tx.id}>
-              <TableCell className="whitespace-nowrap">{formatDate(tx.created_at || tx.date)}</TableCell>
-              <TableCell className="capitalize">{formatType(tx.type)}</TableCell>
-              <TableCell className={`font-medium ${tx.type === 'expense' ? 'text-red-500' : 'text-emerald-600 dark:text-emerald-400'}`}>
+            <TableRow key={tx.id} className="border-slate-800/50 hover:bg-slate-800/40 transition-colors">
+              <TableCell className="whitespace-nowrap text-slate-300">{formatDate(tx.created_at || tx.date)}</TableCell>
+              <TableCell className="capitalize">
+                <span className="px-2 py-1 rounded-full text-xs font-medium bg-slate-700/30 text-slate-300 border border-slate-700/50">
+                  {formatType(tx.type)}
+                </span>
+              </TableCell>
+              <TableCell className={`font-mono font-semibold ${tx.type === 'expense' ? 'text-red-400' : 'text-emerald-400'}`}>
                 {tx.type === 'expense' ? '-' : ''}{formatRupiah(tx.amount)}
               </TableCell>
-              <TableCell>{tx.admin_fee ? formatRupiah(tx.admin_fee) : "-"}</TableCell>
-              <TableCell className="max-w-xs truncate" title={tx.notes || ""}>
+              <TableCell className="text-slate-300">{tx.admin_fee ? formatRupiah(tx.admin_fee) : "-"}</TableCell>
+              <TableCell className="max-w-xs truncate text-slate-300" title={tx.notes || ""}>
                 {tx.notes || "-"}
               </TableCell>
               <TableCell className="text-right">
                 <div className="flex items-center justify-end gap-1">
-                  <Button variant="ghost" size="icon" onClick={() => onPrint(tx)} title="Print Receipt">
-                    <Printer className="h-4 w-4 text-muted-foreground" />
+                  <Button variant="ghost" size="icon" onClick={() => onPrint(tx)} title={reportsLabels.buttons.printReceipt} className="text-slate-400 hover:text-white hover:bg-slate-700/50">
+                    <Printer className="h-4 w-4" />
                   </Button>
                   <button
                     type="button"
-                    title="Edit Transaction"
+                    title={reportsLabels.titles.editTransaction}
                     onClick={() => onEdit(tx)}
-                    className="inline-flex items-center justify-center rounded-md p-2 text-muted-foreground transition-all duration-200 hover:text-orange-500 hover:bg-orange-500/10"
+                    className="inline-flex items-center justify-center rounded-md p-2 text-slate-400 transition-all duration-200 hover:text-orange-400 hover:bg-orange-500/10"
                   >
                     <Pencil className="h-4 w-4" />
                   </button>
                   <button
                     type="button"
-                    title="Delete Transaction"
+                    title={reportsLabels.titles.deleteTransaction}
                     onClick={() => onDelete(tx)}
-                    className="inline-flex items-center justify-center rounded-md p-2 text-muted-foreground transition-all duration-200 hover:text-red-500 hover:bg-red-500/10"
+                    className="inline-flex items-center justify-center rounded-md p-2 text-slate-400 transition-all duration-200 hover:text-red-400 hover:bg-red-500/10"
                   >
                     <Trash2 className="h-4 w-4" />
                   </button>
@@ -332,6 +337,7 @@ export default function ReportsPage() {
     "inventory_purchase",
     "money_transfer",
     "cash_withdrawal",
+    "balance_transfer",
     "kasbon",
   ];
 
@@ -373,114 +379,134 @@ export default function ReportsPage() {
   }
 
   return (
-    <section className="space-y-5">
-      <div className="space-y-1">
-        <h2 className="text-2xl font-semibold">Reports</h2>
-        <p className="text-muted-foreground">View your transaction history and activity.</p>
+    <div className="bg-[#020617] min-h-screen p-6">
+      {/* Page Header */}
+      <div className="mb-6">
+        <h2 className="text-2xl font-semibold text-white">{reportsLabels.titles.financialReports}</h2>
+        <p className="text-slate-400 text-sm">{reportsLabels.titles.description}</p>
       </div>
 
-      {errorMessage ? <p className="text-sm text-destructive">{errorMessage}</p> : null}
+      {errorMessage ? <p className="text-sm text-destructive mb-4">{errorMessage}</p> : null}
 
-      <Tabs defaultValue="all" value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
-          <TabsList className="grid w-full sm:w-fit grid-cols-2 sm:grid-cols-4 gap-2 bg-muted/50 backdrop-blur-sm border border-border/50 h-auto p-1">
-            <TabsTrigger value="all" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white">All</TabsTrigger>
-            <TabsTrigger value="income" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white">Income</TabsTrigger>
-            <TabsTrigger value="operating-expenses" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white">Operating Expenses</TabsTrigger>
-            <TabsTrigger value="assets-transfers" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white">Assets & Transfers</TabsTrigger>
-          </TabsList>
-          <Button onClick={handleExportCSV} variant="outline" size="sm" className="shrink-0" disabled={isLoading || transactions.length === 0}>
-            <Download className="mr-2 h-4 w-4" />
-            <span className="hidden sm:inline">Export to CSV</span>
-            <span className="sm:hidden">CSV</span>
-          </Button>
+      {/* Financial Summary Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <div className="bg-slate-900/40 backdrop-blur-sm border border-slate-800/50 rounded-xl p-6">
+          <p className="text-slate-400 text-sm mb-2">{reportsLabels.summaryCards.totalRevenue}</p>
+          <p className="text-3xl font-bold text-emerald-400 font-mono">{formatRupiah(transactions.filter(tx => !tx.type.includes('expense') && !tx.type.includes('withdrawal') && !tx.type.includes('transfer')).reduce((sum, tx) => sum + tx.amount, 0))}</p>
+        </div>
+        <div className="bg-slate-900/40 backdrop-blur-sm border border-slate-800/50 rounded-xl p-6">
+          <p className="text-slate-400 text-sm mb-2">{reportsLabels.summaryCards.totalExpenses}</p>
+          <p className="text-3xl font-bold text-red-400 font-mono">{formatRupiah(transactions.filter(tx => tx.type === 'expense').reduce((sum, tx) => sum + tx.amount, 0))}</p>
+        </div>
+        <div className="bg-slate-900/40 backdrop-blur-sm border border-slate-800/50 rounded-xl p-6">
+          <p className="text-slate-400 text-sm mb-2">{reportsLabels.summaryCards.netProfit}</p>
+          <p className="text-3xl font-bold text-orange-400 font-mono">{formatRupiah(transactions.filter(tx => !tx.type.includes('expense') && !tx.type.includes('withdrawal') && !tx.type.includes('transfer')).reduce((sum, tx) => sum + tx.amount, 0) - transactions.filter(tx => tx.type === 'expense').reduce((sum, tx) => sum + tx.amount, 0))}</p>
+        </div>
+        <div className="bg-slate-900/40 backdrop-blur-sm border border-slate-800/50 rounded-xl p-6">
+          <p className="text-slate-400 text-sm mb-2">{reportsLabels.summaryCards.profitMargin}</p>
+          <p className="text-3xl font-bold text-blue-400 font-mono">{(() => {
+            const revenue = transactions.filter(tx => !tx.type.includes('expense') && !tx.type.includes('withdrawal') && !tx.type.includes('transfer')).reduce((sum, tx) => sum + tx.amount, 0);
+            const expenses = transactions.filter(tx => tx.type === 'expense').reduce((sum, tx) => sum + tx.amount, 0);
+            const margin = revenue > 0 ? ((revenue - expenses) / revenue * 100).toFixed(1) : '0.0';
+            return `${margin}%`;
+          })()}</p>
+        </div>
+      </div>
+
+      <Tabs defaultValue="all" value={activeTab} onValueChange={setActiveTab} className="w-full flex flex-col">
+        {/* Unified Control Bar */}
+        <div className="flex flex-col gap-4 mb-6 bg-slate-900/50 backdrop-blur-sm border border-slate-800/50 rounded-xl p-6 w-full">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 w-full">
+            <TabsList className="flex flex-wrap gap-2 bg-slate-800/50 h-auto p-1 w-full">
+              <TabsTrigger value="all" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-orange-500 data-[state=active]:to-orange-600 data-[state=active]:text-white data-[state=active]:shadow-[0_0_15px_rgba(249,115,22,0.4)] transition-all rounded-full px-4 py-2">{reportsLabels.filters.all}</TabsTrigger>
+              <TabsTrigger value="income" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-orange-500 data-[state=active]:to-orange-600 data-[state=active]:text-white data-[state=active]:shadow-[0_0_15px_rgba(249,115,22,0.4)] transition-all rounded-full px-4 py-2">{reportsLabels.filters.income}</TabsTrigger>
+              <TabsTrigger value="operating-expenses" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-orange-500 data-[state=active]:to-orange-600 data-[state=active]:text-white data-[state=active]:shadow-[0_0_15px_rgba(249,115,22,0.4)] transition-all rounded-full px-4 py-2">{reportsLabels.filters.operatingExpenses}</TabsTrigger>
+              <TabsTrigger value="assets-transfers" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-orange-500 data-[state=active]:to-orange-600 data-[state=active]:text-white data-[state=active]:shadow-[0_0_15px_rgba(249,115,22,0.4)] transition-all rounded-full px-4 py-2">{reportsLabels.filters.assetsTransfers}</TabsTrigger>
+            </TabsList>
+            <Button onClick={handleExportCSV} variant="outline" size="default" className="border-slate-700 text-slate-300 hover:bg-slate-800 hover:text-orange-400 shadow-[0_0_10px_rgba(249,115,22,0.2)] transition-all shrink-0" disabled={isLoading || transactions.length === 0}>
+              <Download className="mr-2 h-4 w-4" />
+              {reportsLabels.buttons.exportToCSV}
+            </Button>
+          </div>
         </div>
 
         <TabsContent value="all">
-          <Card className="backdrop-blur-sm bg-card/50 border-border/50">
-            <CardHeader>
-              <CardTitle>All Transactions</CardTitle>
-              <CardDescription>A complete log of all module activities.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <TransactionTable 
-                transactions={filteredTransactions} 
-                isLoading={isLoading} 
-                formatDate={formatDate}
-                formatType={formatType}
-                onPrint={(tx) => { setSelectedReceipt(tx); setIsReceiptOpen(true); }}
-                onEdit={openEdit}
-                onDelete={(tx) => { setDeleteTarget(tx); setIsDeleteOpen(true); }}
-              />
-            </CardContent>
-          </Card>
+          <div className="bg-slate-900/40 backdrop-blur-sm border border-slate-800/50 rounded-xl p-6 w-full">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-white">{reportsLabels.titles.allTransactions}</h3>
+              <p className="text-slate-400 text-sm">{reportsLabels.titles.allTransactionsDesc}</p>
+            </div>
+            <TransactionTable 
+              transactions={filteredTransactions} 
+              isLoading={isLoading} 
+              formatDate={formatDate}
+              formatType={formatType}
+              onPrint={(tx) => { setSelectedReceipt(tx); setIsReceiptOpen(true); }}
+              onEdit={openEdit}
+              onDelete={(tx) => { setDeleteTarget(tx); setIsDeleteOpen(true); }}
+            />
+          </div>
         </TabsContent>
 
         <TabsContent value="income">
-          <Card className="backdrop-blur-sm bg-card/50 border-border/50">
-            <CardHeader>
-              <CardTitle>Income Transactions</CardTitle>
-              <CardDescription>Pure revenue from sales, services, commissions, and other income sources.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <TransactionTable 
-                transactions={filteredTransactions} 
-                isLoading={isLoading} 
-                formatDate={formatDate}
-                formatType={formatType}
-                onPrint={(tx) => { setSelectedReceipt(tx); setIsReceiptOpen(true); }}
-                onEdit={openEdit}
-                onDelete={(tx) => { setDeleteTarget(tx); setIsDeleteOpen(true); }}
-              />
-            </CardContent>
-          </Card>
+          <div className="bg-slate-900/40 backdrop-blur-sm border border-slate-800/50 rounded-xl p-6 w-full">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-white">{reportsLabels.titles.incomeTransactions}</h3>
+              <p className="text-slate-400 text-sm">{reportsLabels.titles.incomeTransactionsDesc}</p>
+            </div>
+            <TransactionTable 
+              transactions={filteredTransactions} 
+              isLoading={isLoading} 
+              formatDate={formatDate}
+              formatType={formatType}
+              onPrint={(tx) => { setSelectedReceipt(tx); setIsReceiptOpen(true); }}
+              onEdit={openEdit}
+              onDelete={(tx) => { setDeleteTarget(tx); setIsDeleteOpen(true); }}
+            />
+          </div>
         </TabsContent>
 
         <TabsContent value="operating-expenses">
-          <Card className="backdrop-blur-sm bg-card/50 border-border/50">
-            <CardHeader>
-              <CardTitle>Operating Expenses</CardTitle>
-              <CardDescription>Pure operational expenses (e.g., rent, utilities, supplies, etc.).</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <TransactionTable 
-                transactions={filteredTransactions} 
-                isLoading={isLoading} 
-                formatDate={formatDate}
-                formatType={formatType}
-                onPrint={(tx) => { setSelectedReceipt(tx); setIsReceiptOpen(true); }}
-                onEdit={openEdit}
-                onDelete={(tx) => { setDeleteTarget(tx); setIsDeleteOpen(true); }}
-              />
-            </CardContent>
-          </Card>
+          <div className="bg-slate-900/40 backdrop-blur-sm border border-slate-800/50 rounded-xl p-6 w-full">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-white">{reportsLabels.titles.operatingExpenses}</h3>
+              <p className="text-slate-400 text-sm">{reportsLabels.titles.operatingExpensesDesc}</p>
+            </div>
+            <TransactionTable 
+              transactions={filteredTransactions} 
+              isLoading={isLoading} 
+              formatDate={formatDate}
+              formatType={formatType}
+              onPrint={(tx) => { setSelectedReceipt(tx); setIsReceiptOpen(true); }}
+              onEdit={openEdit}
+              onDelete={(tx) => { setDeleteTarget(tx); setIsDeleteOpen(true); }}
+            />
+          </div>
         </TabsContent>
 
         <TabsContent value="assets-transfers">
-          <Card className="backdrop-blur-sm bg-card/50 border-border/50">
-            <CardHeader>
-              <CardTitle>Assets & Transfers</CardTitle>
-              <CardDescription>Asset exchanges and wallet movements (e.g., inventory purchases, money transfers).</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <TransactionTable 
-                transactions={filteredTransactions} 
-                isLoading={isLoading} 
-                formatDate={formatDate}
-                formatType={formatType}
-                onPrint={(tx) => { setSelectedReceipt(tx); setIsReceiptOpen(true); }}
-                onEdit={openEdit}
-                onDelete={(tx) => { setDeleteTarget(tx); setIsDeleteOpen(true); }}
-              />
-            </CardContent>
-          </Card>
+          <div className="bg-slate-900/40 backdrop-blur-sm border border-slate-800/50 rounded-xl p-6 w-full">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-white">{reportsLabels.titles.assetsTransfers}</h3>
+              <p className="text-slate-400 text-sm">{reportsLabels.titles.assetsTransfersDesc}</p>
+            </div>
+            <TransactionTable 
+              transactions={filteredTransactions} 
+              isLoading={isLoading} 
+              formatDate={formatDate}
+              formatType={formatType}
+              onPrint={(tx) => { setSelectedReceipt(tx); setIsReceiptOpen(true); }}
+              onEdit={openEdit}
+              onDelete={(tx) => { setDeleteTarget(tx); setIsDeleteOpen(true); }}
+            />
+          </div>
         </TabsContent>
       </Tabs>
 
       <Dialog open={isReceiptOpen} onOpenChange={setIsReceiptOpen}>
-        <DialogContent className="sm:max-w-[425px]">
+        <DialogContent className="sm:max-w-[425px] bg-slate-900 border-slate-800 text-white">
           <DialogHeader className="print:hidden">
-            <DialogTitle>Receipt Preview</DialogTitle>
+            <DialogTitle className="text-white">{reportsLabels.titles.receiptPreview}</DialogTitle>
           </DialogHeader>
           {selectedReceipt && (
             <div className="flex flex-col items-center justify-center py-4 print:py-0">
@@ -519,10 +545,10 @@ export default function ReportsPage() {
             </div>
           )}
           <div className="flex justify-end gap-3 mt-4 print:hidden">
-            <Button variant="outline" onClick={() => setIsReceiptOpen(false)}>Close</Button>
+            <Button variant="outline" onClick={() => setIsReceiptOpen(false)}>{reportsLabels.buttons.cancel}</Button>
             <Button onClick={() => window.print()}>
               <Printer className="h-4 w-4 mr-2" />
-              Print Receipt
+              {reportsLabels.buttons.printReceipt}
             </Button>
           </div>
         </DialogContent>
@@ -530,30 +556,30 @@ export default function ReportsPage() {
 
       {/* ---------- Delete Confirmation Dialog ---------- */}
       <Dialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
-        <DialogContent className="sm:max-w-[400px]">
+        <DialogContent className="sm:max-w-[400px] bg-slate-900 border-slate-800 text-white">
           <DialogHeader>
-            <DialogTitle>Delete Transaction</DialogTitle>
+            <DialogTitle className="text-white">{reportsLabels.titles.deleteTransaction}</DialogTitle>
           </DialogHeader>
-          <p className="text-sm text-muted-foreground">
-            Are you sure? This will <span className="font-semibold text-red-500">permanently delete</span> this transaction record.
+          <p className="text-sm text-slate-400">
+            {reportsLabels.messages.deleteConfirm}
           </p>
           {deleteTarget && (
-            <div className="rounded-md border border-slate-800 bg-slate-900/50 p-3 text-sm space-y-1">
-              <p><span className="text-muted-foreground">Type:</span> {formatType(deleteTarget.type)}</p>
-              <p><span className="text-muted-foreground">Amount:</span> {formatRupiah(deleteTarget.amount)}</p>
-              <p className="text-xs text-muted-foreground truncate">{deleteTarget.notes || "No notes"}</p>
+            <div className="rounded-md border border-slate-700 bg-slate-800/50 p-3 text-sm space-y-1">
+              <p><span className="text-slate-400">Type:</span> {formatType(deleteTarget.type)}</p>
+              <p><span className="text-slate-400">Amount:</span> {formatRupiah(deleteTarget.amount)}</p>
+              <p className="text-xs text-slate-400 truncate">{deleteTarget.notes || "No notes"}</p>
             </div>
           )}
           <div className="flex justify-end gap-3 mt-2">
-            <Button variant="outline" onClick={() => { setIsDeleteOpen(false); setDeleteTarget(null); }} disabled={isDeleting}>
-              Cancel
+            <Button variant="outline" onClick={() => { setIsDeleteOpen(false); setDeleteTarget(null); }} disabled={isDeleting} className="border-slate-700 text-slate-300 hover:bg-slate-800">
+              {reportsLabels.buttons.cancel}
             </Button>
             <Button
               onClick={handleDelete}
               disabled={isDeleting}
               className="bg-red-600 text-white hover:bg-red-700 shadow-[0_0_10px_rgba(239,68,68,0.3)] transition-all"
             >
-              {isDeleting ? "Deleting..." : "Delete"}
+              {isDeleting ? "Deleting..." : reportsLabels.buttons.delete}
             </Button>
           </div>
         </DialogContent>
@@ -561,34 +587,34 @@ export default function ReportsPage() {
 
       {/* ---------- Edit Transaction Dialog ---------- */}
       <Dialog open={isEditOpen} onOpenChange={(v) => { setIsEditOpen(v); if (!v) setEditTarget(null); }}>
-        <DialogContent className="sm:max-w-[420px]">
+        <DialogContent className="sm:max-w-[420px] bg-slate-900 border-slate-800 text-white">
           <DialogHeader>
-            <DialogTitle>Edit Transaction</DialogTitle>
+            <DialogTitle className="text-white">{reportsLabels.titles.editTransaction}</DialogTitle>
           </DialogHeader>
           {editTarget && (
             <div className="space-y-4">
               <div className="grid gap-2">
-                <Label htmlFor="edit-amount">Amount</Label>
-                <Input id="edit-amount" type="number" min="0" step="0.01" value={editAmount} onChange={(e) => setEditAmount(e.target.value)} />
+                <Label htmlFor="edit-amount" className="text-slate-300">{reportsLabels.tableHeaders.amount}</Label>
+                <Input id="edit-amount" type="number" min="0" step="0.01" value={editAmount} onChange={(e) => setEditAmount(e.target.value)} className="bg-slate-800/50 border-slate-700 text-white" />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="edit-admin-fee">Admin Fee</Label>
-                <Input id="edit-admin-fee" type="number" min="0" step="0.01" value={editAdminFee} onChange={(e) => setEditAdminFee(e.target.value)} />
+                <Label htmlFor="edit-admin-fee" className="text-slate-300">{reportsLabels.tableHeaders.adminFee}</Label>
+                <Input id="edit-admin-fee" type="number" min="0" step="0.01" value={editAdminFee} onChange={(e) => setEditAdminFee(e.target.value)} className="bg-slate-800/50 border-slate-700 text-white" />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="edit-notes">Notes</Label>
-                <Input id="edit-notes" value={editNotes} onChange={(e) => setEditNotes(e.target.value)} placeholder="Transaction notes" />
+                <Label htmlFor="edit-notes" className="text-slate-300">{reportsLabels.tableHeaders.notes}</Label>
+                <Input id="edit-notes" value={editNotes} onChange={(e) => setEditNotes(e.target.value)} placeholder="Transaction notes" className="bg-slate-800/50 border-slate-700 text-white placeholder:text-slate-500" />
               </div>
               <div className="flex justify-end gap-3">
-                <Button variant="outline" onClick={() => { setIsEditOpen(false); setEditTarget(null); }} disabled={isSavingEdit}>Cancel</Button>
-                <Button onClick={handleEditSave} disabled={isSavingEdit} className="bg-orange-500 text-white hover:bg-orange-600 shadow-[0_0_10px_rgba(249,115,22,0.3)] transition-all">
-                  {isSavingEdit ? "Saving..." : "Save Changes"}
+                <Button variant="outline" onClick={() => { setIsEditOpen(false); setEditTarget(null); }} disabled={isSavingEdit} className="border-slate-700 text-slate-300 hover:bg-slate-800">{reportsLabels.buttons.cancel}</Button>
+                <Button onClick={handleEditSave} disabled={isSavingEdit} className="bg-gradient-to-r from-orange-500 to-orange-600 text-white hover:from-orange-600 hover:to-orange-700 shadow-[0_0_15px_rgba(249,115,22,0.4)] transition-all">
+                  {isSavingEdit ? "Saving..." : reportsLabels.buttons.saveChanges}
                 </Button>
               </div>
             </div>
           )}
         </DialogContent>
       </Dialog>
-    </section>
+    </div>
   );
 }

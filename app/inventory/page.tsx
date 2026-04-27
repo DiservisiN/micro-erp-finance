@@ -2,7 +2,7 @@
 
 import { FormEvent, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import Papa from "papaparse";
-import { Upload, Download, CheckCircle2, XCircle, Pencil } from "lucide-react";
+import { Upload, Download, CheckCircle2, XCircle, Pencil, Trash } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -69,7 +69,6 @@ type ProductFormState = {
 type SortField = "name" | "category" | "cost_price" | "selling_price" | "stock" | "expired_date";
 type SortDirection = "asc" | "desc";
 
-const categoryOptions = ["Food", "Beverage", "Electronics", "Household", "Health", "Other"];
 
 const initialFormState: ProductFormState = {
   barcode: "",
@@ -96,6 +95,7 @@ export default function InventoryPage() {
   const [sortField, setSortField] = useState<SortField>("name");
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
   const [wallets, setWallets] = useState<Wallet[]>([]);
+  const [categories, setCategories] = useState<{ id: string; name: string }[]>([]);
 
   // Edit product state
   const [editTarget, setEditTarget] = useState<Product | null>(null);
@@ -143,8 +143,23 @@ export default function InventoryPage() {
     setIsLoading(false);
   }, [supabase]);
 
+  const loadCategories = useCallback(async () => {
+    if (!supabase) return;
+    const { data, error } = await supabase
+      .from("categories")
+      .select("id, name")
+      .eq("type", "inventory")
+      .order("name", { ascending: true });
+    if (error) {
+      console.error("Failed to load categories:", error);
+      return;
+    }
+    setCategories(data ?? []);
+  }, [supabase]);
+
   useEffect(() => {
     loadProducts();
+    loadCategories();
     // Also load wallets
     async function loadWallets() {
       if (!supabase) return;
@@ -156,7 +171,7 @@ export default function InventoryPage() {
       setWallets((data ?? []) as Wallet[]);
     }
     loadWallets();
-  }, [loadProducts, supabase]);
+  }, [loadProducts, loadCategories, supabase]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -320,6 +335,23 @@ export default function InventoryPage() {
     await loadProducts();
   }
 
+  async function handleDeleteProduct(productId: string) {
+    if (!window.confirm('Hapus produk ini?')) return;
+    if (!supabase) return;
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const sb = supabase as any;
+    const { error } = await sb.from("products").delete().eq("id", productId);
+
+    if (error) {
+      toast.error("Failed to delete product", { description: error.message });
+      return;
+    }
+
+    toast.success("Product deleted successfully");
+    setProducts((prev) => prev.filter((p) => p.id !== productId));
+  }
+
   function toggleSort(field: SortField) {
     if (field === sortField) {
       setSortDirection((current) => (current === "asc" ? "desc" : "asc"));
@@ -330,11 +362,11 @@ export default function InventoryPage() {
   }
 
   return (
-    <section className="space-y-4">
-      <div className="flex items-center justify-between">
+    <section className="space-y-6 bg-[#020617] min-h-screen p-6">
+      <div className="flex items-center justify-between bg-slate-900/50 backdrop-blur-sm border border-slate-800/50 rounded-xl p-6">
         <div>
-          <h2 className="text-2xl font-semibold">Inventory</h2>
-          <p className="text-muted-foreground">Manage and monitor products from your Supabase database.</p>
+          <h2 className="text-2xl font-semibold text-white">Inventory</h2>
+          <p className="text-slate-400 text-sm">Manage and monitor products from your Supabase database.</p>
         </div>
         <div className="flex items-center gap-2">
           <ImportCsvDialog
@@ -351,16 +383,17 @@ export default function InventoryPage() {
             onSubmit={handleSubmit}
             isSaving={isSaving}
             wallets={wallets}
+            categories={categories}
           />
         </div>
       </div>
 
       {errorMessage ? <p className="text-sm text-destructive">{errorMessage}</p> : null}
 
-      <Tabs defaultValue="in-stock">
-        <TabsList className="mb-4">
-          <TabsTrigger value="in-stock">In Stock</TabsTrigger>
-          <TabsTrigger value="in-transit">
+      <Tabs defaultValue="in-stock" className="space-y-4">
+        <TabsList className="bg-slate-900/50 backdrop-blur-sm border border-slate-800/50">
+          <TabsTrigger value="in-stock" className="data-[state=active]:bg-slate-800 data-[state=active]:text-white">In Stock</TabsTrigger>
+          <TabsTrigger value="in-transit" className="data-[state=active]:bg-slate-800 data-[state=active]:text-white">
             In Transit
             {inTransitProducts.length > 0 && (
               <span className="ml-2 inline-flex items-center rounded-full bg-orange-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-orange-500 animate-pulse shadow-[0_0_8px_rgba(249,115,22,0.4)]">
@@ -371,85 +404,106 @@ export default function InventoryPage() {
         </TabsList>
 
         {/* ====== Tab 1: In Stock ====== */}
-        <TabsContent value="in-stock">
-          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-4">
+        <TabsContent value="in-stock" className="space-y-4">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between bg-slate-900/30 backdrop-blur-sm border border-slate-800/30 rounded-xl p-4">
             <Input
               value={searchTerm}
               onChange={(event) => setSearchTerm(event.target.value)}
               placeholder="Search by name, barcode, or category..."
-              className="w-full md:max-w-md"
+              className="w-full md:max-w-md bg-slate-800/50 border-slate-700/50 text-white placeholder:text-slate-500 focus:border-slate-600"
             />
             <Select value={categoryFilter} onValueChange={(value) => setCategoryFilter(value ?? "all")}>
-              <SelectTrigger className="w-full md:w-56">
+              <SelectTrigger className="w-full md:w-56 bg-slate-800/50 border-slate-700/50 text-white">
                 <SelectValue placeholder="Filter category" />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="bg-slate-900 border-slate-800">
                 <SelectItem value="all">All Categories</SelectItem>
-                {categoryOptions.map((category) => (
-                  <SelectItem key={category} value={category.toLowerCase()}>
-                    {category}
+                {categories.map((category) => (
+                  <SelectItem key={category.id} value={category.name.toLowerCase()}>
+                    {category.name}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
 
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Barcode</TableHead>
-                <TableHead>
-                  <SortButton label="Name" isActive={sortField === "name"} direction={sortDirection} onClick={() => toggleSort("name")} />
-                </TableHead>
-                <TableHead>
-                  <SortButton label="Category" isActive={sortField === "category"} direction={sortDirection} onClick={() => toggleSort("category")} />
-                </TableHead>
-                <TableHead>
-                  <SortButton label="Cost Price" isActive={sortField === "cost_price"} direction={sortDirection} onClick={() => toggleSort("cost_price")} />
-                </TableHead>
-                <TableHead>
-                  <SortButton label="Selling Price" isActive={sortField === "selling_price"} direction={sortDirection} onClick={() => toggleSort("selling_price")} />
-                </TableHead>
-                <TableHead>
-                  <SortButton label="Stock" isActive={sortField === "stock"} direction={sortDirection} onClick={() => toggleSort("stock")} />
-                </TableHead>
-                <TableHead>
-                  <SortButton label="Expired Date" isActive={sortField === "expired_date"} direction={sortDirection} onClick={() => toggleSort("expired_date")} />
-                </TableHead>
-                <TableHead className="w-[60px]">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {isLoading ? (
-                <TableRow>
-                  <TableCell colSpan={8} className="text-center text-muted-foreground">
-                    Loading products...
-                  </TableCell>
+          <div className="bg-slate-900/30 backdrop-blur-sm border border-slate-800/30 rounded-xl overflow-hidden">
+            <Table>
+              <TableHeader>
+                <TableRow className="border-slate-800/50 hover:bg-slate-800/30">
+                  <TableHead className="text-slate-400 font-medium">Barcode</TableHead>
+                  <TableHead className="text-slate-400 font-medium">
+                    <SortButton label="Name" isActive={sortField === "name"} direction={sortDirection} onClick={() => toggleSort("name")} />
+                  </TableHead>
+                  <TableHead className="text-slate-400 font-medium">
+                    <SortButton label="Category" isActive={sortField === "category"} direction={sortDirection} onClick={() => toggleSort("category")} />
+                  </TableHead>
+                  <TableHead className="text-slate-400 font-medium text-right">
+                    <SortButton label="Cost Price" isActive={sortField === "cost_price"} direction={sortDirection} onClick={() => toggleSort("cost_price")} />
+                  </TableHead>
+                  <TableHead className="text-slate-400 font-medium text-right">
+                    <SortButton label="Selling Price" isActive={sortField === "selling_price"} direction={sortDirection} onClick={() => toggleSort("selling_price")} />
+                  </TableHead>
+                  <TableHead className="text-slate-400 font-medium text-right">
+                    <SortButton label="Stock" isActive={sortField === "stock"} direction={sortDirection} onClick={() => toggleSort("stock")} />
+                  </TableHead>
+                  <TableHead className="text-slate-400 font-medium">Status</TableHead>
+                  <TableHead className="text-slate-400 font-medium">
+                    <SortButton label="Expired Date" isActive={sortField === "expired_date"} direction={sortDirection} onClick={() => toggleSort("expired_date")} />
+                  </TableHead>
+                  <TableHead className="text-slate-400 font-medium w-[80px]">Actions</TableHead>
                 </TableRow>
-              ) : filteredProducts.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={8} className="text-center text-muted-foreground">
-                    No products found for current filters.
-                  </TableCell>
-                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {isLoading ? (
+                  <TableRow>
+                    <TableCell colSpan={9} className="text-center text-slate-500">
+                      Loading products...
+                    </TableCell>
+                  </TableRow>
+                ) : filteredProducts.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={9} className="text-center text-slate-500">
+                      No products found for current filters.
+                    </TableCell>
+                  </TableRow>
               ) : (
                 filteredProducts.map((product) => (
-                  <TableRow key={product.id}>
-                    <TableCell>{product.barcode ?? "-"}</TableCell>
-                    <TableCell>{product.name}</TableCell>
-                    <TableCell>{product.category ?? "-"}</TableCell>
-                    <TableCell>{formatRupiah(product.cost_price)}</TableCell>
-                    <TableCell>{formatRupiah(product.selling_price)}</TableCell>
-                    <TableCell>{product.stock}</TableCell>
-                    <TableCell>{product.expired_date ?? "-"}</TableCell>
+                  <TableRow key={product.id} className="border-slate-800/30 hover:bg-slate-800/50 transition-colors">
+                    <TableCell className="text-slate-300">{product.barcode ?? "-"}</TableCell>
+                    <TableCell className="text-white font-medium">{product.name}</TableCell>
+                    <TableCell className="text-slate-400">{product.category ?? "-"}</TableCell>
+                    <TableCell className="text-slate-300 text-right font-mono">{formatRupiah(product.cost_price)}</TableCell>
+                    <TableCell className="text-slate-300 text-right font-mono">{formatRupiah(product.selling_price)}</TableCell>
+                    <TableCell className="text-slate-300 text-right font-mono">{product.stock}</TableCell>
+                    <TableCell>
+                      {product.status === "in_stock" ? (
+                        <span className="inline-flex items-center rounded-full bg-green-500/10 px-2.5 py-0.5 text-xs font-medium text-green-400 border border-green-500/20">
+                          In Stock
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center rounded-full bg-orange-500/10 px-2.5 py-0.5 text-xs font-medium text-orange-400 border border-orange-500/20">
+                          On the Way
+                        </span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-slate-400">{product.expired_date ?? "-"}</TableCell>
                     <TableCell>
                       <button
                         type="button"
                         title="Edit Product"
                         onClick={() => openEditProduct(product)}
-                        className="inline-flex items-center justify-center rounded-md p-1.5 text-muted-foreground transition-all duration-200 hover:text-orange-500 hover:bg-orange-500/10"
+                        className="inline-flex items-center justify-center rounded-md p-1.5 text-slate-400 transition-all duration-200 hover:text-orange-400 hover:bg-orange-500/10"
                       >
                         <Pencil className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        title="Delete Product"
+                        onClick={() => handleDeleteProduct(product.id)}
+                        className="inline-flex items-center justify-center rounded-md p-1.5 text-slate-400 transition-all duration-200 hover:text-red-400 hover:bg-red-500/10"
+                      >
+                        <Trash className="h-3.5 w-3.5" />
                       </button>
                     </TableCell>
                   </TableRow>
@@ -457,6 +511,7 @@ export default function InventoryPage() {
               )}
             </TableBody>
           </Table>
+          </div>
         </TabsContent>
 
         {/* ====== Tab 2: In Transit ====== */}
@@ -467,60 +522,60 @@ export default function InventoryPage() {
 
       {/* ====== Edit Product Dialog ====== */}
       <Dialog open={isEditOpen} onOpenChange={(v) => { setIsEditOpen(v); if (!v) setEditTarget(null); }}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-lg bg-slate-900 border-slate-800 text-white">
           <DialogHeader>
-            <DialogTitle>Edit Product</DialogTitle>
-            <DialogDescription>Update the product details below.</DialogDescription>
+            <DialogTitle className="text-white">Edit Product</DialogTitle>
+            <DialogDescription className="text-slate-400">Update the product details below.</DialogDescription>
           </DialogHeader>
           {editTarget && (
             <div className="space-y-4">
               <div className="grid gap-2">
-                <Label htmlFor="edit-prod-name">Name</Label>
-                <Input id="edit-prod-name" value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} />
+                <Label htmlFor="edit-prod-name" className="text-slate-300">Name</Label>
+                <Input id="edit-prod-name" value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} className="bg-slate-800 border-slate-700 text-white" />
               </div>
 
               <div className="grid gap-2">
-                <Label htmlFor="edit-prod-category">Category</Label>
+                <Label htmlFor="edit-prod-category" className="text-slate-300">Category</Label>
                 <select
                   id="edit-prod-category"
                   value={editForm.category}
                   onChange={(e) => setEditForm({ ...editForm, category: e.target.value })}
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                  className="flex h-10 w-full rounded-md border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-slate-600"
                 >
                   <option value="none">No Category</option>
-                  {categoryOptions.map((cat) => (
-                    <option key={cat} value={cat}>{cat}</option>
+                  {categories.map((cat) => (
+                    <option key={cat.id} value={cat.name}>{cat.name}</option>
                   ))}
                 </select>
               </div>
 
               <div className="grid grid-cols-3 gap-3">
                 <div className="grid gap-2">
-                  <Label htmlFor="edit-prod-cost">Cost Price</Label>
-                  <Input id="edit-prod-cost" type="number" min="0" step="0.01" value={editForm.cost_price} onChange={(e) => setEditForm({ ...editForm, cost_price: e.target.value })} />
+                  <Label htmlFor="edit-prod-cost" className="text-slate-300">Cost Price</Label>
+                  <Input id="edit-prod-cost" type="number" min="0" step="0.01" value={editForm.cost_price} onChange={(e) => setEditForm({ ...editForm, cost_price: e.target.value })} className="bg-slate-800 border-slate-700 text-white" />
                 </div>
                 <div className="grid gap-2">
-                  <Label htmlFor="edit-prod-sell">Selling Price</Label>
-                  <Input id="edit-prod-sell" type="number" min="0" step="0.01" value={editForm.selling_price} onChange={(e) => setEditForm({ ...editForm, selling_price: e.target.value })} />
+                  <Label htmlFor="edit-prod-sell" className="text-slate-300">Selling Price</Label>
+                  <Input id="edit-prod-sell" type="number" min="0" step="0.01" value={editForm.selling_price} onChange={(e) => setEditForm({ ...editForm, selling_price: e.target.value })} className="bg-slate-800 border-slate-700 text-white" />
                 </div>
                 <div className="grid gap-2">
-                  <Label htmlFor="edit-prod-stock">Stock</Label>
-                  <Input id="edit-prod-stock" type="number" min="0" step="1" value={editForm.stock} onChange={(e) => setEditForm({ ...editForm, stock: e.target.value })} />
+                  <Label htmlFor="edit-prod-stock" className="text-slate-300">Stock</Label>
+                  <Input id="edit-prod-stock" type="number" min="0" step="1" value={editForm.stock} onChange={(e) => setEditForm({ ...editForm, stock: e.target.value })} className="bg-slate-800 border-slate-700 text-white" />
                 </div>
               </div>
 
               <div className="grid gap-2">
-                <Label htmlFor="edit-prod-expired">Expired Date</Label>
-                <Input id="edit-prod-expired" type="date" value={editForm.expired_date} onChange={(e) => setEditForm({ ...editForm, expired_date: e.target.value })} />
+                <Label htmlFor="edit-prod-expired" className="text-slate-300">Expired Date</Label>
+                <Input id="edit-prod-expired" type="date" value={editForm.expired_date} onChange={(e) => setEditForm({ ...editForm, expired_date: e.target.value })} className="bg-slate-800 border-slate-700 text-white" />
               </div>
 
               <div className="grid gap-2">
-                <Label htmlFor="edit-prod-status">Status</Label>
+                <Label htmlFor="edit-prod-status" className="text-slate-300">Status</Label>
                 <select
                   id="edit-prod-status"
                   value={editForm.status}
                   onChange={(e) => setEditForm({ ...editForm, status: e.target.value })}
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                  className="flex h-10 w-full rounded-md border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-slate-600"
                 >
                   <option value="in_stock">In Stock</option>
                   <option value="in_transit">In Transit</option>
@@ -528,7 +583,7 @@ export default function InventoryPage() {
               </div>
 
               <div className="flex justify-end gap-3 pt-2">
-                <Button variant="outline" onClick={() => { setIsEditOpen(false); setEditTarget(null); }} disabled={isSavingEdit}>Cancel</Button>
+                <Button variant="outline" onClick={() => { setIsEditOpen(false); setEditTarget(null); }} disabled={isSavingEdit} className="border-slate-700 text-slate-300 hover:bg-slate-800">Cancel</Button>
                 <Button onClick={handleEditProduct} disabled={isSavingEdit} className="bg-orange-500 text-white hover:bg-orange-600 shadow-[0_0_10px_rgba(249,115,22,0.3)] transition-all">
                   {isSavingEdit ? "Saving..." : "Save Changes"}
                 </Button>
@@ -549,6 +604,7 @@ function AddProductDialog({
   onSubmit,
   isSaving,
   wallets,
+  categories,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -557,15 +613,16 @@ function AddProductDialog({
   onSubmit: (event: FormEvent<HTMLFormElement>) => Promise<void>;
   isSaving: boolean;
   wallets: Wallet[];
+  categories: { id: string; name: string }[];
 }) {
   const totalCost = (Number(formState.cost_price) || 0) * (Number(formState.stock) || 0);
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogTrigger render={<Button />}>Add Product</DialogTrigger>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-lg bg-slate-900 border-slate-800 text-white">
         <DialogHeader>
-          <DialogTitle>Add Product</DialogTitle>
-          <DialogDescription>Create a new product record and scan barcode from camera.</DialogDescription>
+          <DialogTitle className="text-white">Add Product</DialogTitle>
+          <DialogDescription className="text-slate-400">Create a new product record and scan barcode from camera.</DialogDescription>
         </DialogHeader>
         <form className="space-y-4" onSubmit={onSubmit}>
           <BarcodeScanner
@@ -574,46 +631,45 @@ function AddProductDialog({
           />
 
           <div className="grid gap-2">
-            <Label htmlFor="barcode">Barcode</Label>
+            <Label htmlFor="barcode" className="text-slate-300">Barcode</Label>
             <Input
               id="barcode"
               value={formState.barcode}
               onChange={(event) => onFormStateChange({ ...formState, barcode: event.target.value })}
               placeholder="Scan or enter barcode"
+              className="bg-slate-800 border-slate-700 text-white"
             />
           </div>
 
           <div className="grid gap-2">
-            <Label htmlFor="name">Name</Label>
+            <Label htmlFor="name" className="text-slate-300">Name</Label>
             <Input
               id="name"
               required
               value={formState.name}
               onChange={(event) => onFormStateChange({ ...formState, name: event.target.value })}
               placeholder="Product name"
+              className="bg-slate-800 border-slate-700 text-white"
             />
           </div>
 
           <div className="grid gap-2">
-            <Label htmlFor="category">Category</Label>
+            <Label htmlFor="category" className="text-slate-300">Category</Label>
             <select
               value={formState.category || "none"}
               onChange={(e) => onFormStateChange({ ...formState, category: e.target.value })}
-              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+              className="flex h-10 w-full rounded-md border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-slate-600"
             >
               <option value="none">No Category</option>
-              <option value="Food">Food</option>
-              <option value="Beverage">Beverage</option>
-              <option value="Electronics">Electronics</option>
-              <option value="Household">Household</option>
-              <option value="Health">Health</option>
-              <option value="Other">Other</option>
+              {categories.map((cat) => (
+                <option key={cat.id} value={cat.name}>{cat.name}</option>
+              ))}
             </select>
           </div>
 
           <div className="grid grid-cols-3 gap-3">
             <div className="grid gap-2">
-              <Label htmlFor="cost_price">Cost Price</Label>
+              <Label htmlFor="cost_price" className="text-slate-300">Cost Price</Label>
               <Input
                 id="cost_price"
                 required
@@ -621,12 +677,13 @@ function AddProductDialog({
                 min="0"
                 step="0.01"
                 value={formState.cost_price}
+                className="bg-slate-800 border-slate-700 text-white"
                 onChange={(event) => onFormStateChange({ ...formState, cost_price: event.target.value })}
                 placeholder="0.00"
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="selling_price">Selling Price</Label>
+              <Label htmlFor="selling_price" className="text-slate-300">Selling Price</Label>
               <Input
                 id="selling_price"
                 required
@@ -636,10 +693,11 @@ function AddProductDialog({
                 value={formState.selling_price}
                 onChange={(event) => onFormStateChange({ ...formState, selling_price: event.target.value })}
                 placeholder="0.00"
+                className="bg-slate-800 border-slate-700 text-white"
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="stock">Stock</Label>
+              <Label htmlFor="stock" className="text-slate-300">Stock</Label>
               <Input
                 id="stock"
                 required
@@ -649,27 +707,29 @@ function AddProductDialog({
                 value={formState.stock}
                 onChange={(event) => onFormStateChange({ ...formState, stock: event.target.value })}
                 placeholder="0"
+                className="bg-slate-800 border-slate-700 text-white"
               />
             </div>
           </div>
 
           <div className="grid gap-2">
-            <Label htmlFor="expired_date">Expired Date</Label>
+            <Label htmlFor="expired_date" className="text-slate-300">Expired Date</Label>
             <Input
               id="expired_date"
               type="date"
               value={formState.expired_date}
               onChange={(event) => onFormStateChange({ ...formState, expired_date: event.target.value })}
+              className="bg-slate-800 border-slate-700 text-white"
             />
           </div>
 
           <div className="grid gap-2">
-            <Label htmlFor="product-status">Status</Label>
+            <Label htmlFor="product-status" className="text-slate-300">Status</Label>
             <select
               id="product-status"
               value={formState.status}
               onChange={(e) => onFormStateChange({ ...formState, status: e.target.value })}
-              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+              className="flex h-10 w-full rounded-md border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-slate-600"
             >
               <option value="in_stock">In Stock</option>
               <option value="in_transit">In Transit</option>
@@ -677,12 +737,12 @@ function AddProductDialog({
           </div>
 
           <div className="grid gap-2">
-            <Label htmlFor="payment-wallet">Payment Wallet</Label>
+            <Label htmlFor="payment-wallet" className="text-slate-300">Payment Wallet</Label>
             <select
               id="payment-wallet"
               value={formState.walletId}
               onChange={(e) => onFormStateChange({ ...formState, walletId: e.target.value })}
-              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+              className="flex h-10 w-full rounded-md border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-slate-600"
             >
               <option value="">No wallet deduction</option>
               {wallets.map((w) => (
@@ -695,8 +755,8 @@ function AddProductDialog({
 
           {totalCost > 0 && (
             <div className="rounded-md border border-orange-500/30 bg-orange-500/5 p-3 text-sm">
-              <span className="text-muted-foreground">Total Cost: </span>
-              <span className="font-semibold text-orange-500">{formatRupiah(totalCost)}</span>
+              <span className="text-slate-400">Total Cost: </span>
+              <span className="font-semibold text-orange-400">{formatRupiah(totalCost)}</span>
               {formState.walletId && (
                 <span className="text-xs text-slate-400 ml-2">→ will be deducted from wallet</span>
               )}
@@ -704,7 +764,7 @@ function AddProductDialog({
           )}
 
           <DialogFooter>
-            <Button type="submit" disabled={isSaving}>
+            <Button type="submit" disabled={isSaving} className="bg-orange-500 text-white hover:bg-orange-600 shadow-[0_0_10px_rgba(249,115,22,0.3)] transition-all">
               {isSaving ? "Saving..." : "Save Product"}
             </Button>
           </DialogFooter>
@@ -824,14 +884,14 @@ function InTransitPanel({
 
   return (
     <div className="space-y-3">
-      <p className="text-sm text-muted-foreground">
+      <p className="text-sm text-slate-400">
         Goods that have been paid for but haven&apos;t arrived yet. This value is included in your Total Assets.
       </p>
 
       {isLoading ? (
-        <div className="text-center py-8 text-sm text-muted-foreground">Loading in-transit products...</div>
+        <div className="text-center py-8 text-sm text-slate-500">Loading in-transit products...</div>
       ) : products.length === 0 ? (
-        <div className="text-center py-8 text-sm text-muted-foreground border border-dashed border-slate-800 rounded-xl">
+        <div className="text-center py-8 text-sm text-slate-500 border border-dashed border-slate-800 rounded-xl">
           No products currently in transit.
         </div>
       ) : (
@@ -845,7 +905,7 @@ function InTransitPanel({
               >
                 <div className="flex-1 space-y-1">
                   <div className="flex items-center gap-2">
-                    <span className="text-sm font-semibold text-foreground group-hover:text-orange-500 transition-colors">
+                    <span className="text-sm font-semibold text-white group-hover:text-orange-400 transition-colors">
                       {product.name}
                     </span>
                     <span className="inline-flex items-center rounded-full bg-orange-500/15 px-2 py-0.5 text-[10px] font-bold text-orange-500 uppercase tracking-wider animate-pulse shadow-[0_0_8px_rgba(249,115,22,0.4)]">

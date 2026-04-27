@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState, Suspense } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -28,7 +28,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Plus, Minus } from "lucide-react";
+import { Plus, Minus, ArrowRightLeft } from "lucide-react";
 
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { formatRupiah } from "@/lib/utils";
@@ -37,6 +37,7 @@ type TransactionType =
   | "Physical Sale"
   | "Money Transfer"
   | "Cash Withdrawal"
+  | "Balance Transfer"
   | "Electronic Service"
   | "Digital PPOB (Pulsa/Game)"
   | "Affiliate / Passive Income"
@@ -55,6 +56,7 @@ type Product = {
   name: string;
   selling_price: number | string;
   stock: number;
+  status?: string;
 };
 
 type Expense = {
@@ -67,19 +69,12 @@ type Expense = {
   wallet_name: string;
 };
 
-const expenseCategories = [
-  "Operational",
-  "Supplies",
-  "Personnel",
-  "Marketing",
-  "Transportation",
-  "Miscellaneous",
-];
 
 const transactionTypes: TransactionType[] = [
   "Physical Sale",
   "Money Transfer",
   "Cash Withdrawal",
+  "Balance Transfer",
   "Electronic Service",
   "Digital PPOB (Pulsa/Game)",
   "Affiliate / Passive Income",
@@ -87,13 +82,15 @@ const transactionTypes: TransactionType[] = [
   "Kasbon (Employee Loan)",
 ];
 
-function TransactionsForm() {
+function TransactionsForm({ onSuccess }: { onSuccess: () => void }) {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const [transactionType, setTransactionType] = useState<TransactionType>(
     (searchParams.get("type") as TransactionType) || "Physical Sale"
   );
   const [wallets, setWallets] = useState<Wallet[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
+  const [categories, setCategories] = useState<{ id: string; name: string }[]>([]);
   const [dataError, setDataError] = useState<string | null>(null);
   const [isLoadingData, setIsLoadingData] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -115,6 +112,15 @@ function TransactionsForm() {
   const [internetAmount, setInternetAmount] = useState("");
   const [notes, setNotes] = useState(searchParams.get("notes") || "");
   const [employeeName, setEmployeeName] = useState("");
+
+  // Balance Transfer states
+  const [isTransferDialogOpen, setIsTransferDialogOpen] = useState(false);
+  const [transferFromWallet, setTransferFromWallet] = useState("");
+  const [transferToWallet, setTransferToWallet] = useState("");
+  const [transferAmount, setTransferAmount] = useState("");
+  const [transferDate, setTransferDate] = useState(new Date().toISOString().split('T')[0]);
+  const [transferNotes, setTransferNotes] = useState("");
+  const [isTransferring, setIsTransferring] = useState(false);
 
   // Kasbon states
   const [paymentMethod, setPaymentMethod] = useState<"lunas" | "kasbon">(
@@ -139,19 +145,23 @@ function TransactionsForm() {
       }
 
       setIsLoadingData(true);
-      const [walletResult, productResult] = await Promise.all([
+      const [walletResult, productResult, categoryResult] = await Promise.all([
         supabase.from("wallets").select("id, name, type, balance").order("name", { ascending: true }),
-        supabase.from("products").select("id, name, selling_price, stock").order("name", { ascending: true }),
+        supabase.from("products").select("id, name, selling_price, stock, status").order("name", { ascending: true }),
+        supabase.from("categories").select("id, name").eq("type", "expense").order("name", { ascending: true }),
       ]);
 
-      if (walletResult.error || productResult.error) {
-        setDataError(walletResult.error?.message ?? productResult.error?.message ?? "Failed to load data.");
+      if (walletResult.error || productResult.error || categoryResult.error) {
+        setDataError(walletResult.error?.message ?? productResult.error?.message ?? categoryResult.error?.message ?? "Failed to load data.");
         setIsLoadingData(false);
         return;
       }
 
       setWallets((walletResult.data ?? []) as Wallet[]);
-      setProducts((productResult.data ?? []) as Product[]);
+      // Filter products to only show 'in_stock' items for sales
+      const allProducts = (productResult.data ?? []) as Product[];
+      setProducts(allProducts.filter((p) => (p.status ?? "in_stock") === "in_stock"));
+      setCategories((categoryResult.data ?? []) as { id: string; name: string }[]);
       setDataError(null);
       setIsLoadingData(false);
     }
@@ -209,6 +219,7 @@ function TransactionsForm() {
       from_wallet_id?: string | null;
       to_wallet_id?: string | null;
       product_id?: string | null;
+      quantity?: number;
       notes?: string | null;
     }) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -236,6 +247,10 @@ function TransactionsForm() {
       if (selectedProduct.stock < parsedQuantity) {
         return fail("Insufficient product stock.");
       }
+      // Safety check: Prevent selling 'On the Way' items
+      if ((selectedProduct.status ?? "in_stock") !== "in_stock") {
+        return fail("Product is still in transit and cannot be sold yet.");
+      }
 
       const saleAmount = safeNumber(selectedProduct.selling_price) * parsedQuantity;
       const stockResult = await updateProductStock(selectedProduct, selectedProduct.stock - parsedQuantity);
@@ -259,6 +274,7 @@ function TransactionsForm() {
         amount: saleAmount,
         to_wallet_id: paymentMethod === "lunas" ? selectedDestinationWallet!.id : null,
         product_id: selectedProduct.id,
+        quantity: parsedQuantity,
         notes: notes || `Physical sale (${parsedQuantity}x ${selectedProduct.name})`,
       });
       if (logResult.error) return fail(logResult.error.message);
@@ -340,6 +356,41 @@ function TransactionsForm() {
         from_wallet_id: selectedSourceWallet.id,
         to_wallet_id: paymentMethod === "lunas" ? selectedDestinationWallet.id : null,
         notes: notes || "Cash withdrawal",
+      });
+      if (logResult.error) return fail(logResult.error.message);
+
+    } else if (transactionType === "Balance Transfer") {
+      if (!selectedSourceWallet || !selectedDestinationWallet || parsedAmount <= 0) {
+        return fail("Amount, source wallet, and destination wallet are required.");
+      }
+      if (selectedSourceWallet.id === selectedDestinationWallet.id) {
+        return fail("Source and destination wallet must be different.");
+      }
+      if (safeNumber(selectedSourceWallet.balance) < parsedAmount) {
+        return fail("Insufficient source wallet balance.");
+      }
+
+      // Deduct from source wallet
+      const sourceResult = await updateWalletBalance(
+        selectedSourceWallet,
+        safeNumber(selectedSourceWallet.balance) - parsedAmount,
+      );
+      if (sourceResult.error) return fail(sourceResult.error.message);
+
+      // Add to destination wallet
+      const destinationResult = await updateWalletBalance(
+        selectedDestinationWallet,
+        safeNumber(selectedDestinationWallet.balance) + parsedAmount,
+      );
+      if (destinationResult.error) return fail(destinationResult.error.message);
+
+      // Log balance transfer transaction
+      const logResult = await logTransaction({
+        type: "balance_transfer",
+        amount: parsedAmount,
+        from_wallet_id: selectedSourceWallet.id,
+        to_wallet_id: selectedDestinationWallet.id,
+        notes: notes || "Balance transfer",
       });
       if (logResult.error) return fail(logResult.error.message);
 
@@ -503,6 +554,9 @@ function TransactionsForm() {
     }
 
     toast.success("Transaction saved");
+    // Refresh the dashboard to update monthly stats
+    router.refresh();
+    onSuccess();
     setProductId("");
     setQuantity("1");
     setDestinationWalletId("");
@@ -526,20 +580,23 @@ function TransactionsForm() {
   }
 
   return (
-    <section className="space-y-5">
-      <div className="space-y-1">
-        <h2 className="text-2xl font-semibold">Transactions</h2>
-        <p className="text-muted-foreground">Record all ERP income modules with wallet and stock updates.</p>
+    <section className="space-y-6">
+      <div className="flex items-center justify-between bg-slate-900/50 backdrop-blur-sm border border-slate-800/50 rounded-xl p-6">
+        <div>
+          <h2 className="text-2xl font-semibold text-white">Transactions</h2>
+          <p className="text-slate-400 text-sm">Record all ERP income modules with wallet and stock updates.</p>
+        </div>
       </div>
 
-      <form className="space-y-4 rounded-xl border p-4 md:p-6" onSubmit={handleSubmit}>
+      <div className="bg-slate-900/40 backdrop-blur-sm border border-slate-800/50 rounded-xl p-6">
+        <form className="space-y-4" onSubmit={handleSubmit}>
         <div className="grid gap-2">
-          <Label htmlFor="transaction-type">Transaction Type</Label>
+          <Label htmlFor="transaction-type" className="text-slate-300">Transaction Type</Label>
           <select
             id="transaction-type"
             value={transactionType}
             onChange={(e) => setTransactionType((e.target.value as TransactionType) || "Physical Sale")}
-            className="flex h-10 w-full md:w-72 rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+            className="flex h-10 w-full md:w-72 rounded-md border border-slate-700 bg-slate-800/50 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
           >
             <option value="">Select transaction type</option>
             {transactionTypes.map((type) => (
@@ -551,15 +608,15 @@ function TransactionsForm() {
         </div>
 
         {transactionType === "Physical Sale" ? (
-          <div className="grid gap-4 rounded-lg border p-4">
+          <div className="grid gap-4 rounded-lg border border-slate-800/50 bg-slate-800/30 p-4">
             <div className="grid gap-4 md:grid-cols-2">
               <div className="grid gap-2">
-                <Label>Product</Label>
+                <Label className="text-slate-300">Product</Label>
                 <select
                   value={productId}
                   onChange={(e) => setProductId(e.target.value)}
                   disabled={isLoadingData}
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                  className="flex h-10 w-full rounded-md border border-slate-700 bg-slate-800/50 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
                 >
                   <option value="">{isLoadingData ? "Loading products..." : "Choose product"}</option>
                   {products.map((product) => (
@@ -570,8 +627,8 @@ function TransactionsForm() {
                 </select>
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="quantity">Quantity</Label>
-                <Input id="quantity" type="number" min="1" step="1" required value={quantity} onChange={(event) => setQuantity(event.target.value)} />
+                <Label htmlFor="quantity" className="text-slate-300">Quantity</Label>
+                <Input id="quantity" type="number" min="1" step="1" required value={quantity} onChange={(event) => setQuantity(event.target.value)} className="bg-slate-800/50 border-slate-700 text-white" />
               </div>
             </div>
 
@@ -1057,17 +1114,282 @@ function TransactionsForm() {
           </div>
         ) : null}
 
+        {transactionType === "Balance Transfer" ? (
+          <div className="grid gap-4 rounded-lg border p-4">
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="grid gap-2">
+                <Label htmlFor="balance-transfer-source">From Wallet *</Label>
+                <select
+                  id="balance-transfer-source"
+                  value={sourceWalletId}
+                  onChange={(e) => setSourceWalletId(e.target.value)}
+                  disabled={isLoadingData}
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
+                >
+                  <option value="">{isLoadingData ? "Loading wallets..." : "Choose source wallet"}</option>
+                  {wallets.map((wallet) => (
+                    <option key={wallet.id} value={wallet.id}>
+                      {wallet.name} ({wallet.type}) - {formatRupiah(wallet.balance)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="balance-transfer-destination">To Wallet *</Label>
+                <select
+                  id="balance-transfer-destination"
+                  value={destinationWalletId}
+                  onChange={(e) => setDestinationWalletId(e.target.value)}
+                  disabled={isLoadingData}
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
+                >
+                  <option value="">{isLoadingData ? "Loading wallets..." : "Choose destination wallet"}</option>
+                  {wallets.map((wallet) => (
+                    <option key={wallet.id} value={wallet.id}>
+                      {wallet.name} ({wallet.type}) - {formatRupiah(wallet.balance)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="balance-transfer-amount">Amount *</Label>
+              <Input
+                id="balance-transfer-amount"
+                type="number"
+                min="0.01"
+                step="0.01"
+                required
+                value={amount}
+                onChange={(event) => setAmount(event.target.value)}
+                placeholder="0.00"
+                className="focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
+              />
+            </div>
+          </div>
+        ) : null}
+
         <div className="grid gap-2">
-          <Label htmlFor="notes">Notes</Label>
-          <Input id="notes" value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Optional note" />
+          <Label htmlFor="notes" className="text-slate-300">Notes</Label>
+          <Input id="notes" value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Optional note" className="bg-slate-800/50 border-slate-700 text-white placeholder:text-slate-500" />
         </div>
 
         {dataError ? <p className="text-sm text-destructive">{dataError}</p> : null}
 
-        <Button type="submit" disabled={isSubmitting || isLoadingData}>
+        <Button type="submit" disabled={isSubmitting || isLoadingData} className="bg-gradient-to-r from-orange-500 to-orange-600 text-white hover:from-orange-600 hover:to-orange-700 shadow-[0_0_15px_rgba(249,115,22,0.4)] transition-all">
           {isSubmitting ? "Saving..." : "Save Transaction"}
         </Button>
       </form>
+      </div>
+
+      {/* Balance Transfer Dialog */}
+      <Dialog open={isTransferDialogOpen} onOpenChange={setIsTransferDialogOpen}>
+        <DialogContent className="sm:max-w-[500px] bg-slate-900 border-slate-800">
+          <DialogHeader>
+            <DialogTitle className="text-white">Balance Transfer</DialogTitle>
+          </DialogHeader>
+          <form
+            onSubmit={async (e) => {
+              e.preventDefault();
+              if (!supabase) {
+                toast.error("Supabase is not configured.");
+                return;
+              }
+
+              const fromWallet = wallets.find((w) => w.id === transferFromWallet);
+              const toWallet = wallets.find((w) => w.id === transferToWallet);
+              const parsedAmount = Number(transferAmount || "0");
+
+              if (!fromWallet || !toWallet) {
+                toast.error("Please select both source and destination wallets.");
+                return;
+              }
+              if (fromWallet.id === toWallet.id) {
+                toast.error("Source and destination wallet must be different.");
+                return;
+              }
+              if (parsedAmount <= 0) {
+                toast.error("Amount must be greater than 0.");
+                return;
+              }
+              if (safeNumber(fromWallet.balance) < parsedAmount) {
+                toast.error("Insufficient source wallet balance.");
+                return;
+              }
+
+              setIsTransferring(true);
+
+              try {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const sb: any = supabase;
+
+                // Decrement source wallet
+                const sourceResult = await sb
+                  .from("wallets")
+                  .update({ balance: safeNumber(fromWallet.balance) - parsedAmount } as any)
+                  .eq("id", fromWallet.id);
+
+                if (sourceResult.error) {
+                  toast.error("Failed to update source wallet", { description: sourceResult.error.message });
+                  setIsTransferring(false);
+                  return;
+                }
+
+                // Increment destination wallet
+                const destResult = await sb
+                  .from("wallets")
+                  .update({ balance: safeNumber(toWallet.balance) + parsedAmount } as any)
+                  .eq("id", toWallet.id);
+
+                if (destResult.error) {
+                  toast.error("Failed to update destination wallet", { description: destResult.error.message });
+                  setIsTransferring(false);
+                  return;
+                }
+
+                // Log transaction
+                const logResult = await sb.from("transactions").insert({
+                  date: transferDate,
+                  type: "balance_transfer",
+                  amount: parsedAmount,
+                  from_wallet_id: fromWallet.id,
+                  to_wallet_id: toWallet.id,
+                  notes: transferNotes || "Balance transfer",
+                } as any);
+
+                if (logResult.error) {
+                  toast.error("Failed to log transaction", { description: logResult.error.message });
+                  setIsTransferring(false);
+                  return;
+                }
+
+                toast.success("Balance transferred successfully");
+                setIsTransferDialogOpen(false);
+                setTransferFromWallet("");
+                setTransferToWallet("");
+                setTransferAmount("");
+                setTransferNotes("");
+                setTransferDate(new Date().toISOString().split('T')[0]);
+
+                // Reload wallets data
+                const [newWalletResult] = await Promise.all([
+                  supabase.from("wallets").select("id, name, type, balance").order("name", { ascending: true }),
+                ]);
+                if (!newWalletResult.error) {
+                  setWallets(newWalletResult.data as Wallet[]);
+                }
+              } catch (error) {
+                toast.error("Transfer failed", { description: error instanceof Error ? error.message : "Unknown error" });
+              } finally {
+                setIsTransferring(false);
+              }
+            }}
+            className="space-y-4"
+          >
+            <div className="grid gap-2">
+              <Label htmlFor="transfer-from">From Wallet</Label>
+              <select
+                id="transfer-from"
+                value={transferFromWallet}
+                onChange={(e) => setTransferFromWallet(e.target.value)}
+                className="flex h-10 w-full rounded-md border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
+              >
+                <option value="">Select source wallet</option>
+                {wallets.map((wallet) => (
+                  <option key={wallet.id} value={wallet.id}>
+                    {wallet.name} ({wallet.type}) - {formatRupiah(wallet.balance)}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="transfer-to">To Wallet</Label>
+              <select
+                id="transfer-to"
+                value={transferToWallet}
+                onChange={(e) => setTransferToWallet(e.target.value)}
+                className="flex h-10 w-full rounded-md border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
+              >
+                <option value="">Select destination wallet</option>
+                {wallets.map((wallet) => (
+                  <option key={wallet.id} value={wallet.id}>
+                    {wallet.name} ({wallet.type}) - {formatRupiah(wallet.balance)}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="transfer-amount">Amount</Label>
+              <Input
+                id="transfer-amount"
+                type="number"
+                min="0.01"
+                step="0.01"
+                required
+                value={transferAmount}
+                onChange={(e) => setTransferAmount(e.target.value)}
+                placeholder="0.00"
+                className="bg-slate-800 border-slate-700 text-white focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
+              />
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="transfer-date">Date</Label>
+              <Input
+                id="transfer-date"
+                type="date"
+                required
+                value={transferDate}
+                onChange={(e) => setTransferDate(e.target.value)}
+                className="bg-slate-800 border-slate-700 text-white focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
+              />
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="transfer-notes">Notes</Label>
+              <Input
+                id="transfer-notes"
+                value={transferNotes}
+                onChange={(e) => setTransferNotes(e.target.value)}
+                placeholder="Optional note"
+                className="bg-slate-800 border-slate-700 text-white focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
+              />
+            </div>
+
+            <div className="flex justify-end gap-3">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setIsTransferDialogOpen(false)}
+                disabled={isTransferring}
+                className="border-slate-700 text-white hover:bg-slate-800"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                disabled={isTransferring}
+                className="bg-orange-500 text-white hover:bg-orange-600 shadow-[0_0_10px_rgba(249,115,22,0.3)] transition-all"
+              >
+                {isTransferring ? "Transferring..." : "Confirm Transfer"}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Transfer Balance Button */}
+      <Button
+        onClick={() => setIsTransferDialogOpen(true)}
+        className="fixed bottom-6 right-6 bg-orange-500 text-white hover:bg-orange-600 shadow-[0_0_15px_rgba(249,115,22,0.4)] transition-all z-50"
+        size="lg"
+      >
+        <ArrowRightLeft className="mr-2 h-5 w-5" />
+        Transfer Balance
+      </Button>
     </section>
   );
 }
@@ -1077,15 +1399,9 @@ function safeNumber(value: number | string) {
   return Number.isFinite(numericValue) ? numericValue : 0;
 }
 
-function ExpensesComponent() {
-  const [wallets, setWallets] = useState<Wallet[]>([]);
-  const [expenses, setExpenses] = useState<Expense[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+function ExpensesForm({ wallets, onSuccess }: { wallets: Wallet[]; onSuccess: () => void }) {
+  const [categories, setCategories] = useState<{ id: string; name: string }[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  
-  // Form state
-  const [isAddExpenseOpen, setIsAddExpenseOpen] = useState(false);
   const [expenseAmount, setExpenseAmount] = useState("");
   const [expenseDescription, setExpenseDescription] = useState("");
   const [expenseCategory, setExpenseCategory] = useState("");
@@ -1101,77 +1417,216 @@ function ExpensesComponent() {
   }, []);
 
   useEffect(() => {
-    async function loadData() {
-      if (!supabase) {
-        setErrorMessage("Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY.");
-        setIsLoading(false);
-        return;
+    async function loadCategories() {
+      if (!supabase) return;
+      const { data, error } = await supabase.from("categories").select("id, name").eq("type", "expense").order("name", { ascending: true });
+      if (!error) {
+        setCategories((data ?? []) as { id: string; name: string }[]);
       }
-
-      setIsLoading(true);
-      const [walletResult, expenseResult] = await Promise.all([
-        supabase.from("wallets").select("id, name, type, balance").order("name", { ascending: true }),
-        supabase
-          .from("transactions")
-          .select("id, date, amount, notes, expense_category, from_wallet_id")
-          .eq("type", "expense")
-          .order("date", { ascending: false })
-          .limit(50),
-      ]);
-
-      if (walletResult.error) {
-        setErrorMessage(walletResult.error.message);
-        setIsLoading(false);
-        return;
-      }
-
-      setWallets((walletResult.data ?? []) as Wallet[]);
-
-      if (expenseResult.error) {
-        setErrorMessage(expenseResult.error.message);
-        setIsLoading(false);
-        return;
-      }
-
-      // Join with wallet names
-      const expenseData = (expenseResult.data ?? []) as any[];
-      const expensesWithWalletNames = expenseData.map((expense) => {
-        const wallet = wallets.find((w) => w.id === expense.from_wallet_id);
-        return {
-          id: expense.id,
-          date: expense.date,
-          amount: expense.amount,
-          description: expense.notes || "",
-          expense_category: expense.expense_category,
-          from_wallet_id: expense.from_wallet_id,
-          wallet_name: wallet?.name || "Unknown",
-        } as Expense;
-      });
-
-      setExpenses(expensesWithWalletNames);
-      setErrorMessage(null);
-      setIsLoading(false);
     }
-
-    loadData();
+    loadCategories();
   }, [supabase]);
 
-  const loadExpenses = async () => {
-    if (!supabase) return;
-    
-    const { data, error } = await supabase
-      .from("transactions")
-      .select("id, date, amount, notes, expense_category, from_wallet_id")
-      .eq("type", "expense")
-      .order("date", { ascending: false })
-      .limit(50);
-
-    if (error) {
-      setErrorMessage(error.message);
+  async function handleAddExpense(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!supabase) {
+      toast.error("Supabase is not configured.");
       return;
     }
 
-    const expenseData = (data ?? []) as any[];
+    setIsSubmitting(true);
+    const parsedAmount = Number(expenseAmount);
+
+    if (parsedAmount <= 0) {
+      toast.error("Amount must be greater than 0.");
+      setIsSubmitting(false);
+      return;
+    }
+
+    const selectedWallet = wallets.find((wallet) => wallet.id === expenseWalletId);
+    if (!selectedWallet) {
+      toast.error("Please select a wallet.");
+      setIsSubmitting(false);
+      return;
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const sb = supabase as any;
+
+    // Deduct from wallet
+    const walletResult = await sb.from("wallets").update({ balance: safeNumber(selectedWallet.balance) - parsedAmount } as any).eq("id", selectedWallet.id);
+
+    if (walletResult.error) {
+      toast.error("Failed to update wallet", { description: walletResult.error.message });
+      setIsSubmitting(false);
+      return;
+    }
+
+    // Log expense transaction
+    const logResult = await sb.from("transactions").insert({
+      date: expenseDate,
+      type: "expense",
+      amount: parsedAmount,
+      from_wallet_id: selectedWallet.id,
+      notes: expenseDescription,
+      expense_category: expenseCategory,
+    } as any);
+
+    if (logResult.error) {
+      toast.error("Failed to log expense", { description: logResult.error.message });
+      setIsSubmitting(false);
+      return;
+    }
+
+    toast.success("Expense recorded successfully");
+    setIsSubmitting(false);
+    setExpenseAmount("");
+    setExpenseDescription("");
+    setExpenseCategory("");
+    setExpenseDate(new Date().toISOString().split('T')[0]);
+    setExpenseWalletId("");
+    onSuccess();
+  }
+
+  return (
+    <form onSubmit={handleAddExpense} className="space-y-4">
+      <div className="grid gap-2">
+        <Label htmlFor="expense-amount" className="text-slate-300">Amount *</Label>
+        <Input
+          id="expense-amount"
+          type="number"
+          min="0.01"
+          step="0.01"
+          required
+          value={expenseAmount}
+          onChange={(e) => setExpenseAmount(e.target.value)}
+          placeholder="0.00"
+          className="bg-slate-800/50 border-slate-700 text-white placeholder:text-slate-500"
+        />
+      </div>
+
+      <div className="grid gap-2">
+        <Label htmlFor="expense-description" className="text-slate-300">Description</Label>
+        <Input
+          id="expense-description"
+          value={expenseDescription}
+          onChange={(e) => setExpenseDescription(e.target.value)}
+          placeholder="e.g. Office supplies purchase"
+          className="bg-slate-800/50 border-slate-700 text-white placeholder:text-slate-500"
+        />
+      </div>
+
+      <div className="grid gap-2">
+        <Label htmlFor="expense-category" className="text-slate-300">Category *</Label>
+        <select
+          id="expense-category"
+          required
+          value={expenseCategory}
+          onChange={(e) => setExpenseCategory(e.target.value)}
+          className="flex h-10 w-full rounded-md border border-slate-700 bg-slate-800/50 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
+        >
+          <option value="">Select category</option>
+          {categories.map((cat) => (
+            <option key={cat.id} value={cat.name}>
+              {cat.name}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div className="grid gap-2">
+        <Label htmlFor="expense-date" className="text-slate-300">Date *</Label>
+        <Input
+          id="expense-date"
+          type="date"
+          required
+          value={expenseDate}
+          onChange={(e) => setExpenseDate(e.target.value)}
+          className="bg-slate-800/50 border-slate-700 text-white"
+        />
+      </div>
+
+      <div className="grid gap-2">
+        <Label htmlFor="expense-wallet" className="text-slate-300">Select Wallet *</Label>
+        <select
+          id="expense-wallet"
+          required
+          value={expenseWalletId}
+          onChange={(e) => setExpenseWalletId(e.target.value)}
+          className="flex h-10 w-full rounded-md border border-slate-700 bg-slate-800/50 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
+        >
+          <option value="">Select wallet</option>
+          {wallets.map((wallet) => (
+            <option key={wallet.id} value={wallet.id}>
+              {wallet.name} ({wallet.type}) - {formatRupiah(wallet.balance)}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div className="flex justify-end gap-3 pt-4">
+        <Button
+          type="button"
+          variant="outline"
+          onClick={onSuccess}
+          disabled={isSubmitting}
+          className="border-slate-700 text-slate-300 hover:bg-slate-800"
+        >
+          Cancel
+        </Button>
+        <Button
+          type="submit"
+          disabled={isSubmitting}
+          className="bg-gradient-to-r from-orange-500 to-orange-600 text-white hover:from-orange-600 hover:to-orange-700 shadow-[0_0_15px_rgba(249,115,22,0.4)] transition-all"
+        >
+          {isSubmitting ? "Recording..." : "Record Expense"}
+        </Button>
+      </div>
+    </form>
+  );
+}
+
+function TransactionsDashboard() {
+  const [isIncomeModalOpen, setIsIncomeModalOpen] = useState(false);
+  const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
+  const [wallets, setWallets] = useState<Wallet[]>([]);
+  const [incomeTransactions, setIncomeTransactions] = useState<any[]>([]);
+  const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [dataError, setDataError] = useState<string | null>(null);
+
+  const supabase = useMemo(() => {
+    try {
+      return getSupabaseClient();
+    } catch {
+      return null;
+    }
+  }, []);
+
+  const loadData = async () => {
+    if (!supabase) {
+      setDataError("Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY.");
+      setIsLoading(false);
+      return;
+    }
+
+    setIsLoading(true);
+    const [walletResult, expenseResult, transactionResult] = await Promise.all([
+      supabase.from("wallets").select("id, name, type, balance").order("name", { ascending: true }),
+      supabase.from("transactions").select("*").eq("type", "expense").order("date", { ascending: false }).limit(50),
+      supabase.from("transactions").select("*").neq("type", "expense").order("date", { ascending: false }).limit(50),
+    ]);
+
+    if (walletResult.error || expenseResult.error || transactionResult.error) {
+      setDataError(walletResult.error?.message ?? expenseResult.error?.message ?? transactionResult.error?.message ?? "Failed to load data.");
+      setIsLoading(false);
+      return;
+    }
+
+    setWallets((walletResult.data ?? []) as Wallet[]);
+
+    // Process expense transactions
+    const expenseData = (expenseResult.data ?? []) as any[];
     const expensesWithWalletNames = expenseData.map((expense) => {
       const wallet = wallets.find((w) => w.id === expense.from_wallet_id);
       return {
@@ -1186,337 +1641,218 @@ function ExpensesComponent() {
     });
 
     setExpenses(expensesWithWalletNames);
+    setIncomeTransactions(transactionResult.data ?? []);
+    setDataError(null);
+    setIsLoading(false);
   };
 
-  async function handleAddExpense(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!supabase) {
-      toast.error("Supabase is not configured.");
-      return;
-    }
+  useEffect(() => {
+    loadData();
+  }, [supabase]);
 
-    if (!expenseWalletId || !expenseAmount || !expenseCategory) {
-      toast.error("Please fill in all required fields");
-      return;
-    }
-
-    setIsSubmitting(true);
-
-    const selectedWallet = wallets.find((wallet) => wallet.id === expenseWalletId);
-    if (!selectedWallet) {
-      toast.error("Invalid wallet selected");
-      setIsSubmitting(false);
-      return;
-    }
-
-    const parsedAmount = Number(expenseAmount);
-    if (parsedAmount <= 0) {
-      toast.error("Amount must be greater than zero");
-      setIsSubmitting(false);
-      return;
-    }
-
-    if (safeNumber(selectedWallet.balance) < parsedAmount) {
-      toast.error("Insufficient wallet balance");
-      setIsSubmitting(false);
-      return;
-    }
-
-    // Deduct from wallet balance
-    const walletResult = await (supabase as any)
-      .from("wallets")
-      .update({ balance: safeNumber(selectedWallet.balance) - parsedAmount } as any)
-      .eq("id", selectedWallet.id);
-
-    if (walletResult.error) {
-      toast.error("Failed to update wallet balance", { description: walletResult.error.message });
-      setIsSubmitting(false);
-      return;
-    }
-
-    // Insert expense transaction
-    const transactionResult = await (supabase as any)
-      .from("transactions")
-      .insert({
-        date: new Date(expenseDate).toISOString(),
-        type: "expense",
-        amount: parsedAmount,
-        from_wallet_id: selectedWallet.id,
-        expense_category: expenseCategory,
-        notes: expenseDescription.trim() || null,
-      } as any);
-
-    if (transactionResult.error) {
-      toast.error("Failed to record expense", { description: transactionResult.error.message });
-      setIsSubmitting(false);
-      return;
-    }
-
-    toast.success("Expense recorded successfully");
-    setIsSubmitting(false);
-    setIsAddExpenseOpen(false);
-    
-    // Reset form
-    setExpenseAmount("");
-    setExpenseDescription("");
-    setExpenseCategory("");
-    setExpenseDate(new Date().toISOString().split('T')[0]);
-    setExpenseWalletId("");
-
-    // Reload data
-    await loadData();
-  }
-
-  async function loadData() {
-    if (!supabase) {
-      setErrorMessage("Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY.");
-      setIsLoading(false);
-      return;
-    }
-
-    setIsLoading(true);
-    const [walletResult, expenseResult] = await Promise.all([
-      supabase.from("wallets").select("id, name, type, balance").order("name", { ascending: true }),
-      supabase
-        .from("transactions")
-        .select("id, date, amount, notes, expense_category, from_wallet_id")
-        .eq("type", "expense")
-        .order("date", { ascending: false })
-        .limit(50),
-    ]);
-
-    if (walletResult.error) {
-      setErrorMessage(walletResult.error.message);
-      setIsLoading(false);
-      return;
-    }
-
-    setWallets((walletResult.data ?? []) as Wallet[]);
-
-    if (expenseResult.error) {
-      setErrorMessage(expenseResult.error.message);
-      setIsLoading(false);
-      return;
-    }
-
-    const expenseData = (expenseResult.data ?? []) as any[];
-    const expensesWithWalletNames = expenseData.map((expense) => {
-      const wallet = (walletResult.data ?? []).find((w: any) => w.id === expense.from_wallet_id);
-      return {
-        id: expense.id,
-        date: expense.date,
-        amount: expense.amount,
-        description: expense.notes || "",
-        expense_category: expense.expense_category,
-        from_wallet_id: expense.from_wallet_id,
-        wallet_name: wallet?.name || "Unknown",
-      } as Expense;
-    });
-
-    setExpenses(expensesWithWalletNames);
-    setErrorMessage(null);
-    setIsLoading(false);
-  }
+  const totalIncome = incomeTransactions.reduce((sum, t) => sum + (t.amount || 0), 0);
+  const totalExpense = expenses.reduce((sum, e) => sum + e.amount, 0);
+  const currentBalance = wallets.reduce((sum, w) => sum + safeNumber(w.balance), 0);
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     return date.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
   };
 
+  const getCategoryLabel = (type: string) => {
+    const typeMap: Record<string, string> = {
+      physical_sale: "Physical Sale",
+      money_transfer: "Money Transfer",
+      cash_withdrawal: "Cash Withdrawal",
+      balance_transfer: "Balance Transfer",
+      electronic_service: "Electronic Service",
+      digital_ppob: "Digital PPOB",
+      affiliate_passive_income: "Affiliate",
+      internet_sharing_biznet: "Internet Sharing",
+      kasbon: "Kasbon",
+    };
+    return typeMap[type] || type;
+  };
+
+  const handleExpenseSuccess = () => {
+    setIsExpenseModalOpen(false);
+    loadData();
+  };
+
+  const handleIncomeSuccess = () => {
+    setIsIncomeModalOpen(false);
+    loadData();
+  };
+
   return (
-    <section className="space-y-5">
-      <div className="space-y-1">
-        <h2 className="text-2xl font-semibold">Expenses (Kas Keluar)</h2>
-        <p className="text-muted-foreground">Record and track business expenses with automatic wallet balance deduction.</p>
+    <div className="flex flex-col w-full gap-6 bg-[#020617] min-h-screen p-6">
+      {/* 1. HEADER WITH ADD BUTTONS (FULL WIDTH) */}
+      <div className="w-full flex items-center justify-between bg-slate-900/50 backdrop-blur-sm border border-slate-800/50 rounded-xl p-6">
+        <div>
+          <h2 className="text-2xl font-semibold text-white">Transactions</h2>
+          <p className="text-slate-400 text-sm">View and manage all income and expense transactions.</p>
+        </div>
+        <div className="flex gap-3">
+          <Button onClick={() => setIsIncomeModalOpen(true)} className="bg-gradient-to-r from-emerald-500 to-emerald-600 text-white hover:from-emerald-600 hover:to-emerald-700 shadow-[0_0_15px_rgba(16,185,129,0.4)] transition-all">
+            <Plus className="mr-2 h-4 w-4" />
+            Add Income
+          </Button>
+          <Button onClick={() => setIsExpenseModalOpen(true)} className="bg-gradient-to-r from-orange-500 to-orange-600 text-white hover:from-orange-600 hover:to-orange-700 shadow-[0_0_15px_rgba(249,115,22,0.4)] transition-all">
+            <Plus className="mr-2 h-4 w-4" />
+            Add Expense
+          </Button>
+        </div>
       </div>
 
-      {errorMessage ? <p className="text-sm text-destructive">{errorMessage}</p> : null}
+      {/* 2. STATS BAR (FULL WIDTH) */}
+      <div className="w-full grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="bg-slate-900/40 backdrop-blur-sm border border-slate-800/50 rounded-xl p-6">
+          <p className="text-slate-400 text-sm">Total Income</p>
+          <p className="text-3xl font-bold text-emerald-400 font-mono">{formatRupiah(totalIncome)}</p>
+        </div>
+        <div className="bg-slate-900/40 backdrop-blur-sm border border-slate-800/50 rounded-xl p-6">
+          <p className="text-slate-400 text-sm">Total Expense</p>
+          <p className="text-3xl font-bold text-red-400 font-mono">{formatRupiah(totalExpense)}</p>
+        </div>
+        <div className="bg-slate-900/40 backdrop-blur-sm border border-slate-800/50 rounded-xl p-6">
+          <p className="text-slate-400 text-sm">Current Balance</p>
+          <p className="text-3xl font-bold text-white font-mono">{formatRupiah(currentBalance)}</p>
+        </div>
+      </div>
 
-      <Card className="backdrop-blur-sm bg-card/50 border-border/50">
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle>Recent Expenses</CardTitle>
-              <CardDescription>Latest 50 expense transactions</CardDescription>
-            </div>
-            <Button
-              onClick={() => setIsAddExpenseOpen(true)}
-              className="bg-orange-500 text-white hover:bg-orange-600 shadow-[0_0_10px_rgba(249,115,22,0.3)] transition-all"
-            >
-              <Plus className="mr-2 h-4 w-4" />
-              Add Expense
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
+      {dataError && <p className="text-sm text-destructive">{dataError}</p>}
+
+      {/* 3. MAIN DATA & TABLES (FULL WIDTH) */}
+      <div className="w-full flex flex-col gap-6">
+        {/* Income Table */}
+        <div className="bg-slate-900/40 backdrop-blur-sm border border-slate-800/50 rounded-xl p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold text-white">Income Transactions</h3>
+        </div>
+        <Table>
+          <TableHeader>
+            <TableRow className="border-slate-800/50">
+              <TableHead className="text-slate-300">Date</TableHead>
+              <TableHead className="text-slate-300">Description</TableHead>
+              <TableHead className="text-slate-300">Category</TableHead>
+              <TableHead className="text-slate-300">Wallet</TableHead>
+              <TableHead className="text-right text-slate-300">Amount</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {isLoading ? (
               <TableRow>
-                <TableHead>Date</TableHead>
-                <TableHead>Description</TableHead>
-                <TableHead>Category</TableHead>
-                <TableHead>Wallet</TableHead>
-                <TableHead className="text-right">Amount</TableHead>
+                <TableCell colSpan={5} className="text-center text-slate-500">
+                  Loading transactions...
+                </TableCell>
               </TableRow>
-            </TableHeader>
-            <TableBody>
-              {isLoading ? (
-                <TableRow>
-                  <TableCell colSpan={5} className="text-center text-muted-foreground">
-                    Loading expenses...
-                  </TableCell>
-                </TableRow>
-              ) : expenses.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={5} className="text-center text-muted-foreground">
-                    No expenses recorded yet.
-                  </TableCell>
-                </TableRow>
-              ) : (
-                expenses.map((expense) => (
-                  <TableRow key={expense.id}>
-                    <TableCell>{formatDate(expense.date)}</TableCell>
-                    <TableCell>{expense.description || "-"}</TableCell>
+            ) : incomeTransactions.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={5} className="text-center text-slate-500">
+                  No income transactions recorded yet.
+                </TableCell>
+              </TableRow>
+            ) : (
+              incomeTransactions.map((transaction) => {
+                const wallet = wallets.find(w => w.id === transaction.to_wallet_id);
+                return (
+                  <TableRow key={transaction.id} className="border-slate-800/50 hover:bg-slate-800/40 transition-colors">
+                    <TableCell className="text-slate-300">{formatDate(transaction.date)}</TableCell>
+                    <TableCell className="text-slate-300">{transaction.notes || "-"}</TableCell>
                     <TableCell>
-                      <span className="px-2 py-1 rounded-full text-xs font-medium bg-orange-500/10 text-orange-500 border border-orange-500/20">
-                        {expense.expense_category || "Uncategorized"}
+                      <span className="px-2 py-1 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                        {getCategoryLabel(transaction.type)}
                       </span>
                     </TableCell>
-                    <TableCell>{expense.wallet_name}</TableCell>
-                    <TableCell className="text-right text-red-500 font-medium">
-                      -{formatRupiah(expense.amount)}
+                    <TableCell className="text-slate-300">{wallet?.name || "-"}</TableCell>
+                    <TableCell className="text-right font-mono text-emerald-400 font-semibold">
+                      +{formatRupiah(transaction.amount)}
                     </TableCell>
                   </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+                );
+              })
+            )}
+          </TableBody>
+        </Table>
+      </div>
 
-      {/* Add Expense Dialog */}
-      <Dialog open={isAddExpenseOpen} onOpenChange={setIsAddExpenseOpen}>
-        <DialogContent className="sm:max-w-[500px]">
+        {/* Expenses Table */}
+        <div className="bg-slate-900/40 backdrop-blur-sm border border-slate-800/50 rounded-xl p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold text-white">Expense Transactions</h3>
+        </div>
+        <Table>
+          <TableHeader>
+            <TableRow className="border-slate-800/50">
+              <TableHead className="text-slate-300">Date</TableHead>
+              <TableHead className="text-slate-300">Description</TableHead>
+              <TableHead className="text-slate-300">Category</TableHead>
+              <TableHead className="text-slate-300">Wallet</TableHead>
+              <TableHead className="text-right text-slate-300">Amount</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {isLoading ? (
+              <TableRow>
+                <TableCell colSpan={5} className="text-center text-slate-500">
+                  Loading expenses...
+                </TableCell>
+              </TableRow>
+            ) : expenses.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={5} className="text-center text-slate-500">
+                  No expense transactions recorded yet.
+                </TableCell>
+              </TableRow>
+            ) : (
+              expenses.map((expense) => (
+                <TableRow key={expense.id} className="border-slate-800/50 hover:bg-slate-800/40 transition-colors">
+                  <TableCell className="text-slate-300">{formatDate(expense.date)}</TableCell>
+                  <TableCell className="text-slate-300">{expense.description || "-"}</TableCell>
+                  <TableCell>
+                    <span className="px-2 py-1 rounded-full text-xs font-medium bg-red-500/10 text-red-400 border border-red-500/20">
+                      {expense.expense_category || "Uncategorized"}
+                    </span>
+                  </TableCell>
+                  <TableCell className="text-slate-300">{expense.wallet_name}</TableCell>
+                  <TableCell className="text-right font-mono text-red-400 font-semibold">
+                    -{formatRupiah(expense.amount)}
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </div>
+      </div>
+
+      {/* Add Income Modal */}
+      <Dialog open={isIncomeModalOpen} onOpenChange={setIsIncomeModalOpen}>
+        <DialogContent className="sm:max-w-[600px] bg-slate-900 border-slate-800 text-white max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Minus className="h-5 w-5 text-orange-500" />
-              Add New Expense
-            </DialogTitle>
+            <DialogTitle className="text-white">Add Income Transaction</DialogTitle>
           </DialogHeader>
-          <form onSubmit={handleAddExpense} className="space-y-4">
-            <div className="grid gap-2">
-              <Label htmlFor="expense-amount">Amount *</Label>
-              <Input
-                id="expense-amount"
-                type="number"
-                min="0.01"
-                step="0.01"
-                required
-                value={expenseAmount}
-                onChange={(e) => setExpenseAmount(e.target.value)}
-                placeholder="0.00"
-                className="text-lg font-medium"
-              />
-            </div>
-
-            <div className="grid gap-2">
-              <Label htmlFor="expense-description">Description</Label>
-              <Input
-                id="expense-description"
-                value={expenseDescription}
-                onChange={(e) => setExpenseDescription(e.target.value)}
-                placeholder="e.g. Office supplies purchase"
-              />
-            </div>
-
-            <div className="grid gap-2">
-              <Label htmlFor="expense-category">Category *</Label>
-              <select
-                id="expense-category"
-                required
-                value={expenseCategory}
-                onChange={(e) => setExpenseCategory(e.target.value)}
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-              >
-                <option value="">Select category</option>
-                {expenseCategories.map((cat) => (
-                  <option key={cat} value={cat}>
-                    {cat}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="grid gap-2">
-              <Label htmlFor="expense-date">Date *</Label>
-              <Input
-                id="expense-date"
-                type="date"
-                required
-                value={expenseDate}
-                onChange={(e) => setExpenseDate(e.target.value)}
-              />
-            </div>
-
-            <div className="grid gap-2">
-              <Label htmlFor="expense-wallet">Select Wallet *</Label>
-              <select
-                id="expense-wallet"
-                required
-                value={expenseWalletId}
-                onChange={(e) => setExpenseWalletId(e.target.value)}
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-              >
-                <option value="">Select wallet</option>
-                {wallets.map((wallet) => (
-                  <option key={wallet.id} value={wallet.id}>
-                    {wallet.name} ({wallet.type}) - {formatRupiah(wallet.balance)}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="flex justify-end gap-3 pt-4">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setIsAddExpenseOpen(false)}
-                disabled={isSubmitting}
-              >
-                Cancel
-              </Button>
-              <Button
-                type="submit"
-                disabled={isSubmitting}
-                className="bg-orange-500 text-white hover:bg-orange-600 shadow-[0_0_10px_rgba(249,115,22,0.3)] transition-all"
-              >
-                {isSubmitting ? "Recording..." : "Record Expense"}
-              </Button>
-            </div>
-          </form>
+          <TransactionsForm onSuccess={handleIncomeSuccess} />
         </DialogContent>
       </Dialog>
-    </section>
+
+      {/* Add Expense Modal */}
+      <Dialog open={isExpenseModalOpen} onOpenChange={setIsExpenseModalOpen}>
+        <DialogContent className="sm:max-w-[500px] bg-slate-900 border-slate-800 text-white">
+          <DialogHeader>
+            <DialogTitle className="text-white">Add Expense</DialogTitle>
+          </DialogHeader>
+          <ExpensesForm wallets={wallets} onSuccess={handleExpenseSuccess} />
+        </DialogContent>
+      </Dialog>
+    </div>
   );
 }
 
 export default function TransactionsPage() {
   return (
-    <Suspense fallback={<p className="text-sm text-muted-foreground p-6">Loading transactions module...</p>}>
-      <Tabs defaultValue="income" className="w-full">
-        <TabsList className="grid w-full grid-cols-2 bg-muted/50 backdrop-blur-sm border border-border/50">
-          <TabsTrigger value="income">Income Transactions</TabsTrigger>
-          <TabsTrigger value="expenses">Expenses (Kas Keluar)</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="income">
-          <TransactionsForm />
-        </TabsContent>
-
-        <TabsContent value="expenses">
-          <ExpensesComponent />
-        </TabsContent>
-      </Tabs>
+    <Suspense fallback={<p className="text-sm text-slate-500 p-6">Loading transactions module...</p>}>
+      <TransactionsDashboard />
     </Suspense>
   );
 }
