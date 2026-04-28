@@ -28,10 +28,24 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Plus, Minus, ArrowRightLeft } from "lucide-react";
+import { Plus, Minus, ArrowRightLeft, Search, CalendarDays, Pencil, Trash2, Receipt, FolderOpen } from "lucide-react";
 
-import { getSupabaseClient } from "@/lib/supabase/client";
+import { useFinanceContext } from "@/context/FinanceContext";
 import { formatRupiah } from "@/lib/utils";
+
+// Transaction type from FinanceContext
+type Transaction = {
+  id: string;
+  type: string;
+  category?: string;
+  amount: number;
+  admin_fee?: number | null;
+  date: string;
+  notes?: string | null;
+  product_id?: string | null;
+  from_wallet_id?: string | null;
+  to_wallet_id?: string | null;
+};
 
 type TransactionType =
   | "Physical Sale"
@@ -47,14 +61,14 @@ type TransactionType =
 type Wallet = {
   id: string;
   name: string;
-  type: "business" | "personal";
-  balance: number | string;
+  walletType: string;
+  balance: number;
 };
 
 type Product = {
   id: string;
   name: string;
-  selling_price: number | string;
+  selling_price: number;
   stock: number;
   status?: string;
 };
@@ -85,14 +99,17 @@ const transactionTypes: TransactionType[] = [
 function TransactionsForm({ onSuccess }: { onSuccess: () => void }) {
   const searchParams = useSearchParams();
   const router = useRouter();
+  const { wallets, products, transactions, addDebt, handleTransfer, handleBankTransferService, handleCashWithdrawalService, handlePPOBTransaction, handleProductSale, editProduct, setTransactions } = useFinanceContext();
   const [transactionType, setTransactionType] = useState<TransactionType>(
     (searchParams.get("type") as TransactionType) || "Physical Sale"
   );
-  const [wallets, setWallets] = useState<Wallet[]>([]);
-  const [products, setProducts] = useState<Product[]>([]);
-  const [categories, setCategories] = useState<{ id: string; name: string }[]>([]);
-  const [dataError, setDataError] = useState<string | null>(null);
-  const [isLoadingData, setIsLoadingData] = useState(true);
+  // Categories are hardcoded for now - can be moved to context if needed
+  const categories = [
+    { id: "1", name: "Operational" },
+    { id: "2", name: "Inventory" },
+    { id: "3", name: "Marketing" },
+    { id: "4", name: "Utilities" },
+  ];
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [productId, setProductId] = useState("");
@@ -128,59 +145,11 @@ function TransactionsForm({ onSuccess }: { onSuccess: () => void }) {
   );
   const [personName, setPersonName] = useState("");
 
-  const supabase = useMemo(() => {
-    try {
-      return getSupabaseClient();
-    } catch {
-      return null;
-    }
-  }, []);
-
-  useEffect(() => {
-    async function loadData() {
-      if (!supabase) {
-        setDataError("Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY.");
-        setIsLoadingData(false);
-        return;
-      }
-
-      setIsLoadingData(true);
-      const [walletResult, productResult, categoryResult] = await Promise.all([
-        supabase.from("wallets").select("id, name, type, balance").order("name", { ascending: true }),
-        supabase.from("products").select("id, name, selling_price, stock, status").order("name", { ascending: true }),
-        supabase.from("categories").select("id, name").eq("type", "expense").order("name", { ascending: true }),
-      ]);
-
-      if (walletResult.error || productResult.error || categoryResult.error) {
-        setDataError(walletResult.error?.message ?? productResult.error?.message ?? categoryResult.error?.message ?? "Failed to load data.");
-        setIsLoadingData(false);
-        return;
-      }
-
-      setWallets((walletResult.data ?? []) as Wallet[]);
-      // Filter products to only show 'in_stock' items for sales
-      const allProducts = (productResult.data ?? []) as Product[];
-      setProducts(allProducts.filter((p) => (p.status ?? "in_stock") === "in_stock"));
-      setCategories((categoryResult.data ?? []) as { id: string; name: string }[]);
-      setDataError(null);
-      setIsLoadingData(false);
-    }
-
-    loadData();
-  }, [supabase]);
+  // Filter products to only show 'in_stock' items for sales
+  const availableProducts = products.filter((p) => (p.status ?? "in_stock") === "in_stock");
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!supabase) {
-      toast.error("Supabase is not configured.");
-      return;
-    }
-
-    if (isLoadingData) {
-      toast.info("Please wait until wallets and products finish loading.");
-      return;
-    }
-
     setIsSubmitting(true);
 
     const selectedSourceWallet = wallets.find((wallet) => wallet.id === sourceWalletId);
@@ -202,41 +171,6 @@ function TransactionsForm({ onSuccess }: { onSuccess: () => void }) {
       setIsSubmitting(false);
     };
 
-    const updateWalletBalance = async (wallet: Wallet, nextBalance: number) => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      return (supabase as any).from("wallets").update({ balance: nextBalance } as any).eq("id", wallet.id);
-    };
-
-    const updateProductStock = async (product: Product, nextStock: number) => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      return (supabase as any).from("products").update({ stock: nextStock } as any).eq("id", product.id);
-    };
-
-    const logTransaction = async (payload: {
-      type: string;
-      amount: number;
-      admin_fee?: number;
-      from_wallet_id?: string | null;
-      to_wallet_id?: string | null;
-      product_id?: string | null;
-      quantity?: number;
-      notes?: string | null;
-    }) => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      return (supabase as any).from("transactions").insert({ date: new Date().toISOString(), ...payload } as any);
-    };
-
-    const insertDebt = async (debtAmount: number, description: string) => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      return (supabase as any).from("debts").insert({
-        person_name: personName.trim(),
-        amount: debtAmount,
-        type: "receivable",
-        status: "unpaid",
-        notes: notes || description,
-      });
-    };
-
     if (transactionType === "Physical Sale") {
       if (!selectedProduct || (paymentMethod === "lunas" && !selectedDestinationWallet) || parsedQuantity <= 0) {
         return fail("Product, quantity, and destination wallet are required.");
@@ -252,32 +186,20 @@ function TransactionsForm({ onSuccess }: { onSuccess: () => void }) {
         return fail("Product is still in transit and cannot be sold yet.");
       }
 
-      const saleAmount = safeNumber(selectedProduct.selling_price) * parsedQuantity;
-      const stockResult = await updateProductStock(selectedProduct, selectedProduct.stock - parsedQuantity);
-      if (stockResult.error) {
-        return fail(stockResult.error.message);
-      }
+      const saleAmount = selectedProduct.selling_price * parsedQuantity;
 
-      if (paymentMethod === "lunas") {
-        const walletResult = await updateWalletBalance(
-          selectedDestinationWallet!,
-          safeNumber(selectedDestinationWallet!.balance) + saleAmount,
-        );
-        if (walletResult.error) return fail(walletResult.error.message);
+      // Use handleProductSale for lunas payment, or addDebt for kasbon
+      if (paymentMethod === "lunas" && selectedDestinationWallet) {
+        handleProductSale(selectedProduct.id, parsedQuantity, selectedProduct.selling_price, selectedDestinationWallet.id);
       } else {
-        const debtResult = await insertDebt(saleAmount, `From transaction: Physical sale (${parsedQuantity}x ${selectedProduct.name})`);
-        if (debtResult.error) return fail(debtResult.error.message);
+        // Add as debt for kasbon
+        addDebt({
+          person_name: personName.trim(),
+          type: "receivable",
+          amount: saleAmount,
+          notes: `Kasbon: Physical sale (${parsedQuantity}x ${selectedProduct.name})`,
+        });
       }
-
-      const logResult = await logTransaction({
-        type: "physical_sale",
-        amount: saleAmount,
-        to_wallet_id: paymentMethod === "lunas" ? selectedDestinationWallet!.id : null,
-        product_id: selectedProduct.id,
-        quantity: parsedQuantity,
-        notes: notes || `Physical sale (${parsedQuantity}x ${selectedProduct.name})`,
-      });
-      if (logResult.error) return fail(logResult.error.message);
 
     } else if (transactionType === "Money Transfer") {
       if (!selectedSourceWallet || !selectedDestinationWallet || parsedAmount <= 0 || parsedAdminFee < 0) {
@@ -286,38 +208,23 @@ function TransactionsForm({ onSuccess }: { onSuccess: () => void }) {
       if (selectedSourceWallet.id === selectedDestinationWallet.id) {
         return fail("Source and destination wallet must be different.");
       }
-      if (safeNumber(selectedSourceWallet.balance) < parsedAmount) {
+      if (selectedSourceWallet.balance < parsedAmount) {
         return fail("Insufficient source wallet balance.");
       }
 
-      // Deduct from source wallet (Digital)
-      const sourceResult = await updateWalletBalance(
-        selectedSourceWallet,
-        safeNumber(selectedSourceWallet.balance) - parsedAmount,
-      );
-      if (sourceResult.error) return fail(sourceResult.error.message);
-
-      // Add to destination wallet (usually Cash) if Lunas, or record as debt if Kasbon
-      if (paymentMethod === "lunas") {
-        const destinationResult = await updateWalletBalance(
-          selectedDestinationWallet,
-          safeNumber(selectedDestinationWallet.balance) + parsedAmount + parsedAdminFee,
-        );
-        if (destinationResult.error) return fail(destinationResult.error.message);
+      // Use handleBankTransferService for Jasa Transfer Bank
+      if (paymentMethod === "lunas" && selectedDestinationWallet) {
+        handleBankTransferService(selectedSourceWallet.id, selectedDestinationWallet.id, parsedAmount, parsedAdminFee);
       } else {
-        const debtResult = await insertDebt(parsedAmount + parsedAdminFee, "Money Transfer");
-        if (debtResult.error) return fail(debtResult.error.message);
+        // Just deduct from source and record as debt
+        handleBankTransferService(selectedSourceWallet.id, "kasbon", parsedAmount, parsedAdminFee);
+        addDebt({
+          person_name: personName.trim(),
+          type: "receivable",
+          amount: parsedAmount + parsedAdminFee,
+          notes: `Kasbon: Money Transfer`,
+        });
       }
-
-      const logResult = await logTransaction({
-        type: "money_transfer",
-        amount: parsedAmount,
-        admin_fee: parsedAdminFee,
-        from_wallet_id: selectedSourceWallet.id,
-        to_wallet_id: paymentMethod === "lunas" ? selectedDestinationWallet.id : null,
-        notes: notes || "Money transfer",
-      });
-      if (logResult.error) return fail(logResult.error.message);
 
     } else if (transactionType === "Cash Withdrawal") {
       if (!selectedSourceWallet || !selectedDestinationWallet || parsedAmount <= 0 || parsedAdminFee < 0) {
@@ -326,38 +233,23 @@ function TransactionsForm({ onSuccess }: { onSuccess: () => void }) {
       if (selectedSourceWallet.id === selectedDestinationWallet.id) {
         return fail("Source and destination wallet must be different.");
       }
-      if (safeNumber(selectedSourceWallet.balance) < parsedAmount) {
+      if (selectedSourceWallet.balance < parsedAmount) {
         return fail("Insufficient source wallet balance.");
       }
 
-      // Deduct from source wallet (usually Cash)
-      const sourceResult = await updateWalletBalance(
-        selectedSourceWallet,
-        safeNumber(selectedSourceWallet.balance) - parsedAmount,
-      );
-      if (sourceResult.error) return fail(sourceResult.error.message);
-
-      // Add to destination wallet (Digital) if Lunas, or record as debt if Kasbon
-      if (paymentMethod === "lunas") {
-        const destinationResult = await updateWalletBalance(
-          selectedDestinationWallet,
-          safeNumber(selectedDestinationWallet.balance) + parsedAmount + parsedAdminFee,
-        );
-        if (destinationResult.error) return fail(destinationResult.error.message);
+      // Use handleCashWithdrawalService for Jasa Tarik Tunai
+      if (paymentMethod === "lunas" && selectedDestinationWallet) {
+        handleCashWithdrawalService(selectedSourceWallet.id, selectedDestinationWallet.id, parsedAmount, parsedAdminFee);
       } else {
-        const debtResult = await insertDebt(parsedAmount + parsedAdminFee, "Cash Withdrawal");
-        if (debtResult.error) return fail(debtResult.error.message);
+        // Deduct from source and record as debt
+        handleCashWithdrawalService(selectedSourceWallet.id, "kasbon", parsedAmount, parsedAdminFee);
+        addDebt({
+          person_name: personName.trim(),
+          type: "receivable",
+          amount: parsedAmount + parsedAdminFee,
+          notes: `Kasbon: Cash Withdrawal`,
+        });
       }
-
-      const logResult = await logTransaction({
-        type: "cash_withdrawal",
-        amount: parsedAmount,
-        admin_fee: parsedAdminFee,
-        from_wallet_id: selectedSourceWallet.id,
-        to_wallet_id: paymentMethod === "lunas" ? selectedDestinationWallet.id : null,
-        notes: notes || "Cash withdrawal",
-      });
-      if (logResult.error) return fail(logResult.error.message);
 
     } else if (transactionType === "Balance Transfer") {
       if (!selectedSourceWallet || !selectedDestinationWallet || parsedAmount <= 0) {
@@ -366,33 +258,12 @@ function TransactionsForm({ onSuccess }: { onSuccess: () => void }) {
       if (selectedSourceWallet.id === selectedDestinationWallet.id) {
         return fail("Source and destination wallet must be different.");
       }
-      if (safeNumber(selectedSourceWallet.balance) < parsedAmount) {
+      if (selectedSourceWallet.balance < parsedAmount) {
         return fail("Insufficient source wallet balance.");
       }
 
-      // Deduct from source wallet
-      const sourceResult = await updateWalletBalance(
-        selectedSourceWallet,
-        safeNumber(selectedSourceWallet.balance) - parsedAmount,
-      );
-      if (sourceResult.error) return fail(sourceResult.error.message);
-
-      // Add to destination wallet
-      const destinationResult = await updateWalletBalance(
-        selectedDestinationWallet,
-        safeNumber(selectedDestinationWallet.balance) + parsedAmount,
-      );
-      if (destinationResult.error) return fail(destinationResult.error.message);
-
-      // Log balance transfer transaction
-      const logResult = await logTransaction({
-        type: "balance_transfer",
-        amount: parsedAmount,
-        from_wallet_id: selectedSourceWallet.id,
-        to_wallet_id: selectedDestinationWallet.id,
-        notes: notes || "Balance transfer",
-      });
-      if (logResult.error) return fail(logResult.error.message);
+      // Use handleTransfer for balance transfer
+      handleTransfer(selectedSourceWallet.id, selectedDestinationWallet.id, parsedAmount, 0);
 
     } else if (transactionType === "Electronic Service") {
       if ((paymentMethod === "lunas" && !selectedDestinationWallet) || parsedServiceFee < 0) {
@@ -407,30 +278,36 @@ function TransactionsForm({ onSuccess }: { onSuccess: () => void }) {
         if (selectedSparepart.stock < 1) {
           return fail("Selected sparepart is out of stock.");
         }
-        const stockResult = await updateProductStock(selectedSparepart, selectedSparepart.stock - 1);
-        if (stockResult.error) return fail(stockResult.error.message);
-        totalIncome += safeNumber(selectedSparepart.selling_price);
+        // Update product stock using editProduct from context
+        editProduct(selectedSparepart.id, { stock: selectedSparepart.stock - 1 });
+        totalIncome += selectedSparepart.selling_price;
       }
 
-      if (paymentMethod === "lunas") {
-        const walletResult = await updateWalletBalance(
-          selectedDestinationWallet!,
-          safeNumber(selectedDestinationWallet!.balance) + totalIncome,
-        );
-        if (walletResult.error) return fail(walletResult.error.message);
+      // Handle wallet updates and debt recording
+      if (paymentMethod === "lunas" && selectedDestinationWallet) {
+        // Use handleTransfer to add income to wallet
+        handleTransfer("income", selectedDestinationWallet.id, totalIncome, 0);
       } else {
-        const debtResult = await insertDebt(totalIncome, `From transaction: Electronic service fee` + (selectedSparepart ? ` + sparepart` : ""));
-        if (debtResult.error) return fail(debtResult.error.message);
+        // Record as debt
+        addDebt({
+          person_name: personName.trim() || "Customer",
+          type: "receivable",
+          amount: totalIncome,
+          notes: `Electronic service fee` + (selectedSparepart ? ` + sparepart (${selectedSparepart.name})` : ""),
+        });
       }
 
-      const logResult = await logTransaction({
-        type: "electronic_service",
+      // Log transaction
+      const newTransaction = {
+        id: Date.now().toString(),
+        date: new Date().toISOString(),
+        type: "electronic_service" as const,
         amount: totalIncome,
         to_wallet_id: paymentMethod === "lunas" ? selectedDestinationWallet!.id : null,
         product_id: selectedSparepart?.id ?? null,
         notes: notes || (selectedSparepart ? `Service fee + sparepart (${selectedSparepart.name})` : "Electronic service fee"),
-      });
-      if (logResult.error) return fail(logResult.error.message);
+      };
+      setTransactions([...transactions, newTransaction as Transaction]);
 
     } else if (transactionType === "Digital PPOB (Pulsa/Game)") {
       if (!selectedSourceWallet || (paymentMethod === "lunas" && !selectedDestinationWallet) || !ppobProductName.trim()) {
@@ -442,36 +319,23 @@ function TransactionsForm({ onSuccess }: { onSuccess: () => void }) {
       if (parsedPpobCost <= 0 || parsedPpobSelling <= 0) {
         return fail("Capital and selling price must be greater than zero.");
       }
-      if (safeNumber(selectedSourceWallet.balance) < parsedPpobCost) {
+      if (selectedSourceWallet.balance < parsedPpobCost) {
         return fail("Insufficient source wallet balance.");
       }
 
-      // Always deduct cost from source wallet
-      const sourceResult = await updateWalletBalance(
-        selectedSourceWallet,
-        safeNumber(selectedSourceWallet.balance) - parsedPpobCost,
-      );
-      if (sourceResult.error) return fail(sourceResult.error.message);
-
-      if (paymentMethod === "lunas") {
-        const destinationResult = await updateWalletBalance(
-          selectedDestinationWallet!,
-          safeNumber(selectedDestinationWallet!.balance) + parsedPpobSelling,
-        );
-        if (destinationResult.error) return fail(destinationResult.error.message);
+      // Use handlePPOBTransaction for proper profit tracking
+      if (paymentMethod === "lunas" && selectedDestinationWallet) {
+        handlePPOBTransaction(ppobProductName.trim(), parsedPpobCost, parsedPpobSelling, selectedSourceWallet.id, selectedDestinationWallet.id);
       } else {
-        const debtResult = await insertDebt(parsedPpobSelling, `From transaction: PPOB ${ppobProductName.trim()}`);
-        if (debtResult.error) return fail(debtResult.error.message);
+        // For kasbon, deduct cost and record debt for selling price
+        handlePPOBTransaction(ppobProductName.trim(), parsedPpobCost, parsedPpobSelling, selectedSourceWallet.id, "kasbon");
+        addDebt({
+          person_name: personName.trim() || "Customer",
+          type: "receivable",
+          amount: parsedPpobSelling,
+          notes: `PPOB ${ppobProductName.trim()}`,
+        });
       }
-
-      const logResult = await logTransaction({
-        type: "digital_ppob",
-        amount: parsedPpobSelling,
-        from_wallet_id: selectedSourceWallet.id,
-        to_wallet_id: paymentMethod === "lunas" ? selectedDestinationWallet!.id : null,
-        notes: notes || `PPOB ${ppobProductName.trim()} (Cost: ${formatRupiah(parsedPpobCost)}, Sell: ${formatRupiah(parsedPpobSelling)})`,
-      });
-      if (logResult.error) return fail(logResult.error.message);
 
     } else if (transactionType === "Affiliate / Passive Income") {
       if ((paymentMethod === "lunas" && !selectedDestinationWallet) || !platformName.trim() || parsedCommission <= 0) {
@@ -481,24 +345,29 @@ function TransactionsForm({ onSuccess }: { onSuccess: () => void }) {
         return fail("Customer Name is required for Kasbon.");
       }
 
-      if (paymentMethod === "lunas") {
-        const walletResult = await updateWalletBalance(
-          selectedDestinationWallet!,
-          safeNumber(selectedDestinationWallet!.balance) + parsedCommission,
-        );
-        if (walletResult.error) return fail(walletResult.error.message);
+      if (paymentMethod === "lunas" && selectedDestinationWallet) {
+        // Add commission to destination wallet
+        handleTransfer("income", selectedDestinationWallet.id, parsedCommission, 0);
       } else {
-        const debtResult = await insertDebt(parsedCommission, `From transaction: Commission from ${platformName.trim()}`);
-        if (debtResult.error) return fail(debtResult.error.message);
+        // Record as debt
+        addDebt({
+          person_name: personName.trim() || "Affiliate",
+          type: "receivable",
+          amount: parsedCommission,
+          notes: `Commission from ${platformName.trim()}`,
+        });
       }
 
-      const logResult = await logTransaction({
-        type: "affiliate_passive_income",
+      // Log transaction
+      const newTransaction = {
+        id: Date.now().toString(),
+        date: new Date().toISOString(),
+        type: "affiliate_passive_income" as const,
         amount: parsedCommission,
         to_wallet_id: paymentMethod === "lunas" ? selectedDestinationWallet!.id : null,
         notes: notes || `Commission from ${platformName.trim()}`,
-      });
-      if (logResult.error) return fail(logResult.error.message);
+      };
+      setTransactions([...transactions, newTransaction as Transaction]);
 
     } else if (transactionType === "Internet Sharing (BIZNET)") {
       if ((paymentMethod === "lunas" && !selectedDestinationWallet) || !customerName.trim() || parsedInternetAmount <= 0) {
@@ -508,49 +377,52 @@ function TransactionsForm({ onSuccess }: { onSuccess: () => void }) {
         return fail("Customer Name is required for Kasbon.");
       }
 
-      if (paymentMethod === "lunas") {
-        const walletResult = await updateWalletBalance(
-          selectedDestinationWallet!,
-          safeNumber(selectedDestinationWallet!.balance) + parsedInternetAmount,
-        );
-        if (walletResult.error) return fail(walletResult.error.message);
+      if (paymentMethod === "lunas" && selectedDestinationWallet) {
+        // Add payment to destination wallet
+        handleTransfer("income", selectedDestinationWallet.id, parsedInternetAmount, 0);
       } else {
-        const debtResult = await insertDebt(parsedInternetAmount, `From transaction: Internet sharing payment from ${customerName.trim()}`);
-        if (debtResult.error) return fail(debtResult.error.message);
+        // Record as debt
+        addDebt({
+          person_name: personName.trim() || customerName.trim(),
+          type: "receivable",
+          amount: parsedInternetAmount,
+          notes: `Internet sharing payment from ${customerName.trim()}`,
+        });
       }
 
-      const logResult = await logTransaction({
-        type: "internet_sharing_biznet",
+      // Log transaction
+      const newTransaction = {
+        id: Date.now().toString(),
+        date: new Date().toISOString(),
+        type: "internet_sharing_biznet" as const,
         amount: parsedInternetAmount,
         to_wallet_id: paymentMethod === "lunas" ? selectedDestinationWallet!.id : null,
         notes: notes || `Internet sharing payment from ${customerName.trim()}`,
-      });
-      if (logResult.error) return fail(logResult.error.message);
+      };
+      setTransactions([...transactions, newTransaction as Transaction]);
 
     } else if (transactionType === "Kasbon (Employee Loan)") {
       if (!selectedSourceWallet || !employeeName.trim() || parsedAmount <= 0) {
         return fail("Source wallet, employee name, and amount are required.");
       }
-      if (safeNumber(selectedSourceWallet.balance) < parsedAmount) {
+      if (selectedSourceWallet.balance < parsedAmount) {
         return fail("Insufficient source wallet balance.");
       }
 
-      // Deduct from source wallet
-      const walletResult = await updateWalletBalance(
-        selectedSourceWallet,
-        safeNumber(selectedSourceWallet.balance) - parsedAmount,
-      );
-      if (walletResult.error) return fail(walletResult.error.message);
+      // Deduct from source wallet using handleTransfer
+      handleTransfer(selectedSourceWallet.id, "expense", parsedAmount, 0);
 
       // Log kasbon transaction
       const kasbonNotes = notes ? `${employeeName.trim()} - ${notes}` : employeeName.trim();
-      const logResult = await logTransaction({
-        type: "kasbon",
+      const newTransaction = {
+        id: Date.now().toString(),
+        date: new Date().toISOString(),
+        type: "kasbon" as const,
         amount: parsedAmount,
         from_wallet_id: selectedSourceWallet.id,
         notes: kasbonNotes,
-      });
-      if (logResult.error) return fail(logResult.error.message);
+      };
+      setTransactions([...transactions, newTransaction as Transaction]);
     }
 
     toast.success("Transaction saved");
@@ -615,11 +487,10 @@ function TransactionsForm({ onSuccess }: { onSuccess: () => void }) {
                 <select
                   value={productId}
                   onChange={(e) => setProductId(e.target.value)}
-                  disabled={isLoadingData}
                   className="flex h-10 w-full rounded-md border border-slate-700 bg-slate-800/50 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
                 >
-                  <option value="">{isLoadingData ? "Loading products..." : "Choose product"}</option>
-                  {products.map((product) => (
+                  <option value="">Choose product</option>
+                  {availableProducts.map((product) => (
                     <option key={product.id} value={product.id}>
                       {product.name} (Stock: {product.stock}, Price: {formatRupiah(product.selling_price)})
                     </option>
@@ -657,13 +528,12 @@ function TransactionsForm({ onSuccess }: { onSuccess: () => void }) {
                   <select
                     value={destinationWalletId}
                     onChange={(e) => setDestinationWalletId(e.target.value)}
-                    disabled={isLoadingData}
-                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
                   >
-                    <option value="">{isLoadingData ? "Loading wallets..." : "Choose destination wallet"}</option>
+                    <option value="">"Choose destination wallet"</option>
                     {wallets.map((wallet) => (
                       <option key={wallet.id} value={wallet.id}>
-                        {wallet.name} ({wallet.type}) - {formatRupiah(wallet.balance)}
+                        {wallet.name} ({wallet.walletType}) - {formatRupiah(wallet.balance)}
                       </option>
                     ))}
                   </select>
@@ -692,13 +562,12 @@ function TransactionsForm({ onSuccess }: { onSuccess: () => void }) {
                   id="transfer-source-wallet"
                   value={sourceWalletId}
                   onChange={(e) => setSourceWalletId(e.target.value)}
-                  disabled={isLoadingData}
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
+                                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
                 >
-                  <option value="">{isLoadingData ? "Loading wallets..." : "Choose sending wallet"}</option>
+                  <option value="">"Choose sending wallet"</option>
                   {wallets.map((wallet) => (
                     <option key={wallet.id} value={wallet.id}>
-                      {wallet.name} ({wallet.type}) - {formatRupiah(wallet.balance)}
+                      {wallet.name} ({wallet.walletType}) - {formatRupiah(wallet.balance)}
                     </option>
                   ))}
                 </select>
@@ -709,13 +578,12 @@ function TransactionsForm({ onSuccess }: { onSuccess: () => void }) {
                   id="transfer-destination-wallet"
                   value={destinationWalletId}
                   onChange={(e) => setDestinationWalletId(e.target.value)}
-                  disabled={isLoadingData}
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
+                                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
                 >
-                  <option value="">{isLoadingData ? "Loading wallets..." : "Choose receiving wallet"}</option>
+                  <option value="">"Choose receiving wallet"</option>
                   {wallets.map((wallet) => (
                     <option key={wallet.id} value={wallet.id}>
-                      {wallet.name} ({wallet.type}) - {formatRupiah(wallet.balance)}
+                      {wallet.name} ({wallet.walletType}) - {formatRupiah(wallet.balance)}
                     </option>
                   ))}
                 </select>
@@ -763,13 +631,12 @@ function TransactionsForm({ onSuccess }: { onSuccess: () => void }) {
                   id="withdrawal-source-wallet"
                   value={sourceWalletId}
                   onChange={(e) => setSourceWalletId(e.target.value)}
-                  disabled={isLoadingData}
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
+                                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
                 >
-                  <option value="">{isLoadingData ? "Loading wallets..." : "Choose source wallet"}</option>
+                  <option value="">"Choose source wallet"</option>
                   {wallets.map((wallet) => (
                     <option key={wallet.id} value={wallet.id}>
-                      {wallet.name} ({wallet.type}) - {formatRupiah(wallet.balance)}
+                      {wallet.name} ({wallet.walletType}) - {formatRupiah(wallet.balance)}
                     </option>
                   ))}
                 </select>
@@ -780,13 +647,12 @@ function TransactionsForm({ onSuccess }: { onSuccess: () => void }) {
                   id="withdrawal-destination-wallet"
                   value={destinationWalletId}
                   onChange={(e) => setDestinationWalletId(e.target.value)}
-                  disabled={isLoadingData}
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
+                                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
                 >
-                  <option value="">{isLoadingData ? "Loading wallets..." : "Choose destination wallet"}</option>
+                  <option value="">"Choose destination wallet"</option>
                   {wallets.map((wallet) => (
                     <option key={wallet.id} value={wallet.id}>
-                      {wallet.name} ({wallet.type}) - {formatRupiah(wallet.balance)}
+                      {wallet.name} ({wallet.walletType}) - {formatRupiah(wallet.balance)}
                     </option>
                   ))}
                 </select>
@@ -827,8 +693,7 @@ function TransactionsForm({ onSuccess }: { onSuccess: () => void }) {
                 <select
                   value={sparepartProductId}
                   onChange={(e) => setSparepartProductId(e.target.value)}
-                  disabled={isLoadingData}
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
                 >
                   <option value="">No Sparepart</option>
                   {products.map((product) => (
@@ -865,13 +730,12 @@ function TransactionsForm({ onSuccess }: { onSuccess: () => void }) {
                   <select
                     value={destinationWalletId}
                     onChange={(e) => setDestinationWalletId(e.target.value)}
-                    disabled={isLoadingData}
-                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
                   >
-                    <option value="">{isLoadingData ? "Loading wallets..." : "Choose destination wallet"}</option>
+                    <option value="">"Choose destination wallet"</option>
                     {wallets.map((wallet) => (
                       <option key={wallet.id} value={wallet.id}>
-                        {wallet.name} ({wallet.type}) - {formatRupiah(wallet.balance)}
+                        {wallet.name} ({wallet.walletType}) - {formatRupiah(wallet.balance)}
                       </option>
                     ))}
                   </select>
@@ -904,13 +768,12 @@ function TransactionsForm({ onSuccess }: { onSuccess: () => void }) {
                 <select
                   value={sourceWalletId}
                   onChange={(e) => setSourceWalletId(e.target.value)}
-                  disabled={isLoadingData}
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
                 >
-                  <option value="">{isLoadingData ? "Loading wallets..." : "Choose source wallet"}</option>
+                  <option value="">"Choose source wallet"</option>
                   {wallets.map((wallet) => (
                     <option key={wallet.id} value={wallet.id}>
-                      {wallet.name} ({wallet.type}) - {formatRupiah(wallet.balance)}
+                      {wallet.name} ({wallet.walletType}) - {formatRupiah(wallet.balance)}
                     </option>
                   ))}
                 </select>
@@ -940,13 +803,12 @@ function TransactionsForm({ onSuccess }: { onSuccess: () => void }) {
                   <select
                     value={destinationWalletId}
                     onChange={(e) => setDestinationWalletId(e.target.value)}
-                    disabled={isLoadingData}
-                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
                   >
-                    <option value="">{isLoadingData ? "Loading wallets..." : "Choose destination wallet"}</option>
+                    <option value="">"Choose destination wallet"</option>
                     {wallets.map((wallet) => (
                       <option key={wallet.id} value={wallet.id}>
-                        {wallet.name} ({wallet.type}) - {formatRupiah(wallet.balance)}
+                        {wallet.name} ({wallet.walletType}) - {formatRupiah(wallet.balance)}
                       </option>
                     ))}
                   </select>
@@ -994,13 +856,12 @@ function TransactionsForm({ onSuccess }: { onSuccess: () => void }) {
                   <select
                     value={destinationWalletId}
                     onChange={(e) => setDestinationWalletId(e.target.value)}
-                    disabled={isLoadingData}
-                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
                   >
-                    <option value="">{isLoadingData ? "Loading wallets..." : "Choose destination wallet"}</option>
+                    <option value="">"Choose destination wallet"</option>
                     {wallets.map((wallet) => (
                       <option key={wallet.id} value={wallet.id}>
-                        {wallet.name} ({wallet.type}) - {formatRupiah(wallet.balance)}
+                        {wallet.name} ({wallet.walletType}) - {formatRupiah(wallet.balance)}
                       </option>
                     ))}
                   </select>
@@ -1048,13 +909,12 @@ function TransactionsForm({ onSuccess }: { onSuccess: () => void }) {
                   <select
                     value={destinationWalletId}
                     onChange={(e) => setDestinationWalletId(e.target.value)}
-                    disabled={isLoadingData}
-                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
                   >
-                    <option value="">{isLoadingData ? "Loading wallets..." : "Choose destination wallet"}</option>
+                    <option value="">"Choose destination wallet"</option>
                     {wallets.map((wallet) => (
                       <option key={wallet.id} value={wallet.id}>
-                        {wallet.name} ({wallet.type}) - {formatRupiah(wallet.balance)}
+                        {wallet.name} ({wallet.walletType}) - {formatRupiah(wallet.balance)}
                       </option>
                     ))}
                   </select>
@@ -1073,13 +933,12 @@ function TransactionsForm({ onSuccess }: { onSuccess: () => void }) {
                   id="kasbon-source-wallet"
                   value={sourceWalletId}
                   onChange={(e) => setSourceWalletId(e.target.value)}
-                  disabled={isLoadingData}
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
+                                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
                 >
-                  <option value="">{isLoadingData ? "Loading wallets..." : "Choose source wallet"}</option>
+                  <option value="">"Choose source wallet"</option>
                   {wallets.map((wallet) => (
                     <option key={wallet.id} value={wallet.id}>
-                      {wallet.name} ({wallet.type}) - {formatRupiah(wallet.balance)}
+                      {wallet.name} ({wallet.walletType}) - {formatRupiah(wallet.balance)}
                     </option>
                   ))}
                 </select>
@@ -1123,13 +982,12 @@ function TransactionsForm({ onSuccess }: { onSuccess: () => void }) {
                   id="balance-transfer-source"
                   value={sourceWalletId}
                   onChange={(e) => setSourceWalletId(e.target.value)}
-                  disabled={isLoadingData}
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
+                                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
                 >
-                  <option value="">{isLoadingData ? "Loading wallets..." : "Choose source wallet"}</option>
+                  <option value="">"Choose source wallet"</option>
                   {wallets.map((wallet) => (
                     <option key={wallet.id} value={wallet.id}>
-                      {wallet.name} ({wallet.type}) - {formatRupiah(wallet.balance)}
+                      {wallet.name} ({wallet.walletType}) - {formatRupiah(wallet.balance)}
                     </option>
                   ))}
                 </select>
@@ -1140,13 +998,12 @@ function TransactionsForm({ onSuccess }: { onSuccess: () => void }) {
                   id="balance-transfer-destination"
                   value={destinationWalletId}
                   onChange={(e) => setDestinationWalletId(e.target.value)}
-                  disabled={isLoadingData}
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
+                                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
                 >
-                  <option value="">{isLoadingData ? "Loading wallets..." : "Choose destination wallet"}</option>
+                  <option value="">"Choose destination wallet"</option>
                   {wallets.map((wallet) => (
                     <option key={wallet.id} value={wallet.id}>
-                      {wallet.name} ({wallet.type}) - {formatRupiah(wallet.balance)}
+                      {wallet.name} ({wallet.walletType}) - {formatRupiah(wallet.balance)}
                     </option>
                   ))}
                 </select>
@@ -1175,9 +1032,7 @@ function TransactionsForm({ onSuccess }: { onSuccess: () => void }) {
           <Input id="notes" value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Optional note" className="bg-slate-800/50 border-slate-700 text-white placeholder:text-slate-500" />
         </div>
 
-        {dataError ? <p className="text-sm text-destructive">{dataError}</p> : null}
-
-        <Button type="submit" disabled={isSubmitting || isLoadingData} className="bg-gradient-to-r from-orange-500 to-orange-600 text-white hover:from-orange-600 hover:to-orange-700 shadow-[0_0_15px_rgba(249,115,22,0.4)] transition-all">
+        <Button type="submit" disabled={isSubmitting} className="bg-gradient-to-r from-orange-500 to-orange-600 text-white hover:from-orange-600 hover:to-orange-700 shadow-[0_0_15px_rgba(249,115,22,0.4)] transition-all">
           {isSubmitting ? "Saving..." : "Save Transaction"}
         </Button>
       </form>
@@ -1192,10 +1047,6 @@ function TransactionsForm({ onSuccess }: { onSuccess: () => void }) {
           <form
             onSubmit={async (e) => {
               e.preventDefault();
-              if (!supabase) {
-                toast.error("Supabase is not configured.");
-                return;
-              }
 
               const fromWallet = wallets.find((w) => w.id === transferFromWallet);
               const toWallet = wallets.find((w) => w.id === transferToWallet);
@@ -1213,7 +1064,7 @@ function TransactionsForm({ onSuccess }: { onSuccess: () => void }) {
                 toast.error("Amount must be greater than 0.");
                 return;
               }
-              if (safeNumber(fromWallet.balance) < parsedAmount) {
+              if (fromWallet.balance < parsedAmount) {
                 toast.error("Insufficient source wallet balance.");
                 return;
               }
@@ -1221,48 +1072,8 @@ function TransactionsForm({ onSuccess }: { onSuccess: () => void }) {
               setIsTransferring(true);
 
               try {
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                const sb: any = supabase;
-
-                // Decrement source wallet
-                const sourceResult = await sb
-                  .from("wallets")
-                  .update({ balance: safeNumber(fromWallet.balance) - parsedAmount } as any)
-                  .eq("id", fromWallet.id);
-
-                if (sourceResult.error) {
-                  toast.error("Failed to update source wallet", { description: sourceResult.error.message });
-                  setIsTransferring(false);
-                  return;
-                }
-
-                // Increment destination wallet
-                const destResult = await sb
-                  .from("wallets")
-                  .update({ balance: safeNumber(toWallet.balance) + parsedAmount } as any)
-                  .eq("id", toWallet.id);
-
-                if (destResult.error) {
-                  toast.error("Failed to update destination wallet", { description: destResult.error.message });
-                  setIsTransferring(false);
-                  return;
-                }
-
-                // Log transaction
-                const logResult = await sb.from("transactions").insert({
-                  date: transferDate,
-                  type: "balance_transfer",
-                  amount: parsedAmount,
-                  from_wallet_id: fromWallet.id,
-                  to_wallet_id: toWallet.id,
-                  notes: transferNotes || "Balance transfer",
-                } as any);
-
-                if (logResult.error) {
-                  toast.error("Failed to log transaction", { description: logResult.error.message });
-                  setIsTransferring(false);
-                  return;
-                }
+                // Use handleTransfer from FinanceContext
+                handleTransfer(fromWallet.id, toWallet.id, parsedAmount, 0);
 
                 toast.success("Balance transferred successfully");
                 setIsTransferDialogOpen(false);
@@ -1271,14 +1082,6 @@ function TransactionsForm({ onSuccess }: { onSuccess: () => void }) {
                 setTransferAmount("");
                 setTransferNotes("");
                 setTransferDate(new Date().toISOString().split('T')[0]);
-
-                // Reload wallets data
-                const [newWalletResult] = await Promise.all([
-                  supabase.from("wallets").select("id, name, type, balance").order("name", { ascending: true }),
-                ]);
-                if (!newWalletResult.error) {
-                  setWallets(newWalletResult.data as Wallet[]);
-                }
               } catch (error) {
                 toast.error("Transfer failed", { description: error instanceof Error ? error.message : "Unknown error" });
               } finally {
@@ -1298,7 +1101,7 @@ function TransactionsForm({ onSuccess }: { onSuccess: () => void }) {
                 <option value="">Select source wallet</option>
                 {wallets.map((wallet) => (
                   <option key={wallet.id} value={wallet.id}>
-                    {wallet.name} ({wallet.type}) - {formatRupiah(wallet.balance)}
+                    {wallet.name} ({wallet.walletType}) - {formatRupiah(wallet.balance)}
                   </option>
                 ))}
               </select>
@@ -1315,7 +1118,7 @@ function TransactionsForm({ onSuccess }: { onSuccess: () => void }) {
                 <option value="">Select destination wallet</option>
                 {wallets.map((wallet) => (
                   <option key={wallet.id} value={wallet.id}>
-                    {wallet.name} ({wallet.type}) - {formatRupiah(wallet.balance)}
+                    {wallet.name} ({wallet.walletType}) - {formatRupiah(wallet.balance)}
                   </option>
                 ))}
               </select>
@@ -1380,27 +1183,18 @@ function TransactionsForm({ onSuccess }: { onSuccess: () => void }) {
           </form>
         </DialogContent>
       </Dialog>
-
-      {/* Transfer Balance Button */}
-      <Button
-        onClick={() => setIsTransferDialogOpen(true)}
-        className="fixed bottom-6 right-6 bg-orange-500 text-white hover:bg-orange-600 shadow-[0_0_15px_rgba(249,115,22,0.4)] transition-all z-50"
-        size="lg"
-      >
-        <ArrowRightLeft className="mr-2 h-5 w-5" />
-        Transfer Balance
-      </Button>
     </section>
   );
 }
 
-function safeNumber(value: number | string) {
-  const numericValue = typeof value === "number" ? value : Number(value);
-  return Number.isFinite(numericValue) ? numericValue : 0;
-}
-
-function ExpensesForm({ wallets, onSuccess }: { wallets: Wallet[]; onSuccess: () => void }) {
-  const [categories, setCategories] = useState<{ id: string; name: string }[]>([]);
+function ExpensesForm({ onSuccess }: { onSuccess: () => void }) {
+  const { wallets, transactions, setTransactions } = useFinanceContext();
+  const categories = [
+    { id: "1", name: "Operational" },
+    { id: "2", name: "Inventory" },
+    { id: "3", name: "Marketing" },
+    { id: "4", name: "Utilities" },
+  ];
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [expenseAmount, setExpenseAmount] = useState("");
   const [expenseDescription, setExpenseDescription] = useState("");
@@ -1408,31 +1202,8 @@ function ExpensesForm({ wallets, onSuccess }: { wallets: Wallet[]; onSuccess: ()
   const [expenseDate, setExpenseDate] = useState(new Date().toISOString().split('T')[0]);
   const [expenseWalletId, setExpenseWalletId] = useState("");
 
-  const supabase = useMemo(() => {
-    try {
-      return getSupabaseClient();
-    } catch {
-      return null;
-    }
-  }, []);
-
-  useEffect(() => {
-    async function loadCategories() {
-      if (!supabase) return;
-      const { data, error } = await supabase.from("categories").select("id, name").eq("type", "expense").order("name", { ascending: true });
-      if (!error) {
-        setCategories((data ?? []) as { id: string; name: string }[]);
-      }
-    }
-    loadCategories();
-  }, [supabase]);
-
   async function handleAddExpense(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!supabase) {
-      toast.error("Supabase is not configured.");
-      return;
-    }
 
     setIsSubmitting(true);
     const parsedAmount = Number(expenseAmount);
@@ -1450,33 +1221,23 @@ function ExpensesForm({ wallets, onSuccess }: { wallets: Wallet[]; onSuccess: ()
       return;
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const sb = supabase as any;
-
-    // Deduct from wallet
-    const walletResult = await sb.from("wallets").update({ balance: safeNumber(selectedWallet.balance) - parsedAmount } as any).eq("id", selectedWallet.id);
-
-    if (walletResult.error) {
-      toast.error("Failed to update wallet", { description: walletResult.error.message });
+    if (selectedWallet.balance < parsedAmount) {
+      toast.error("Insufficient wallet balance.");
       setIsSubmitting(false);
       return;
     }
 
-    // Log expense transaction
-    const logResult = await sb.from("transactions").insert({
+    // Deduct from wallet and add transaction
+    const newTransaction = {
+      id: Date.now().toString(),
       date: expenseDate,
       type: "expense",
+      category: expenseCategory,
       amount: parsedAmount,
       from_wallet_id: selectedWallet.id,
       notes: expenseDescription,
-      expense_category: expenseCategory,
-    } as any);
-
-    if (logResult.error) {
-      toast.error("Failed to log expense", { description: logResult.error.message });
-      setIsSubmitting(false);
-      return;
-    }
+    };
+    setTransactions([...transactions, newTransaction]);
 
     toast.success("Expense recorded successfully");
     setIsSubmitting(false);
@@ -1558,7 +1319,7 @@ function ExpensesForm({ wallets, onSuccess }: { wallets: Wallet[]; onSuccess: ()
           <option value="">Select wallet</option>
           {wallets.map((wallet) => (
             <option key={wallet.id} value={wallet.id}>
-              {wallet.name} ({wallet.type}) - {formatRupiah(wallet.balance)}
+              {wallet.name} ({wallet.walletType}) - {formatRupiah(wallet.balance)}
             </option>
           ))}
         </select>
@@ -1587,72 +1348,31 @@ function ExpensesForm({ wallets, onSuccess }: { wallets: Wallet[]; onSuccess: ()
 }
 
 function TransactionsDashboard() {
+  const { wallets, transactions, setTransactions } = useFinanceContext();
   const [isIncomeModalOpen, setIsIncomeModalOpen] = useState(false);
   const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
-  const [wallets, setWallets] = useState<Wallet[]>([]);
-  const [incomeTransactions, setIncomeTransactions] = useState<any[]>([]);
-  const [expenses, setExpenses] = useState<Expense[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [dataError, setDataError] = useState<string | null>(null);
 
-  const supabase = useMemo(() => {
-    try {
-      return getSupabaseClient();
-    } catch {
-      return null;
-    }
-  }, []);
+  // Search & Date Filter state
+  const [searchQuery, setSearchQuery] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
 
-  const loadData = async () => {
-    if (!supabase) {
-      setDataError("Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY.");
-      setIsLoading(false);
-      return;
-    }
-
-    setIsLoading(true);
-    const [walletResult, expenseResult, transactionResult] = await Promise.all([
-      supabase.from("wallets").select("id, name, type, balance").order("name", { ascending: true }),
-      supabase.from("transactions").select("*").eq("type", "expense").order("date", { ascending: false }).limit(50),
-      supabase.from("transactions").select("*").neq("type", "expense").order("date", { ascending: false }).limit(50),
-    ]);
-
-    if (walletResult.error || expenseResult.error || transactionResult.error) {
-      setDataError(walletResult.error?.message ?? expenseResult.error?.message ?? transactionResult.error?.message ?? "Failed to load data.");
-      setIsLoading(false);
-      return;
-    }
-
-    setWallets((walletResult.data ?? []) as Wallet[]);
-
-    // Process expense transactions
-    const expenseData = (expenseResult.data ?? []) as any[];
-    const expensesWithWalletNames = expenseData.map((expense) => {
-      const wallet = wallets.find((w) => w.id === expense.from_wallet_id);
-      return {
-        id: expense.id,
-        date: expense.date,
-        amount: expense.amount,
-        description: expense.notes || "",
-        expense_category: expense.expense_category,
-        from_wallet_id: expense.from_wallet_id,
-        wallet_name: wallet?.name || "Unknown",
-      } as Expense;
-    });
-
-    setExpenses(expensesWithWalletNames);
-    setIncomeTransactions(transactionResult.data ?? []);
-    setDataError(null);
-    setIsLoading(false);
-  };
-
-  useEffect(() => {
-    loadData();
-  }, [supabase]);
+  // Derive income and expense transactions from FinanceContext
+  // Only transactions with type === 'expense' count as expenses (not transfers/asset conversions)
+  const incomeTransactions = useMemo(() => transactions.filter(t => t.type !== "expense" && t.type !== "transfer"), [transactions]);
+  const expenses = useMemo(() => transactions.filter(t => t.type === "expense").map(t => ({
+    id: t.id,
+    date: t.date,
+    amount: t.amount,
+    description: t.notes || "",
+    expense_category: t.category,
+    from_wallet_id: t.from_wallet_id,
+    wallet_name: wallets.find(w => w.id === t.from_wallet_id)?.name || "Unknown",
+  })), [transactions, wallets]);
 
   const totalIncome = incomeTransactions.reduce((sum, t) => sum + (t.amount || 0), 0);
   const totalExpense = expenses.reduce((sum, e) => sum + e.amount, 0);
-  const currentBalance = wallets.reduce((sum, w) => sum + safeNumber(w.balance), 0);
+  const currentBalance = wallets.reduce((sum, w) => sum + (w.balance || 0), 0);
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
@@ -1674,33 +1394,127 @@ function TransactionsDashboard() {
     return typeMap[type] || type;
   };
 
+  const getCategoryColor = (type: string) => {
+    const colorMap: Record<string, string> = {
+      physical_sale: "emerald",
+      money_transfer: "blue",
+      cash_withdrawal: "amber",
+      balance_transfer: "purple",
+      electronic_service: "cyan",
+      digital_ppob: "pink",
+      affiliate_passive_income: "violet",
+      internet_sharing_biznet: "sky",
+      kasbon: "orange",
+    };
+    return colorMap[type] || "slate";
+  };
+
+  const getGhostBadgeClasses = (color: string) => {
+    const map: Record<string, string> = {
+      emerald: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
+      blue: "bg-blue-500/10 text-blue-400 border-blue-500/20",
+      amber: "bg-amber-500/10 text-amber-400 border-amber-500/20",
+      purple: "bg-purple-500/10 text-purple-400 border-purple-500/20",
+      cyan: "bg-cyan-500/10 text-cyan-400 border-cyan-500/20",
+      pink: "bg-pink-500/10 text-pink-400 border-pink-500/20",
+      violet: "bg-violet-500/10 text-violet-400 border-violet-500/20",
+      sky: "bg-sky-500/10 text-sky-400 border-sky-500/20",
+      orange: "bg-orange-500/10 text-orange-400 border-orange-500/20",
+      red: "bg-red-500/10 text-red-400 border-red-500/20",
+      slate: "bg-slate-500/10 text-slate-400 border-slate-500/20",
+    };
+    return map[color] || map.slate;
+  };
+
+  // Filter logic
+  const filterBySearchAndDate = (items: any[], notesKey: string) => {
+    return items.filter((item) => {
+      const q = searchQuery.toLowerCase();
+      const matchesSearch = !q || 
+        (item[notesKey] || "").toLowerCase().includes(q) ||
+        (item.type ? getCategoryLabel(item.type).toLowerCase().includes(q) : false) ||
+        (item.expense_category || "").toLowerCase().includes(q);
+      const itemDate = item.date ? item.date.split("T")[0] : "";
+      const matchesFrom = !dateFrom || itemDate >= dateFrom;
+      const matchesTo = !dateTo || itemDate <= dateTo;
+      return matchesSearch && matchesFrom && matchesTo;
+    });
+  };
+
+  const filteredIncome = useMemo(() => filterBySearchAndDate(incomeTransactions, "notes"), [incomeTransactions, searchQuery, dateFrom, dateTo]);
+  const filteredExpenses = useMemo(() => filterBySearchAndDate(expenses, "description"), [expenses, searchQuery, dateFrom, dateTo]);
+
+  const handleDelete = (id: string) => {
+    if (!confirm("Are you sure you want to delete this transaction?")) return;
+    setTransactions(transactions.filter(t => t.id !== id));
+    toast.success("Transaction deleted");
+  };
+
   const handleExpenseSuccess = () => {
     setIsExpenseModalOpen(false);
-    loadData();
   };
 
   const handleIncomeSuccess = () => {
     setIsIncomeModalOpen(false);
-    loadData();
   };
 
   return (
     <div className="flex flex-col w-full gap-6 bg-[#020617] min-h-screen p-6">
-      {/* 1. HEADER WITH ADD BUTTONS (FULL WIDTH) */}
-      <div className="w-full flex items-center justify-between bg-slate-900/50 backdrop-blur-sm border border-slate-800/50 rounded-xl p-6">
-        <div>
-          <h2 className="text-2xl font-semibold text-white">Transactions</h2>
-          <p className="text-slate-400 text-sm">View and manage all income and expense transactions.</p>
+      {/* 1. HEADER WITH ADD BUTTONS + SEARCH/FILTER (FULL WIDTH) */}
+      <div className="w-full bg-slate-900/50 backdrop-blur-sm border border-slate-800/50 rounded-xl p-6 space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-2xl font-semibold text-white">Transactions</h2>
+            <p className="text-slate-400 text-sm">View and manage all income and expense transactions.</p>
+          </div>
+          <div className="flex gap-3">
+            <Button onClick={() => setIsIncomeModalOpen(true)} className="bg-gradient-to-r from-emerald-500 to-emerald-600 text-white hover:from-emerald-600 hover:to-emerald-700 shadow-[0_0_15px_rgba(16,185,129,0.4)] transition-all">
+              <Plus className="mr-2 h-4 w-4" />
+              Add Income
+            </Button>
+            <Button onClick={() => setIsExpenseModalOpen(true)} className="bg-gradient-to-r from-orange-500 to-orange-600 text-white hover:from-orange-600 hover:to-orange-700 shadow-[0_0_15px_rgba(249,115,22,0.4)] transition-all">
+              <Plus className="mr-2 h-4 w-4" />
+              Add Expense
+            </Button>
+          </div>
         </div>
-        <div className="flex gap-3">
-          <Button onClick={() => setIsIncomeModalOpen(true)} className="bg-gradient-to-r from-emerald-500 to-emerald-600 text-white hover:from-emerald-600 hover:to-emerald-700 shadow-[0_0_15px_rgba(16,185,129,0.4)] transition-all">
-            <Plus className="mr-2 h-4 w-4" />
-            Add Income
-          </Button>
-          <Button onClick={() => setIsExpenseModalOpen(true)} className="bg-gradient-to-r from-orange-500 to-orange-600 text-white hover:from-orange-600 hover:to-orange-700 shadow-[0_0_15px_rgba(249,115,22,0.4)] transition-all">
-            <Plus className="mr-2 h-4 w-4" />
-            Add Expense
-          </Button>
+
+        {/* Search & Date Filter Row */}
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="relative flex-1 min-w-[200px] max-w-sm">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
+            <input
+              type="text"
+              placeholder="Search transactions..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full h-9 pl-9 pr-3 rounded-lg border border-slate-700/50 bg-slate-800/50 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500/50 transition-all"
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <CalendarDays className="h-4 w-4 text-slate-500" />
+            <input
+              type="date"
+              value={dateFrom}
+              onChange={(e) => setDateFrom(e.target.value)}
+              className="h-9 px-3 rounded-lg border border-slate-700/50 bg-slate-800/50 text-sm text-white focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500/50 transition-all"
+            />
+            <span className="text-slate-500 text-xs">to</span>
+            <input
+              type="date"
+              value={dateTo}
+              onChange={(e) => setDateTo(e.target.value)}
+              className="h-9 px-3 rounded-lg border border-slate-700/50 bg-slate-800/50 text-sm text-white focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500/50 transition-all"
+            />
+          </div>
+          {(searchQuery || dateFrom || dateTo) && (
+            <button
+              onClick={() => { setSearchQuery(""); setDateFrom(""); setDateTo(""); }}
+              className="h-9 px-3 rounded-lg border border-slate-700/50 bg-slate-800/30 text-xs text-slate-400 hover:text-white hover:border-slate-600 transition-all"
+            >
+              Clear filters
+            </button>
+          )}
         </div>
       </div>
 
@@ -1708,19 +1522,18 @@ function TransactionsDashboard() {
       <div className="w-full grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="bg-slate-900/40 backdrop-blur-sm border border-slate-800/50 rounded-xl p-6">
           <p className="text-slate-400 text-sm">Total Income</p>
-          <p className="text-3xl font-bold text-emerald-400 font-mono">{formatRupiah(totalIncome)}</p>
+          <p className="text-3xl font-bold text-emerald-400 font-jetbrains">{formatRupiah(totalIncome)}</p>
         </div>
         <div className="bg-slate-900/40 backdrop-blur-sm border border-slate-800/50 rounded-xl p-6">
           <p className="text-slate-400 text-sm">Total Expense</p>
-          <p className="text-3xl font-bold text-red-400 font-mono">{formatRupiah(totalExpense)}</p>
+          <p className="text-3xl font-bold text-red-400 font-jetbrains">{formatRupiah(totalExpense)}</p>
         </div>
         <div className="bg-slate-900/40 backdrop-blur-sm border border-slate-800/50 rounded-xl p-6">
           <p className="text-slate-400 text-sm">Current Balance</p>
-          <p className="text-3xl font-bold text-white font-mono">{formatRupiah(currentBalance)}</p>
+          <p className="text-3xl font-bold text-white font-jetbrains">{formatRupiah(currentBalance)}</p>
         </div>
       </div>
 
-      {dataError && <p className="text-sm text-destructive">{dataError}</p>}
 
       {/* 3. MAIN DATA & TABLES (FULL WIDTH) */}
       <div className="w-full flex flex-col gap-6">
@@ -1737,36 +1550,53 @@ function TransactionsDashboard() {
               <TableHead className="text-slate-300">Category</TableHead>
               <TableHead className="text-slate-300">Wallet</TableHead>
               <TableHead className="text-right text-slate-300">Amount</TableHead>
+              <TableHead className="text-right text-slate-300 w-[80px]">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {isLoading ? (
+            {filteredIncome.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={5} className="text-center text-slate-500">
-                  Loading transactions...
-                </TableCell>
-              </TableRow>
-            ) : incomeTransactions.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={5} className="text-center text-slate-500">
-                  No income transactions recorded yet.
+                <TableCell colSpan={6} className="text-center py-12">
+                  <div className="flex flex-col items-center gap-3">
+                    <Receipt className="h-12 w-12 text-slate-700/60" strokeWidth={1} />
+                    <p className="text-slate-500 text-sm">No income transactions recorded yet.</p>
+                  </div>
                 </TableCell>
               </TableRow>
             ) : (
-              incomeTransactions.map((transaction) => {
+              filteredIncome.map((transaction) => {
                 const wallet = wallets.find(w => w.id === transaction.to_wallet_id);
+                const catColor = getCategoryColor(transaction.type);
                 return (
-                  <TableRow key={transaction.id} className="border-slate-800/50 hover:bg-slate-800/40 transition-colors">
-                    <TableCell className="text-slate-300">{formatDate(transaction.date)}</TableCell>
-                    <TableCell className="text-slate-300">{transaction.notes || "-"}</TableCell>
+                  <TableRow key={transaction.id} className="border-slate-800/50 hover:bg-slate-800/40 transition-colors group">
+                    <TableCell className="text-slate-300 text-sm">{formatDate(transaction.date)}</TableCell>
+                    <TableCell className="text-slate-300 text-sm max-w-[200px] truncate">{transaction.notes || "-"}</TableCell>
                     <TableCell>
-                      <span className="px-2 py-1 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                      <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-medium border ${getGhostBadgeClasses(catColor)}`}>
                         {getCategoryLabel(transaction.type)}
                       </span>
                     </TableCell>
-                    <TableCell className="text-slate-300">{wallet?.name || "-"}</TableCell>
-                    <TableCell className="text-right font-mono text-emerald-400 font-semibold">
+                    <TableCell>
+                      {wallet ? (
+                        <span className="inline-flex px-2.5 py-1 rounded-full text-xs font-medium border bg-slate-500/10 text-slate-300 border-slate-500/20">
+                          {wallet.name}
+                        </span>
+                      ) : (
+                        <span className="text-slate-500 text-sm">-</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-right font-jetbrains text-emerald-400 font-semibold text-sm tabular-nums">
                       +{formatRupiah(transaction.amount)}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button className="p-1.5 rounded-md hover:bg-slate-700/50 text-slate-500 hover:text-slate-300 transition-colors" title="Edit">
+                          <Pencil className="h-3.5 w-3.5" />
+                        </button>
+                        <button onClick={() => handleDelete(transaction.id)} className="p-1.5 rounded-md hover:bg-red-500/10 text-slate-500 hover:text-red-400 transition-colors" title="Delete">
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 );
@@ -1789,37 +1619,58 @@ function TransactionsDashboard() {
               <TableHead className="text-slate-300">Category</TableHead>
               <TableHead className="text-slate-300">Wallet</TableHead>
               <TableHead className="text-right text-slate-300">Amount</TableHead>
+              <TableHead className="text-right text-slate-300 w-[80px]">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {isLoading ? (
+            {filteredExpenses.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={5} className="text-center text-slate-500">
-                  Loading expenses...
-                </TableCell>
-              </TableRow>
-            ) : expenses.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={5} className="text-center text-slate-500">
-                  No expense transactions recorded yet.
+                <TableCell colSpan={6} className="text-center py-12">
+                  <div className="flex flex-col items-center gap-3">
+                    <FolderOpen className="h-12 w-12 text-slate-700/60" strokeWidth={1} />
+                    <p className="text-slate-500 text-sm">No expense transactions recorded yet.</p>
+                  </div>
                 </TableCell>
               </TableRow>
             ) : (
-              expenses.map((expense) => (
-                <TableRow key={expense.id} className="border-slate-800/50 hover:bg-slate-800/40 transition-colors">
-                  <TableCell className="text-slate-300">{formatDate(expense.date)}</TableCell>
-                  <TableCell className="text-slate-300">{expense.description || "-"}</TableCell>
-                  <TableCell>
-                    <span className="px-2 py-1 rounded-full text-xs font-medium bg-red-500/10 text-red-400 border border-red-500/20">
-                      {expense.expense_category || "Uncategorized"}
-                    </span>
-                  </TableCell>
-                  <TableCell className="text-slate-300">{expense.wallet_name}</TableCell>
-                  <TableCell className="text-right font-mono text-red-400 font-semibold">
-                    -{formatRupiah(expense.amount)}
-                  </TableCell>
-                </TableRow>
-              ))
+              filteredExpenses.map((expense) => {
+                const expWallet = wallets.find(w => w.id === expense.from_wallet_id);
+                return (
+                  <TableRow key={expense.id} className="border-slate-800/50 hover:bg-slate-800/40 transition-colors group">
+                    <TableCell className="text-slate-300 text-sm">{formatDate(expense.date)}</TableCell>
+                    <TableCell className="text-slate-300 text-sm max-w-[200px] truncate">{expense.description || "-"}</TableCell>
+                    <TableCell>
+                      <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-medium border ${getGhostBadgeClasses("red")}`}>
+                        {expense.expense_category || "Uncategorized"}
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      {expWallet ? (
+                        <span className="inline-flex px-2.5 py-1 rounded-full text-xs font-medium border bg-slate-500/10 text-slate-300 border-slate-500/20">
+                          {expWallet.name}
+                        </span>
+                      ) : (
+                        <span className="inline-flex px-2.5 py-1 rounded-full text-xs font-medium border bg-slate-500/10 text-slate-300 border-slate-500/20">
+                          {expense.wallet_name}
+                        </span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-right font-jetbrains text-red-400 font-semibold text-sm tabular-nums">
+                      -{formatRupiah(expense.amount)}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button className="p-1.5 rounded-md hover:bg-slate-700/50 text-slate-500 hover:text-slate-300 transition-colors" title="Edit">
+                          <Pencil className="h-3.5 w-3.5" />
+                        </button>
+                        <button onClick={() => handleDelete(expense.id)} className="p-1.5 rounded-md hover:bg-red-500/10 text-slate-500 hover:text-red-400 transition-colors" title="Delete">
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                );
+              })
             )}
           </TableBody>
         </Table>
@@ -1842,7 +1693,7 @@ function TransactionsDashboard() {
           <DialogHeader>
             <DialogTitle className="text-white">Add Expense</DialogTitle>
           </DialogHeader>
-          <ExpensesForm wallets={wallets} onSuccess={handleExpenseSuccess} />
+          <ExpensesForm onSuccess={handleExpenseSuccess} />
         </DialogContent>
       </Dialog>
     </div>

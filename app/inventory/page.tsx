@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { FormEvent, useEffect, useId, useMemo, useRef, useState } from "react";
 import Papa from "papaparse";
 import { Upload, Download, CheckCircle2, XCircle, Pencil, Trash } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -15,8 +15,8 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { getSupabaseClient } from "@/lib/supabase/client";
 import { formatRupiah } from "@/lib/utils";
+import { useFinanceContext } from "@/context/FinanceContext";
 import {
   Select,
   SelectContent,
@@ -40,8 +40,8 @@ type Product = {
   barcode: string | null;
   name: string;
   category: string | null;
-  cost_price: number | string;
-  selling_price: number | string;
+  cost_price: number;
+  selling_price: number;
   stock: number;
   expired_date: string | null;
   status: string;
@@ -50,8 +50,8 @@ type Product = {
 type Wallet = {
   id: string;
   name: string;
-  type: string;
-  balance: number | string;
+  walletType: string;
+  balance: number;
 };
 
 type ProductFormState = {
@@ -83,9 +83,7 @@ const initialFormState: ProductFormState = {
 };
 
 export default function InventoryPage() {
-  const [products, setProducts] = useState<Product[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const { products, addProduct, editProduct, deleteProduct, wallets, handleRestock, categories } = useFinanceContext();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isImportOpen, setIsImportOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -94,8 +92,9 @@ export default function InventoryPage() {
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [sortField, setSortField] = useState<SortField>("name");
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
-  const [wallets, setWallets] = useState<Wallet[]>([]);
-  const [categories, setCategories] = useState<{ id: string; name: string }[]>([]);
+
+  // Filter categories for inventory type only
+  const inventoryCategories = categories.filter(c => c.type === "inventory");
 
   // Edit product state
   const [editTarget, setEditTarget] = useState<Product | null>(null);
@@ -111,151 +110,48 @@ export default function InventoryPage() {
     status: "in_stock",
   });
 
-  const supabase = useMemo(() => {
-    try {
-      return getSupabaseClient();
-    } catch {
-      return null;
-    }
-  }, []);
-
-  const loadProducts = useCallback(async () => {
-    if (!supabase) {
-      setErrorMessage("Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY.");
-      setIsLoading(false);
-      return;
-    }
-
-    setIsLoading(true);
-    const { data, error } = await supabase
-      .from("products")
-      .select("id, barcode, name, category, cost_price, selling_price, stock, expired_date, status")
-      .order("name", { ascending: true });
-
-    if (error) {
-      setErrorMessage(error.message);
-      setIsLoading(false);
-      return;
-    }
-
-    setProducts(data ?? []);
-    setErrorMessage(null);
-    setIsLoading(false);
-  }, [supabase]);
-
-  const loadCategories = useCallback(async () => {
-    if (!supabase) return;
-    const { data, error } = await supabase
-      .from("categories")
-      .select("id, name")
-      .eq("type", "inventory")
-      .order("name", { ascending: true });
-    if (error) {
-      console.error("Failed to load categories:", error);
-      return;
-    }
-    setCategories(data ?? []);
-  }, [supabase]);
-
-  useEffect(() => {
-    loadProducts();
-    loadCategories();
-    // Also load wallets
-    async function loadWallets() {
-      if (!supabase) return;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data } = await (supabase as any)
-        .from("wallets")
-        .select("id, name, type, balance")
-        .order("name", { ascending: true });
-      setWallets((data ?? []) as Wallet[]);
-    }
-    loadWallets();
-  }, [loadProducts, loadCategories, supabase]);
-
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!supabase) {
-      setErrorMessage("Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY.");
-      toast.error("Supabase is not configured.");
-      return;
-    }
-
     setIsSaving(true);
 
-    const payload = {
-      barcode: formState.barcode.trim() || null,
-      name: formState.name.trim(),
-      category: formState.category === "none" ? null : formState.category.trim() || null,
-      cost_price: Number(formState.cost_price),
-      selling_price: Number(formState.selling_price),
-      stock: Number(formState.stock),
-      expired_date: formState.expired_date || null,
-      status: formState.status || "in_stock",
-    };
-
-    const totalCost = payload.cost_price * payload.stock;
+    const costPrice = Number(formState.cost_price);
+    const sellingPrice = Number(formState.selling_price);
+    const stock = Number(formState.stock);
+    const totalCost = costPrice * stock;
     const selectedWallet = wallets.find((w) => w.id === formState.walletId);
 
     // Validate wallet balance if a wallet is selected
     if (selectedWallet && totalCost > 0) {
-      const currentBalance = Number(selectedWallet.balance) || 0;
-      if (currentBalance < totalCost) {
+      if (selectedWallet.balance < totalCost) {
         toast.error("Insufficient wallet balance", {
-          description: `Total cost ${formatRupiah(totalCost)} exceeds ${selectedWallet.name} balance of ${formatRupiah(currentBalance)}.`,
+          description: `Total cost ${formatRupiah(totalCost)} exceeds ${selectedWallet.name} balance of ${formatRupiah(selectedWallet.balance)}.`,
         });
         setIsSaving(false);
         return;
       }
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const sb = supabase as any;
+    // Add product to context
+    addProduct({
+      barcode: formState.barcode.trim() || null,
+      name: formState.name.trim(),
+      category: formState.category === "none" ? null : formState.category.trim() || null,
+      cost_price: costPrice,
+      selling_price: sellingPrice,
+      stock: stock,
+      expired_date: formState.expired_date || null,
+      status: formState.status || "in_stock",
+    });
 
-    // 1. Insert the product
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error } = await sb.from("products").insert(payload as any);
-
-    if (error) {
-      setErrorMessage(error.message);
-      setIsSaving(false);
-      toast.error("Failed to save product", { description: error.message });
-      return;
-    }
-
-    // 2. If a wallet is selected, deduct balance and log transaction
+    // Handle wallet deduction if wallet selected
     if (selectedWallet && totalCost > 0) {
-      const newBalance = (Number(selectedWallet.balance) || 0) - totalCost;
-      const walletUpdate = await sb
-        .from("wallets")
-        .update({ balance: newBalance } as any)
-        .eq("id", selectedWallet.id);
-
-      if (walletUpdate.error) {
-        toast.error("Product saved but wallet deduction failed", { description: walletUpdate.error.message });
-      } else {
-        // 3. Log expense transaction
-        await sb.from("transactions").insert({
-          date: new Date().toISOString(),
-          type: "inventory_purchase",
-          amount: totalCost,
-          from_wallet_id: selectedWallet.id,
-          notes: `Purchase of ${payload.name} (${payload.stock}x @ ${formatRupiah(payload.cost_price)})`,
-        } as any);
-
-        // Update local wallet state
-        setWallets((prev) =>
-          prev.map((w) => (w.id === selectedWallet.id ? { ...w, balance: newBalance } : w)),
-        );
-      }
+      handleRestock("", stock, costPrice, selectedWallet.id);
     }
 
     setFormState(initialFormState);
     setIsDialogOpen(false);
     setIsSaving(false);
-    setErrorMessage(null);
     toast.success("Product added successfully");
-    await loadProducts();
   }
 
   const filteredProducts = useMemo(() => {
@@ -307,12 +203,11 @@ export default function InventoryPage() {
     setIsEditOpen(true);
   }
 
-  async function handleEditProduct() {
-    if (!supabase || !editTarget) return;
+  function handleEditProduct() {
+    if (!editTarget) return;
     setIsSavingEdit(true);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const sb = supabase as any;
-    const { error } = await sb.from("products").update({
+
+    editProduct(editTarget.id, {
       name: editForm.name.trim(),
       category: editForm.category === "none" ? null : editForm.category.trim() || null,
       cost_price: Number(editForm.cost_price),
@@ -320,36 +215,18 @@ export default function InventoryPage() {
       stock: Number(editForm.stock),
       expired_date: editForm.expired_date || null,
       status: editForm.status || "in_stock",
-    } as any).eq("id", editTarget.id);
-
-    if (error) {
-      toast.error("Failed to update product", { description: error.message });
-      setIsSavingEdit(false);
-      return;
-    }
+    });
 
     toast.success("Product updated successfully");
     setIsSavingEdit(false);
     setIsEditOpen(false);
     setEditTarget(null);
-    await loadProducts();
   }
 
-  async function handleDeleteProduct(productId: string) {
+  function handleDeleteProduct(productId: string) {
     if (!window.confirm('Hapus produk ini?')) return;
-    if (!supabase) return;
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const sb = supabase as any;
-    const { error } = await sb.from("products").delete().eq("id", productId);
-
-    if (error) {
-      toast.error("Failed to delete product", { description: error.message });
-      return;
-    }
-
+    deleteProduct(productId);
     toast.success("Product deleted successfully");
-    setProducts((prev) => prev.filter((p) => p.id !== productId));
   }
 
   function toggleSort(field: SortField) {
@@ -366,14 +243,13 @@ export default function InventoryPage() {
       <div className="flex items-center justify-between bg-slate-900/50 backdrop-blur-sm border border-slate-800/50 rounded-xl p-6">
         <div>
           <h2 className="text-2xl font-semibold text-white">Inventory</h2>
-          <p className="text-slate-400 text-sm">Manage and monitor products from your Supabase database.</p>
+          <p className="text-slate-400 text-sm">Manage and monitor products from FinanceContext.</p>
         </div>
         <div className="flex items-center gap-2">
           <ImportCsvDialog
             open={isImportOpen}
             onOpenChange={setIsImportOpen}
-            supabase={supabase}
-            onImportComplete={loadProducts}
+            onImportComplete={() => {}}
           />
           <AddProductDialog
             open={isDialogOpen}
@@ -383,12 +259,10 @@ export default function InventoryPage() {
             onSubmit={handleSubmit}
             isSaving={isSaving}
             wallets={wallets}
-            categories={categories}
+            categories={inventoryCategories}
           />
         </div>
       </div>
-
-      {errorMessage ? <p className="text-sm text-destructive">{errorMessage}</p> : null}
 
       <Tabs defaultValue="in-stock" className="space-y-4">
         <TabsList className="bg-slate-900/50 backdrop-blur-sm border border-slate-800/50">
@@ -418,7 +292,7 @@ export default function InventoryPage() {
               </SelectTrigger>
               <SelectContent className="bg-slate-900 border-slate-800">
                 <SelectItem value="all">All Categories</SelectItem>
-                {categories.map((category) => (
+                {inventoryCategories.map((category) => (
                   <SelectItem key={category.id} value={category.name.toLowerCase()}>
                     {category.name}
                   </SelectItem>
@@ -455,13 +329,7 @@ export default function InventoryPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {isLoading ? (
-                  <TableRow>
-                    <TableCell colSpan={9} className="text-center text-slate-500">
-                      Loading products...
-                    </TableCell>
-                  </TableRow>
-                ) : filteredProducts.length === 0 ? (
+                {filteredProducts.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={9} className="text-center text-slate-500">
                       No products found for current filters.
@@ -516,7 +384,7 @@ export default function InventoryPage() {
 
         {/* ====== Tab 2: In Transit ====== */}
         <TabsContent value="in-transit">
-          <InTransitPanel products={inTransitProducts} isLoading={isLoading} supabase={supabase} onStatusChange={loadProducts} wallets={wallets} onEdit={openEditProduct} />
+          <InTransitPanel products={inTransitProducts} onEdit={openEditProduct} />
         </TabsContent>
       </Tabs>
 
@@ -543,7 +411,7 @@ export default function InventoryPage() {
                   className="flex h-10 w-full rounded-md border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-slate-600"
                 >
                   <option value="none">No Category</option>
-                  {categories.map((cat) => (
+                  {inventoryCategories.map((cat) => (
                     <option key={cat.id} value={cat.name}>{cat.name}</option>
                   ))}
                 </select>
@@ -610,7 +478,7 @@ function AddProductDialog({
   onOpenChange: (open: boolean) => void;
   formState: ProductFormState;
   onFormStateChange: (state: ProductFormState) => void;
-  onSubmit: (event: FormEvent<HTMLFormElement>) => Promise<void>;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   isSaving: boolean;
   wallets: Wallet[];
   categories: { id: string; name: string }[];
@@ -747,7 +615,7 @@ function AddProductDialog({
               <option value="">No wallet deduction</option>
               {wallets.map((w) => (
                 <option key={w.id} value={w.id}>
-                  {w.name} ({w.type}) - {formatRupiah(w.balance)}
+                  {w.name} ({w.walletType}) - {formatRupiah(w.balance)}
                 </option>
               ))}
             </select>
@@ -777,89 +645,39 @@ function AddProductDialog({
 /* ---------- In Transit Panel ---------- */
 function InTransitPanel({
   products,
-  isLoading,
-  supabase,
-  onStatusChange,
-  wallets,
   onEdit,
 }: {
   products: Product[];
-  isLoading: boolean;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  supabase: any;
-  onStatusChange: () => Promise<void>;
-  wallets: Wallet[];
   onEdit: (product: Product) => void;
 }) {
+  const { editProduct, deleteProduct, wallets, handleTransfer } = useFinanceContext();
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [cancelTarget, setCancelTarget] = useState<Product | null>(null);
   const [isCancelOpen, setIsCancelOpen] = useState(false);
   const [refundWalletId, setRefundWalletId] = useState("");
   const [isCancelling, setIsCancelling] = useState(false);
 
-  async function markAsReceived(productId: string) {
-    if (!supabase) return;
+  function markAsReceived(productId: string) {
     setUpdatingId(productId);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error } = await (supabase as any)
-      .from("products")
-      .update({ status: "in_stock" } as any)
-      .eq("id", productId);
-
-    if (error) {
-      toast.error("Failed to update status", { description: error.message });
-      setUpdatingId(null);
-      return;
-    }
-
+    editProduct(productId, { status: "in_stock" });
     toast.success("Product marked as received and moved to In Stock");
     setUpdatingId(null);
-    await onStatusChange();
   }
 
-  async function handleCancelOrder() {
-    if (!supabase || !cancelTarget) return;
+  function handleCancelOrder() {
+    if (!cancelTarget) return;
     setIsCancelling(true);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const sb = supabase as any;
-    const refundAmount = Number(cancelTarget.cost_price) * cancelTarget.stock;
+    const refundAmount = cancelTarget.cost_price * cancelTarget.stock;
     const selectedWallet = wallets.find((w) => w.id === refundWalletId);
 
     try {
-      // 1. Refund to wallet if selected
+      // Refund to wallet if selected
       if (selectedWallet && refundAmount > 0) {
-        const newBalance = (Number(selectedWallet.balance) || 0) + refundAmount;
-        const { error: walletError } = await sb
-          .from("wallets")
-          .update({ balance: newBalance } as any)
-          .eq("id", selectedWallet.id);
-        if (walletError) {
-          toast.error("Failed to refund wallet", { description: walletError.message });
-          setIsCancelling(false);
-          return;
-        }
-
-        // 2. Log refund transaction
-        await sb.from("transactions").insert({
-          date: new Date().toISOString(),
-          type: "refund",
-          amount: refundAmount,
-          to_wallet_id: selectedWallet.id,
-          notes: `Refund for cancelled order: ${cancelTarget.name} (${cancelTarget.stock}x @ ${formatRupiah(cancelTarget.cost_price)})`,
-        } as any);
+        handleTransfer("system", selectedWallet.id, refundAmount);
       }
 
-      // 3. Delete the product
-      const { error: deleteError } = await sb
-        .from("products")
-        .delete()
-        .eq("id", cancelTarget.id);
-
-      if (deleteError) {
-        toast.error("Failed to delete product", { description: deleteError.message });
-        setIsCancelling(false);
-        return;
-      }
+      // Delete the product
+      deleteProduct(cancelTarget.id);
 
       toast.success(
         selectedWallet
@@ -870,7 +688,6 @@ function InTransitPanel({
       setIsCancelOpen(false);
       setCancelTarget(null);
       setRefundWalletId("");
-      await onStatusChange();
     } catch {
       toast.error("An unexpected error occurred");
       setIsCancelling(false);
@@ -888,9 +705,7 @@ function InTransitPanel({
         Goods that have been paid for but haven&apos;t arrived yet. This value is included in your Total Assets.
       </p>
 
-      {isLoading ? (
-        <div className="text-center py-8 text-sm text-slate-500">Loading in-transit products...</div>
-      ) : products.length === 0 ? (
+      {products.length === 0 ? (
         <div className="text-center py-8 text-sm text-slate-500 border border-dashed border-slate-800 rounded-xl">
           No products currently in transit.
         </div>
@@ -994,7 +809,7 @@ function InTransitPanel({
                   <option value="">No refund (delete only)</option>
                   {wallets.map((w) => (
                     <option key={w.id} value={w.id}>
-                      {w.name} ({w.type}) - {formatRupiah(w.balance)}
+                      {w.name} ({w.walletType}) - {formatRupiah(w.balance)}
                     </option>
                   ))}
                 </select>
@@ -1170,16 +985,13 @@ function downloadCsvTemplate() {
 function ImportCsvDialog({
   open,
   onOpenChange,
-  supabase,
   onImportComplete,
 }: {
   open: boolean;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   onOpenChange: (open: boolean) => void;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  supabase: any;
-  onImportComplete: () => Promise<void>;
+  onImportComplete: () => void;
 }) {
+  const { addProduct } = useFinanceContext();
   const [isImporting, setIsImporting] = useState(false);
   const [previewRows, setPreviewRows] = useState<Record<string, string>[]>([]);
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
@@ -1223,34 +1035,30 @@ function ImportCsvDialog({
     });
   }
 
-  async function handleImport() {
-    if (!supabase || previewRows.length === 0 || validationErrors.length > 0) return;
+  function handleImport() {
+    if (previewRows.length === 0 || validationErrors.length > 0) return;
 
     setIsImporting(true);
-    const payload = previewRows.map((row) => ({
-      name: row.name?.trim() ?? "",
-      category: row.category?.trim() || null,
-      cost_price: Number(row.cost_price) || 0,
-      selling_price: Number(row.selling_price) || 0,
-      stock: Number(row.stock) || 0,
-      status: ["in_stock", "in_transit"].includes(row.status?.trim()) ? row.status.trim() : "in_stock",
-      expired_date: row.expired_date?.trim() || null,
-      barcode: null,
-    }));
+    const { addProduct } = useFinanceContext();
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error } = await supabase.from("products").insert(payload as any);
+    previewRows.forEach((row) => {
+      addProduct({
+        name: row.name?.trim() ?? "",
+        category: row.category?.trim() || null,
+        cost_price: Number(row.cost_price) || 0,
+        selling_price: Number(row.selling_price) || 0,
+        stock: Number(row.stock) || 0,
+        status: ["in_stock", "in_transit"].includes(row.status?.trim()) ? row.status.trim() : "in_stock",
+        expired_date: row.expired_date?.trim() || null,
+        barcode: null,
+      });
+    });
 
-    if (error) {
-      toast.error("Import failed", { description: error.message });
-      setIsImporting(false);
-      return;
-    }
-
-    toast.success(`Successfully imported ${payload.length} product(s)`);
+    toast.success(`Successfully imported ${previewRows.length} product(s)`);
     resetState();
     onOpenChange(false);
-    await onImportComplete();
+    onImportComplete();
+    setIsImporting(false);
   }
 
   return (

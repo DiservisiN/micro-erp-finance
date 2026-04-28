@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import { TrendingUp, TrendingDown, ArrowUpRight, ArrowDownRight } from "lucide-react";
 import {
   Card,
@@ -9,7 +9,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { useAppContext } from "@/context/AppContext";
-import { getSupabaseClient } from "@/lib/supabase/client";
+import { useFinanceContext } from "@/context/FinanceContext";
 import { formatRupiah } from "@/lib/utils";
 import {
   PieChart,
@@ -76,24 +76,10 @@ const CHART_COLORS = ["#f97316", "#3b82f6", "#10b981", "#8b5cf6", "#ec4899"];
 /* ---------- page ---------- */
 export default function Home() {
   const { mode } = useAppContext();
-  const supabase = useMemo(() => {
-    try {
-      return getSupabaseClient();
-    } catch {
-      return null;
-    }
-  }, []);
+  const { wallets, transactions, products, investments, debts } = useFinanceContext();
 
-  const [isLoading, setIsLoading] = useState(true);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [wallets, setWallets] = useState<WalletRow[]>([]);
-  const [products, setProducts] = useState<ProductRow[]>([]);
-  const [investments, setInvestments] = useState<InvestmentRow[]>([]);
-  const [debts, setDebts] = useState<DebtRow[]>([]);
-  const [transactions, setTransactions] = useState<TransactionRow[]>([]);
-
-  // Calculate monthly income, expenses, and profit (current month)
-  const monthlyStats = useMemo(() => {
+  // Calculate income, expenses, and profit
+  const financeStats = useMemo(() => {
     const now = new Date();
     const currentMonth = now.getMonth();
     const currentYear = now.getFullYear();
@@ -110,126 +96,49 @@ export default function Home() {
     let monthlyIncome = 0;
     let monthlyExpenses = 0;
     let monthlyCOGS = 0;
-
-    console.log("=== Monthly Stats Calculation ===");
-    console.log("Current date:", now.toISOString());
-    console.log("Current month:", currentMonth, "Year:", currentYear);
-    console.log("Income types being checked:", Array.from(incomeTypes));
-    console.log("Total transactions to check:", transactions.length);
+    let allTimeIncome = 0;
+    let allTimeExpenses = 0;
+    let allTimeCOGS = 0;
 
     for (const tx of transactions) {
       const d = new Date(tx.date);
-      // Use local time for consistent comparison
       const txMonth = d.getMonth();
       const txYear = d.getFullYear();
+      const amount = safeNumber(tx.amount);
+      const adminFee = safeNumber(tx.admin_fee ?? 0);
+      const isCurrentMonth = txMonth === currentMonth && txYear === currentYear;
 
-      console.log("Transaction:", tx.type, "Date:", tx.date, "Month:", txMonth, "Year:", txYear, "Amount:", tx.amount, "Is income?", incomeTypes.has(tx.type), "Is current month?", txMonth === currentMonth && txYear === currentYear);
+      if (incomeTypes.has(tx.type)) {
+        allTimeIncome += amount;
+        if (isCurrentMonth) monthlyIncome += amount;
 
-      if (txMonth === currentMonth && txYear === currentYear) {
-        const amount = safeNumber(tx.amount);
-        const adminFee = safeNumber(tx.admin_fee ?? 0);
-
-        if (incomeTypes.has(tx.type)) {
-          monthlyIncome += amount;
-          console.log("  -> Added to income:", amount, "Total income so far:", monthlyIncome);
-
-          // Calculate COGS for physical sales and digital PPOB
-          // Note: quantity is not stored in transactions table, assuming quantity = 1 for now
-          if (tx.type === "physical_sale" && tx.product_id) {
-            const product = products.find((p) => p.id === tx.product_id);
-            if (product) {
-              monthlyCOGS += safeNumber(product.cost_price);
-            }
+        // Calculate COGS for physical sales and digital PPOB
+        if ((tx.type === "physical_sale" || tx.type === "digital_ppob") && tx.product_id) {
+          const product = products.find((p) => p.id === tx.product_id);
+          if (product) {
+            const costPrice = safeNumber(product.cost_price);
+            allTimeCOGS += costPrice;
+            if (isCurrentMonth) monthlyCOGS += costPrice;
           }
-          if (tx.type === "digital_ppob" && tx.product_id) {
-            const product = products.find((p) => p.id === tx.product_id);
-            if (product) {
-              monthlyCOGS += safeNumber(product.cost_price);
-            }
-          }
-        } else if (expenseTypes.has(tx.type)) {
-          monthlyExpenses += amount + adminFee;
         }
+      } else if (expenseTypes.has(tx.type)) {
+        allTimeExpenses += amount + adminFee;
+        if (isCurrentMonth) monthlyExpenses += amount + adminFee;
       }
     }
 
-    const grossProfit = monthlyIncome - monthlyCOGS;
-    const netProfit = grossProfit - monthlyExpenses;
+    const monthlyGrossProfit = monthlyIncome - monthlyCOGS;
+    const monthlyNetProfit = monthlyGrossProfit - monthlyExpenses;
+    const allTimeGrossProfit = allTimeIncome - allTimeCOGS;
+    const allTimeNetProfit = allTimeGrossProfit - allTimeExpenses;
 
-    console.log("Final monthly stats:", { monthlyIncome, monthlyExpenses, monthlyCOGS, grossProfit, netProfit });
-
-    return { monthlyIncome, monthlyExpenses, monthlyCOGS, grossProfit, netProfit };
+    return {
+      monthlyIncome, monthlyExpenses, monthlyCOGS,
+      monthlyGrossProfit, monthlyNetProfit,
+      allTimeIncome, allTimeExpenses, allTimeCOGS,
+      allTimeGrossProfit, allTimeNetProfit,
+    };
   }, [transactions, products]);
-
-  useEffect(() => {
-    async function loadNeracaData() {
-      if (!supabase) {
-        setErrorMessage("Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY.");
-        setIsLoading(false);
-        return;
-      }
-
-      setIsLoading(true);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const sb: any = supabase;
-      const [walletsResult, productsResult, investmentsResult, debtsResult, transactionsResult] =
-        await Promise.all([
-          sb.from("wallets").select("id, name, balance, type"),
-          sb.from("products").select("id, name, cost_price, stock, status"),
-          sb.from("investments").select("id, quantity, current_price"),
-          sb.from("debts").select("id, type, status, amount"),
-          sb.from("transactions").select("id, type, amount, admin_fee, date, product_id, notes").order("date", { ascending: false }).limit(500),
-        ]);
-
-      if (
-        walletsResult.error ||
-        productsResult.error ||
-        investmentsResult.error ||
-        debtsResult.error ||
-        transactionsResult.error
-      ) {
-        console.error("Supabase fetch errors:", {
-          wallets: walletsResult.error,
-          products: productsResult.error,
-          investments: investmentsResult.error,
-          debts: debtsResult.error,
-          transactions: transactionsResult.error,
-        });
-        setErrorMessage(
-          walletsResult.error?.message ??
-          productsResult.error?.message ??
-          investmentsResult.error?.message ??
-          debtsResult.error?.message ??
-          transactionsResult.error?.message ??
-          "Failed to load dashboard data.",
-        );
-        setIsLoading(false);
-        return;
-      }
-
-      setWallets((walletsResult.data ?? []) as WalletRow[]);
-      setProducts((productsResult.data ?? []) as ProductRow[]);
-      setInvestments((investmentsResult.data ?? []) as InvestmentRow[]);
-      setDebts((debtsResult.data ?? []) as DebtRow[]);
-      const txData = (transactionsResult.data ?? []) as TransactionRow[];
-      setTransactions(txData);
-      setErrorMessage(null);
-      setIsLoading(false);
-
-      // Debug logging
-      console.log("=== Dashboard Debug ===");
-      console.log("Current date:", new Date().toISOString());
-      console.log("Current month:", new Date().getMonth(), "Year:", new Date().getFullYear());
-      console.log("Transactions fetched:", txData.length);
-      console.log("Raw transactions:", txData);
-      if (txData.length > 0) {
-        console.log("First transaction date:", txData[0].date);
-        console.log("Last transaction date:", txData[txData.length - 1].date);
-      }
-    }
-
-    loadNeracaData();
-  }, [supabase]);
 
   /* ---------- computed values ---------- */
   const businessWalletsTotal = wallets
@@ -283,11 +192,7 @@ export default function Home() {
 
   /* ---------- recent transactions ---------- */
   const recentTransactions = useMemo(() => {
-    const recent = transactions.slice(0, 5);
-    console.log("=== Recent Transactions ===");
-    console.log("Total transactions:", transactions.length);
-    console.log("Recent transactions (first 5):", recent);
-    return recent;
+    return transactions.slice(0, 5);
   }, [transactions]);
 
   const incomeTypes = new Set([
@@ -444,39 +349,34 @@ export default function Home() {
           </div>
         </div>
 
-        {errorMessage && (
-          <div className="bg-red-500/10 border border-red-500/20 text-red-400 px-4 py-2 rounded-lg text-sm">
-            {errorMessage}
-          </div>
-        )}
 
         {/* Top Row - 4 Stat Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <StatCard
             title="Total Assets"
-            value={isLoading ? "Loading..." : formatRupiah(totalAssets)}
+            value={formatRupiah(totalAssets)}
             trend="+5.2%"
             trendUp={true}
             accent="orange"
           />
           <StatCard
-            title="Net Worth"
-            value={isLoading ? "Loading..." : formatRupiah(netWorth)}
-            trend="+3.8%"
-            trendUp={true}
-            accent="blue"
-          />
-          <StatCard
             title="Monthly Income"
-            value={isLoading ? "Loading..." : formatRupiah(monthlyStats.monthlyIncome)}
-            trend="+12.4%"
-            trendUp={true}
+            value={formatRupiah(financeStats.monthlyIncome)}
+            trend={financeStats.monthlyIncome > 0 ? "+" + Math.round((financeStats.monthlyIncome / Math.max(financeStats.allTimeIncome, 1)) * 100) + "%" : "0%"}
+            trendUp={financeStats.monthlyIncome > 0}
             accent="green"
           />
+          <StatCard
+            title="Total Expenses"
+            value={formatRupiah(financeStats.monthlyExpenses)}
+            trend={financeStats.monthlyExpenses > 0 ? "-" + Math.round((financeStats.monthlyExpenses / Math.max(financeStats.allTimeExpenses, 1)) * 100) + "%" : "0%"}
+            trendUp={false}
+            accent="purple"
+          />
           <NetProfitCard
-            netProfit={monthlyStats.netProfit}
-            grossProfit={monthlyStats.grossProfit}
-            isLoading={isLoading}
+            netProfit={financeStats.monthlyNetProfit}
+            grossProfit={financeStats.monthlyGrossProfit}
+            isLoading={false}
           />
         </div>
 
@@ -488,50 +388,44 @@ export default function Home() {
               <CardTitle className="text-white text-lg">Income vs Expenses vs Profit</CardTitle>
             </CardHeader>
             <CardContent>
-              {isLoading ? (
-                <div className="flex h-[300px] items-center justify-center">
-                  <div className="h-8 w-8 animate-spin rounded-full border-4 border-slate-700 border-t-orange-500" />
-                </div>
-              ) : (
-                <ResponsiveContainer width="100%" height={300}>
-                  <BarChart data={barData} barGap={4}>
-                    <XAxis
-                      dataKey="month"
-                      tick={{ fill: "#64748b", fontSize: 12 }}
-                      axisLine={{ stroke: "#334155" }}
-                      tickLine={false}
-                    />
-                    <YAxis
-                      tick={{ fill: "#64748b", fontSize: 12 }}
-                      axisLine={false}
-                      tickLine={false}
-                      tickFormatter={(v: number) => shortCurrency(v)}
-                    />
-                    <Tooltip content={<BarTooltip />} cursor={{ fill: "#334155", opacity: 0.3 }} />
-                    <Bar
-                      dataKey="Income"
-                      fill="#f97316"
-                      radius={[4, 4, 0, 0]}
-                      animationDuration={800}
-                      maxBarSize={40}
-                    />
-                    <Bar
-                      dataKey="Expenses"
-                      fill="#8b5cf6"
-                      radius={[4, 4, 0, 0]}
-                      animationDuration={800}
-                      maxBarSize={40}
-                    />
-                    <Bar
-                      dataKey="Profit"
-                      fill="#10b981"
-                      radius={[4, 4, 0, 0]}
-                      animationDuration={800}
-                      maxBarSize={40}
-                    />
-                  </BarChart>
-                </ResponsiveContainer>
-              )}
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={barData} barGap={4}>
+                  <XAxis
+                    dataKey="month"
+                    tick={{ fill: "#64748b", fontSize: 12 }}
+                    axisLine={{ stroke: "#334155" }}
+                    tickLine={false}
+                  />
+                  <YAxis
+                    tick={{ fill: "#64748b", fontSize: 12 }}
+                    axisLine={false}
+                    tickLine={false}
+                    tickFormatter={(v: number) => shortCurrency(v)}
+                  />
+                  <Tooltip content={<BarTooltip />} cursor={{ fill: "#334155", opacity: 0.3 }} />
+                  <Bar
+                    dataKey="Income"
+                    fill="#f97316"
+                    radius={[4, 4, 0, 0]}
+                    animationDuration={800}
+                    maxBarSize={40}
+                  />
+                  <Bar
+                    dataKey="Expenses"
+                    fill="#8b5cf6"
+                    radius={[4, 4, 0, 0]}
+                    animationDuration={800}
+                    maxBarSize={40}
+                  />
+                  <Bar
+                    dataKey="Profit"
+                    fill="#10b981"
+                    radius={[4, 4, 0, 0]}
+                    animationDuration={800}
+                    maxBarSize={40}
+                  />
+                </BarChart>
+              </ResponsiveContainer>
             </CardContent>
           </Card>
 
@@ -541,36 +435,30 @@ export default function Home() {
               <CardTitle className="text-white text-lg">Asset Distribution</CardTitle>
             </CardHeader>
             <CardContent>
-              {isLoading ? (
-                <div className="flex h-[300px] items-center justify-center">
-                  <div className="h-8 w-8 animate-spin rounded-full border-4 border-slate-700 border-t-orange-500" />
-                </div>
-              ) : (
-                <ResponsiveContainer width="100%" height={300}>
-                  <PieChart>
-                    <Pie
-                      data={pieData}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={50}
-                      outerRadius={80}
-                      paddingAngle={2}
-                      dataKey="value"
-                      strokeWidth={0}
-                      animationBegin={0}
-                      animationDuration={800}
-                    >
-                      {pieData.map((_, index) => (
-                        <Cell
-                          key={`cell-${index}`}
-                          fill={CHART_COLORS[index % CHART_COLORS.length]}
-                        />
-                      ))}
-                    </Pie>
-                    <Tooltip content={<PieTooltip />} />
-                  </PieChart>
-                </ResponsiveContainer>
-              )}
+              <ResponsiveContainer width="100%" height={300}>
+                <PieChart>
+                  <Pie
+                    data={pieData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={50}
+                    outerRadius={80}
+                    paddingAngle={2}
+                    dataKey="value"
+                    strokeWidth={0}
+                    animationBegin={0}
+                    animationDuration={800}
+                  >
+                    {pieData.map((_, index) => (
+                      <Cell
+                        key={`cell-${index}`}
+                        fill={CHART_COLORS[index % CHART_COLORS.length]}
+                      />
+                    ))}
+                  </Pie>
+                  <Tooltip content={<PieTooltip />} />
+                </PieChart>
+              </ResponsiveContainer>
             </CardContent>
           </Card>
         </div>
@@ -581,11 +469,7 @@ export default function Home() {
             <CardTitle className="text-white text-lg">Recent Activity</CardTitle>
           </CardHeader>
           <CardContent>
-            {isLoading ? (
-              <div className="flex h-[200px] items-center justify-center">
-                <div className="h-8 w-8 animate-spin rounded-full border-4 border-slate-700 border-t-orange-500" />
-              </div>
-            ) : recentTransactions.length === 0 ? (
+            {recentTransactions.length === 0 ? (
               <div className="text-center py-8 text-slate-500 text-sm">No recent transactions</div>
             ) : (
               <Table>

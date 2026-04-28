@@ -19,33 +19,30 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Pencil, Trash2, X } from "lucide-react";
+import { useFinanceContext } from "@/context/FinanceContext";
 
 export default function SettingsPage() {
   // State untuk melacak tab mana yang sedang aktif
   const [activeTab, setActiveTab] = useState("general");
 
-  // Category state
+  // Use FinanceContext for wallets and categories
+  const { wallets, setWallets, categories, addCategory, deleteCategory, editCategory } = useFinanceContext();
+
+  // Category form state
   const [categoryName, setCategoryName] = useState("");
   const [categoryType, setCategoryType] = useState<"inventory" | "expense">("inventory");
   const [categoryDescription, setCategoryDescription] = useState("");
-  const [categories, setCategories] = useState([
-    { id: "1", name: "Electronics", type: "inventory", description: "Electronic devices" },
-    { id: "2", name: "Office Supplies", type: "expense", description: "Office items" },
-  ]);
   const [isCategoryEditOpen, setIsCategoryEditOpen] = useState(false);
   const [editCategoryTarget, setEditCategoryTarget] = useState<typeof categories[0] | null>(null);
   const [editCategoryName, setEditCategoryName] = useState("");
   const [editCategoryType, setEditCategoryType] = useState<"inventory" | "expense">("inventory");
   const [editCategoryDescription, setEditCategoryDescription] = useState("");
 
-  // Wallet state
-  const [wallets, setWallets] = useState([
-    { id: "1", name: "BCA Utama", type: "Bank", balance: 15500000 },
-    { id: "2", name: "GoPay Bisnis", type: "E-Wallet", balance: 2150000 },
-  ]);
+  // Wallet modal state
   const [isWalletModalOpen, setIsWalletModalOpen] = useState(false);
   const [walletName, setWalletName] = useState("");
-  const [walletType, setWalletType] = useState("Bank");
+  const [walletType, setWalletType] = useState<"business" | "personal">("business");
+  const [walletCategory, setWalletCategory] = useState<"Bank" | "E-Wallet" | "Cash">("Bank");
   const [walletBalance, setWalletBalance] = useState("");
   const [editWalletTarget, setEditWalletTarget] = useState<typeof wallets[0] | null>(null);
 
@@ -70,12 +67,11 @@ export default function SettingsPage() {
   const handleAddCategory = (e: React.FormEvent) => {
     e.preventDefault();
     if (categoryName) {
-      setCategories([...categories, {
-        id: Date.now().toString(),
+      addCategory({
         name: categoryName,
         type: categoryType,
         description: categoryDescription
-      }]);
+      });
       setCategoryName("");
       setCategoryType("inventory");
       setCategoryDescription("");
@@ -83,7 +79,7 @@ export default function SettingsPage() {
   };
 
   const handleDeleteCategory = (id: string) => {
-    setCategories(categories.filter(c => c.id !== id));
+    deleteCategory(id);
   };
 
   const handleEditCategory = (category: typeof categories[0]) => {
@@ -96,11 +92,11 @@ export default function SettingsPage() {
 
   const handleSaveCategory = () => {
     if (editCategoryTarget) {
-      setCategories(categories.map(c => 
-        c.id === editCategoryTarget.id 
-          ? { ...c, name: editCategoryName, type: editCategoryType, description: editCategoryDescription }
-          : c
-      ));
+      editCategory(editCategoryTarget.id, {
+        name: editCategoryName,
+        type: editCategoryType,
+        description: editCategoryDescription
+      });
       setIsCategoryEditOpen(false);
       setEditCategoryTarget(null);
     }
@@ -114,6 +110,7 @@ export default function SettingsPage() {
     setEditWalletTarget(wallet);
     setWalletName(wallet.name);
     setWalletType(wallet.type);
+    setWalletCategory(wallet.walletType);
     setWalletBalance(wallet.balance.toString());
     setIsWalletModalOpen(true);
   };
@@ -299,7 +296,7 @@ export default function SettingsPage() {
                 <div key={wallet.id} className="bg-slate-900/40 border border-slate-800/50 p-5 rounded-xl backdrop-blur-sm hover:border-slate-700 transition-colors">
                   <div className="flex justify-between items-start mb-4">
                     <div className="text-slate-200 font-medium">{wallet.name}</div>
-                    <span className="text-xs bg-slate-800 border border-slate-700 text-slate-300 px-2 py-1 rounded">{wallet.type}</span>
+                    <span className="text-xs bg-slate-800 border border-slate-700 text-slate-300 px-2 py-1 rounded">{wallet.walletType}</span>
                   </div>
                   <div className="text-2xl font-mono text-white mb-4">Rp {wallet.balance.toLocaleString('id-ID')}</div>
                   <div className="flex gap-2 justify-end">
@@ -411,7 +408,7 @@ export default function SettingsPage() {
                 if (editWalletTarget) {
                   setWallets(wallets.map(w => 
                     w.id === editWalletTarget.id 
-                      ? { ...w, name: walletName, type: walletType, balance: Number(walletBalance) }
+                      ? { ...w, name: walletName, type: walletType, walletType: walletCategory, balance: Number(walletBalance) }
                       : w
                   ));
                 } else {
@@ -419,11 +416,13 @@ export default function SettingsPage() {
                     id: Date.now().toString(),
                     name: walletName,
                     type: walletType,
+                    walletType: walletCategory,
                     balance: Number(walletBalance)
                   }]);
                 }
                 setWalletName("");
-                setWalletType("Bank");
+                setWalletType("business");
+                setWalletCategory("Bank");
                 setWalletBalance("");
                 setEditWalletTarget(null);
                 setIsWalletModalOpen(false);
@@ -442,11 +441,11 @@ export default function SettingsPage() {
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="wallet-type" className="text-slate-300">Type</Label>
+              <Label htmlFor="wallet-category" className="text-slate-300">Category</Label>
               <select
-                id="wallet-type"
-                value={walletType}
-                onChange={(e) => setWalletType(e.target.value)}
+                id="wallet-category"
+                value={walletCategory}
+                onChange={(e) => setWalletCategory(e.target.value as "Bank" | "E-Wallet" | "Cash")}
                 className="flex h-10 w-full rounded-md border border-slate-700 bg-slate-800/50 px-3 py-2 text-sm text-white ring-offset-background focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 focus:border-orange-500 transition-all"
               >
                 <option value="Bank">Bank</option>
