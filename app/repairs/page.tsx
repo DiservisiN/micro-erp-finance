@@ -209,7 +209,7 @@ export default function RepairsPage() {
 
       try {
         // Call the context handler (creates income transaction + updates wallet)
-        handleRepairPayment({
+        await handleRepairPayment({
           repairId: paymentTarget.id,
           finalFee: fee,
           sparepartId: sparepartId || undefined,

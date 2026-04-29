@@ -182,9 +182,9 @@ export default function ReportsPage() {
   }, [sortedTransactions, activeTab]);
 
   // ─── Handlers ──────────────────────────────────────────────────────────
-  function handleDelete() {
+  async function handleDelete() {
     if (!deleteTarget) return;
-    deleteTransaction(deleteTarget.id);
+    await deleteTransaction(deleteTarget.id);
     toast.success(reportsLabels.messages.deleteSuccess);
     setIsDeleteOpen(false);
     setDeleteTarget(null);
@@ -198,9 +198,9 @@ export default function ReportsPage() {
     setIsEditOpen(true);
   }
 
-  function handleEditSave() {
+  async function handleEditSave() {
     if (!editTarget) return;
-    updateTransaction(editTarget.id, {
+    await updateTransaction(editTarget.id, {
       amount: Number(editAmount),
       admin_fee: Number(editAdminFee),
       notes: editNotes.trim(),

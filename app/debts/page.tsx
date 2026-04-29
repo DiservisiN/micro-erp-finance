@@ -103,13 +103,13 @@ export default function DebtsPage() {
     setIsSettleOpen(true);
   }
 
-  function confirmSettle() {
+  const handleSettle = async () => {
     if (!settleTarget) return;
     if (!settleWalletId) {
       toast.error("Please select a wallet for settlement");
       return;
     }
-    settleDebt(settleTarget.id, settleWalletId);
+    await settleDebt(settleTarget.id, settleWalletId);
     toast.success("Debt settled successfully");
     setIsSettleOpen(false);
     setSettleTarget(null);
@@ -308,7 +308,7 @@ export default function DebtsPage() {
                   Cancel
                 </Button>
                 <Button
-                  onClick={confirmSettle}
+                  onClick={handleSettle}
                   disabled={!settleWalletId}
                   className="bg-emerald-500 text-white hover:bg-emerald-600 shadow-[0_0_10px_rgba(16,185,129,0.3)] transition-all"
                 >

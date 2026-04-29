@@ -2,6 +2,12 @@
 
 import { createContext, useContext, useState, ReactNode, useEffect } from "react";
 import { formatRupiah } from "@/lib/utils";
+import { createClient } from "@supabase/supabase-js";
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+const supabase = supabaseUrl && supabaseAnonKey ? createClient(supabaseUrl, supabaseAnonKey) : null;
 
 type Wallet = {
   id: string;
@@ -76,24 +82,24 @@ type FinanceContextValue = {
   addCategory: (category: Omit<Category, "id">) => void;
   deleteCategory: (id: string) => void;
   editCategory: (id: string, updates: Partial<Category>) => void;
-  handleTransfer: (fromWalletId: string, toWalletId: string, amount: number, fee?: number) => void;
+  handleTransfer: (fromWalletId: string, toWalletId: string, amount: number, fee?: number) => Promise<void>;
   handleBankTransferService: (bankWalletId: string, cashWalletId: string, amount: number, adminFee: number) => void;
   handleCashWithdrawalService: (cashWalletId: string, bankWalletId: string, amount: number, adminFee: number) => void;
   handlePPOBTransaction: (productName: string, cost: number, sellingPrice: number, sourceWalletId: string, destWalletId: string) => void;
-  handleRepairPayment: (params: { repairId: string; finalFee: number; sparepartId?: string; walletId: string; note?: string }) => void;
+  handleRepairPayment: (params: { repairId: string; finalFee: number; sparepartId?: string; walletId: string; note?: string }) => Promise<void>;
   handleProductSale: (productId: string, quantity: number, sellingPrice: number, walletId: string) => void;
   handleRestock: (productId: string, quantity: number, costPrice: number, walletId: string) => void;
   handleDebtPayment: (debtId: string, amount: number, walletId: string) => void;
-  addTransaction: (transaction: Transaction) => void;
-  deleteTransaction: (id: string) => void;
-  updateTransaction: (id: string, updatedData: Partial<Transaction>) => void;
+  addTransaction: (transaction: Transaction) => Promise<void>;
+  deleteTransaction: (id: string) => Promise<void>;
+  updateTransaction: (id: string, updatedData: Partial<Transaction>) => Promise<void>;
   addProduct: (product: Omit<Product, "id">) => void;
   editProduct: (productId: string, updates: Partial<Product>) => void;
   deleteProduct: (productId: string) => void;
   updateInvestment: (id: string, updatedData: Partial<Investment>) => void;
   addDebt: (debt: Omit<Debt, "id" | "status">) => void;
   deleteDebt: (debtId: string) => void;
-  settleDebt: (debtId: string, walletId: string) => void;
+  settleDebt: (debtId: string, walletId: string) => Promise<void>;
 };
 
 const FinanceContext = createContext<FinanceContextValue | undefined>(undefined);
@@ -142,35 +148,81 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
   const [categories, setCategories] = useState<Category[]>(defaultState.categories);
   const [goldPrice, setGoldPrice] = useState<number>(defaultState.goldPrice);
 
-  // Load from localStorage on mount (client-side only)
+  // Load from Supabase on mount (client-side only)
   useEffect(() => {
     if (typeof window === "undefined") return;
 
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (parsed.wallets) setWallets(parsed.wallets);
-        if (parsed.transactions) setTransactions(parsed.transactions);
-        if (parsed.products) setProducts(parsed.products);
-        if (parsed.investments) setInvestments(parsed.investments);
-        if (parsed.debts) setDebts(parsed.debts);
-        if (parsed.categories) setCategories(parsed.categories);
-        if (parsed.goldPrice) setGoldPrice(parsed.goldPrice);
+    const loadData = async () => {
+      if (!supabase) {
+        console.warn("Supabase client not initialized, falling back to localStorage");
+        try {
+          const saved = localStorage.getItem(STORAGE_KEY);
+          if (saved) {
+            const parsed = JSON.parse(saved);
+            if (parsed.wallets) setWallets(parsed.wallets);
+            if (parsed.transactions) setTransactions(parsed.transactions);
+            if (parsed.products) setProducts(parsed.products);
+            if (parsed.investments) setInvestments(parsed.investments);
+            if (parsed.debts) setDebts(parsed.debts);
+            if (parsed.categories) setCategories(parsed.categories);
+            if (parsed.goldPrice) setGoldPrice(parsed.goldPrice);
+          }
+        } catch (e) {
+          console.error("Failed to load from localStorage:", e);
+        }
+        setIsHydrated(true);
+        return;
       }
-    } catch (e) {
-      console.error("Failed to load from localStorage:", e);
-    }
-    setIsHydrated(true);
+
+      try {
+        // Fetch wallets from Supabase
+        const { data: walletsData, error: walletsError } = await supabase
+          .from("wallets")
+          .select("*")
+          .order("created_at", { ascending: false });
+
+        if (walletsError) {
+          console.error("Failed to fetch wallets:", walletsError);
+        } else if (walletsData) {
+          setWallets(walletsData as Wallet[]);
+        }
+
+        // Fetch transactions from Supabase
+        const { data: transactionsData, error: transactionsError } = await supabase
+          .from("transactions")
+          .select("*")
+          .order("date", { ascending: false });
+
+        if (transactionsError) {
+          console.error("Failed to fetch transactions:", transactionsError);
+        } else if (transactionsData) {
+          setTransactions(transactionsData as Transaction[]);
+        }
+
+        // For now, keep other data from localStorage until we migrate those tables too
+        const saved = localStorage.getItem(STORAGE_KEY);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (parsed.products) setProducts(parsed.products);
+          if (parsed.investments) setInvestments(parsed.investments);
+          if (parsed.debts) setDebts(parsed.debts);
+          if (parsed.categories) setCategories(parsed.categories);
+          if (parsed.goldPrice) setGoldPrice(parsed.goldPrice);
+        }
+      } catch (e) {
+        console.error("Failed to load from Supabase:", e);
+      }
+      setIsHydrated(true);
+    };
+
+    loadData();
   }, []);
 
-  // Save to localStorage whenever state changes
+  // Save to localStorage whenever state changes (only for non-Supabase data)
   useEffect(() => {
     if (!isHydrated || typeof window === "undefined") return;
 
     const data = {
-      wallets,
-      transactions,
       products,
       investments,
       debts,
@@ -178,12 +230,30 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
       goldPrice,
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-  }, [wallets, transactions, products, investments, debts, categories, goldPrice, isHydrated]);
+  }, [products, investments, debts, categories, goldPrice, isHydrated]);
 
   // Smart Action Handlers
 
+  // Helper function to sync wallet balance to Supabase
+  const syncWalletBalance = async (walletId: string, newBalance: number) => {
+    if (!supabase) return;
+
+    try {
+      const { error } = await supabase
+        .from("wallets")
+        .update({ balance: newBalance })
+        .eq("id", walletId);
+
+      if (error) {
+        console.error("Failed to sync wallet balance:", error);
+      }
+    } catch (e) {
+      console.error("Failed to sync wallet balance:", e);
+    }
+  };
+
   // Internal wallet-to-wallet transfer (for regular balance transfers)
-  const handleTransfer = (fromWalletId: string, toWalletId: string, amount: number, fee: number = 0) => {
+  const handleTransfer = async (fromWalletId: string, toWalletId: string, amount: number, fee: number = 0) => {
     setWallets(prevWallets => {
       const fromWallet = prevWallets.find(w => w.id === fromWalletId);
       const toWallet = prevWallets.find(w => w.id === toWalletId);
@@ -198,12 +268,19 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
         return prevWallets;
       }
 
+      const newFromBalance = fromWallet.balance - amount - fee;
+      const newToBalance = toWallet.balance + amount;
+
+      // Sync to Supabase
+      syncWalletBalance(fromWalletId, newFromBalance);
+      syncWalletBalance(toWalletId, newToBalance);
+
       return prevWallets.map(w => {
         if (w.id === fromWalletId) {
-          return { ...w, balance: w.balance - amount - fee };
+          return { ...w, balance: newFromBalance };
         }
         if (w.id === toWalletId) {
-          return { ...w, balance: w.balance + amount };
+          return { ...w, balance: newToBalance };
         }
         return w;
       });
@@ -423,7 +500,7 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
   };
 
   // Repair Payment: Add fee to wallet, create income transaction, decrease sparepart stock
-  const handleRepairPayment = ({ repairId, finalFee, sparepartId, walletId, note }: { repairId: string; finalFee: number; sparepartId?: string; walletId: string; note?: string }) => {
+  const handleRepairPayment = async ({ repairId, finalFee, sparepartId, walletId, note }: { repairId: string; finalFee: number; sparepartId?: string; walletId: string; note?: string }) => {
     // Add final fee to wallet balance
     setWallets(prevWallets => {
       const wallet = prevWallets.find(w => w.id === walletId);
@@ -431,9 +508,11 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
         console.error("Invalid wallet ID for repair payment");
         return prevWallets;
       }
+      const newBalance = wallet.balance + finalFee;
+      syncWalletBalance(walletId, newBalance);
       return prevWallets.map(w => {
         if (w.id === walletId) {
-          return { ...w, balance: w.balance + finalFee };
+          return { ...w, balance: newBalance };
         }
         return w;
       });
@@ -450,7 +529,7 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
       notes: note || `Repair payment for repair ID: ${repairId}`,
       to_wallet_id: walletId,
     };
-    setTransactions(prev => [...prev, incomeTransaction]);
+    await addTransaction(incomeTransaction);
 
     // Decrease sparepart stock if provided
     if (sparepartId) {
@@ -598,150 +677,294 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
   };
 
   // Transaction CRUD operations with accounting rollback
-  const addTransaction = (transaction: Transaction) => {
-    // Apply wallet balance changes based on transaction type
-    setWallets(prevWallets => {
-      return prevWallets.map(w => {
-        if (transaction.type === "income" && transaction.to_wallet_id === w.id) {
-          // Income: add amount to wallet
-          return { ...w, balance: w.balance + transaction.amount };
-        }
-        if (transaction.type === "expense" && transaction.from_wallet_id === w.id) {
-          // Expense: subtract amount from wallet
-          return { ...w, balance: w.balance - transaction.amount };
-        }
-        if (transaction.type === "transfer") {
-          // Transfer: deduct from source, add to destination
-          if (transaction.from_wallet_id === w.id) {
-            return { ...w, balance: w.balance - transaction.amount };
-          }
-          if (transaction.to_wallet_id === w.id) {
+  const addTransaction = async (transaction: Transaction) => {
+    if (!supabase) {
+      console.warn("Supabase not available, using local state only");
+      // Apply wallet balance changes based on transaction type
+      setWallets(prevWallets => {
+        return prevWallets.map(w => {
+          if (transaction.type === "income" && transaction.to_wallet_id === w.id) {
             return { ...w, balance: w.balance + transaction.amount };
           }
-        }
-        return w;
+          if (transaction.type === "expense" && transaction.from_wallet_id === w.id) {
+            return { ...w, balance: w.balance - transaction.amount };
+          }
+          if (transaction.type === "transfer") {
+            if (transaction.from_wallet_id === w.id) {
+              return { ...w, balance: w.balance - transaction.amount };
+            }
+            if (transaction.to_wallet_id === w.id) {
+              return { ...w, balance: w.balance + transaction.amount };
+            }
+          }
+          return w;
+        });
       });
-    });
+      setTransactions(prev => [...prev, transaction]);
+      return;
+    }
 
-    // Add the transaction to the array
-    setTransactions(prev => [...prev, transaction]);
+    try {
+      // Insert transaction into Supabase
+      const { error } = await supabase
+        .from("transactions")
+        .insert(transaction);
+
+      if (error) {
+        console.error("Failed to insert transaction:", error);
+        return;
+      }
+
+      // Apply wallet balance changes based on transaction type
+      setWallets(prevWallets => {
+        return prevWallets.map(w => {
+          if (transaction.type === "income" && transaction.to_wallet_id === w.id) {
+            const newBalance = w.balance + transaction.amount;
+            syncWalletBalance(w.id, newBalance);
+            return { ...w, balance: newBalance };
+          }
+          if (transaction.type === "expense" && transaction.from_wallet_id === w.id) {
+            const newBalance = w.balance - transaction.amount;
+            syncWalletBalance(w.id, newBalance);
+            return { ...w, balance: newBalance };
+          }
+          if (transaction.type === "transfer") {
+            if (transaction.from_wallet_id === w.id) {
+              const newBalance = w.balance - transaction.amount;
+              syncWalletBalance(w.id, newBalance);
+              return { ...w, balance: newBalance };
+            }
+            if (transaction.to_wallet_id === w.id) {
+              const newBalance = w.balance + transaction.amount;
+              syncWalletBalance(w.id, newBalance);
+              return { ...w, balance: newBalance };
+            }
+          }
+          return w;
+        });
+      });
+
+      // Add the transaction to the array
+      setTransactions(prev => [...prev, transaction]);
+    } catch (e) {
+      console.error("Failed to add transaction:", e);
+    }
   };
 
-  const deleteTransaction = (id: string) => {
+  const deleteTransaction = async (id: string) => {
     const tx = transactions.find(t => t.id === id);
     if (!tx) {
       console.error("Transaction not found");
       return;
     }
 
-    // Reverse the wallet balance changes
-    setWallets(prevWallets => {
-      return prevWallets.map(w => {
-        if (tx.type === "income" && tx.to_wallet_id === w.id) {
-          // Income: subtract amount from wallet
-          return { ...w, balance: w.balance - tx.amount };
-        }
-        if (tx.type === "expense" && tx.from_wallet_id === w.id) {
-          // Expense: add amount back to wallet
-          return { ...w, balance: w.balance + tx.amount };
-        }
-        if (tx.type === "transfer") {
-          // Transfer: reverse the flow
-          if (tx.from_wallet_id === w.id) {
-            // Add back to source wallet
-            return { ...w, balance: w.balance + tx.amount };
-          }
-          if (tx.to_wallet_id === w.id) {
-            // Subtract from destination wallet
+    if (!supabase) {
+      console.warn("Supabase not available, using local state only");
+      // Reverse the wallet balance changes
+      setWallets(prevWallets => {
+        return prevWallets.map(w => {
+          if (tx.type === "income" && tx.to_wallet_id === w.id) {
             return { ...w, balance: w.balance - tx.amount };
           }
-        }
-        return w;
-      });
-    });
-
-    // Cascade: If this was a debt settlement transaction, revert the debt to unpaid
-    const cat = (tx.category || "").toLowerCase();
-    const isDebtSettlement = cat.includes("debt settlement") || cat.includes("bayar piutang") || cat.includes("debt payment") || cat.includes("bayar hutang");
-    if (isDebtSettlement) {
-      if (tx.debt_id) {
-        // Direct link via debt_id
-        setDebts(prev => prev.map(d => d.id === tx.debt_id ? { ...d, status: "unpaid" as const } : d));
-      } else {
-        // Fallback: match by person name extracted from notes and amount
-        const personMatch = (tx.notes || "").match(/(?:settled|paid):\s*(.+?)(?:\s*-|$)/i);
-        if (personMatch) {
-          const personName = personMatch[1].trim().toLowerCase();
-          setDebts(prev => prev.map(d => {
-            if (
-              d.status === "paid" &&
-              d.amount === tx.amount &&
-              d.person_name.toLowerCase() === personName
-            ) {
-              return { ...d, status: "unpaid" as const };
+          if (tx.type === "expense" && tx.from_wallet_id === w.id) {
+            return { ...w, balance: w.balance + tx.amount };
+          }
+          if (tx.type === "transfer") {
+            if (tx.from_wallet_id === w.id) {
+              return { ...w, balance: w.balance + tx.amount };
             }
-            return d;
-          }));
-        }
-      }
+            if (tx.to_wallet_id === w.id) {
+              return { ...w, balance: w.balance - tx.amount };
+            }
+          }
+          return w;
+        });
+      });
+      setTransactions(prev => prev.filter(t => t.id !== id));
+      return;
     }
 
-    // Remove the transaction
-    setTransactions(prev => prev.filter(t => t.id !== id));
+    try {
+      // Delete from Supabase
+      const { error } = await supabase
+        .from("transactions")
+        .delete()
+        .eq("id", id);
+
+      if (error) {
+        console.error("Failed to delete transaction:", error);
+        return;
+      }
+
+      // Reverse the wallet balance changes
+      setWallets(prevWallets => {
+        return prevWallets.map(w => {
+          if (tx.type === "income" && tx.to_wallet_id === w.id) {
+            const newBalance = w.balance - tx.amount;
+            syncWalletBalance(w.id, newBalance);
+            return { ...w, balance: newBalance };
+          }
+          if (tx.type === "expense" && tx.from_wallet_id === w.id) {
+            const newBalance = w.balance + tx.amount;
+            syncWalletBalance(w.id, newBalance);
+            return { ...w, balance: newBalance };
+          }
+          if (tx.type === "transfer") {
+            if (tx.from_wallet_id === w.id) {
+              const newBalance = w.balance + tx.amount;
+              syncWalletBalance(w.id, newBalance);
+              return { ...w, balance: newBalance };
+            }
+            if (tx.to_wallet_id === w.id) {
+              const newBalance = w.balance - tx.amount;
+              syncWalletBalance(w.id, newBalance);
+              return { ...w, balance: newBalance };
+            }
+          }
+          return w;
+        });
+      });
+
+      // Remove the transaction
+      setTransactions(prev => prev.filter(t => t.id !== id));
+    } catch (e) {
+      console.error("Failed to delete transaction:", e);
+    }
   };
 
-  const updateTransaction = (id: string, updatedData: Partial<Transaction>) => {
+  const updateTransaction = async (id: string, updatedData: Partial<Transaction>) => {
     const oldTx = transactions.find(t => t.id === id);
     if (!oldTx) {
       console.error("Transaction not found");
       return;
     }
 
-    // Step 1: Reverse the old transaction's wallet balance changes
-    setWallets(prevWallets => {
-      return prevWallets.map(w => {
-        if (oldTx.type === "income" && oldTx.to_wallet_id === w.id) {
-          return { ...w, balance: w.balance - oldTx.amount };
-        }
-        if (oldTx.type === "expense" && oldTx.from_wallet_id === w.id) {
-          return { ...w, balance: w.balance + oldTx.amount };
-        }
-        if (oldTx.type === "transfer") {
-          if (oldTx.from_wallet_id === w.id) {
-            return { ...w, balance: w.balance + oldTx.amount };
-          }
-          if (oldTx.to_wallet_id === w.id) {
+    if (!supabase) {
+      console.warn("Supabase not available, using local state only");
+      // Step 1: Reverse the old transaction's wallet balance changes
+      setWallets(prevWallets => {
+        return prevWallets.map(w => {
+          if (oldTx.type === "income" && oldTx.to_wallet_id === w.id) {
             return { ...w, balance: w.balance - oldTx.amount };
           }
-        }
-        return w;
-      });
-    });
-
-    // Step 2: Apply the new transaction's wallet balance changes
-    const newTx = { ...oldTx, ...updatedData };
-    setWallets(prevWallets => {
-      return prevWallets.map(w => {
-        if (newTx.type === "income" && newTx.to_wallet_id === w.id) {
-          return { ...w, balance: w.balance + newTx.amount };
-        }
-        if (newTx.type === "expense" && newTx.from_wallet_id === w.id) {
-          return { ...w, balance: w.balance - newTx.amount };
-        }
-        if (newTx.type === "transfer") {
-          if (newTx.from_wallet_id === w.id) {
-            return { ...w, balance: w.balance - newTx.amount };
+          if (oldTx.type === "expense" && oldTx.from_wallet_id === w.id) {
+            return { ...w, balance: w.balance + oldTx.amount };
           }
-          if (newTx.to_wallet_id === w.id) {
+          if (oldTx.type === "transfer") {
+            if (oldTx.from_wallet_id === w.id) {
+              return { ...w, balance: w.balance + oldTx.amount };
+            }
+            if (oldTx.to_wallet_id === w.id) {
+              return { ...w, balance: w.balance - oldTx.amount };
+            }
+          }
+          return w;
+        });
+      });
+
+      // Step 2: Apply the new transaction's wallet balance changes
+      const newTx = { ...oldTx, ...updatedData };
+      setWallets(prevWallets => {
+        return prevWallets.map(w => {
+          if (newTx.type === "income" && newTx.to_wallet_id === w.id) {
             return { ...w, balance: w.balance + newTx.amount };
           }
-        }
-        return w;
+          if (newTx.type === "expense" && newTx.from_wallet_id === w.id) {
+            return { ...w, balance: w.balance - newTx.amount };
+          }
+          if (newTx.type === "transfer") {
+            if (newTx.from_wallet_id === w.id) {
+              return { ...w, balance: w.balance - newTx.amount };
+            }
+            if (newTx.to_wallet_id === w.id) {
+              return { ...w, balance: w.balance + newTx.amount };
+            }
+          }
+          return w;
+        });
       });
-    });
 
-    // Step 3: Update the transaction in the array
-    setTransactions(prev => prev.map(t => t.id === id ? newTx : t));
+      // Step 3: Update the transaction in the array
+      setTransactions(prev => prev.map(t => t.id === id ? newTx : t));
+      return;
+    }
+
+    try {
+      // Update in Supabase
+      const { error } = await supabase
+        .from("transactions")
+        .update(updatedData)
+        .eq("id", id);
+
+      if (error) {
+        console.error("Failed to update transaction:", error);
+        return;
+      }
+
+      // Step 1: Reverse the old transaction's wallet balance changes
+      setWallets(prevWallets => {
+        return prevWallets.map(w => {
+          if (oldTx.type === "income" && oldTx.to_wallet_id === w.id) {
+            const newBalance = w.balance - oldTx.amount;
+            syncWalletBalance(w.id, newBalance);
+            return { ...w, balance: newBalance };
+          }
+          if (oldTx.type === "expense" && oldTx.from_wallet_id === w.id) {
+            const newBalance = w.balance + oldTx.amount;
+            syncWalletBalance(w.id, newBalance);
+            return { ...w, balance: newBalance };
+          }
+          if (oldTx.type === "transfer") {
+            if (oldTx.from_wallet_id === w.id) {
+              const newBalance = w.balance + oldTx.amount;
+              syncWalletBalance(w.id, newBalance);
+              return { ...w, balance: newBalance };
+            }
+            if (oldTx.to_wallet_id === w.id) {
+              const newBalance = w.balance - oldTx.amount;
+              syncWalletBalance(w.id, newBalance);
+              return { ...w, balance: newBalance };
+            }
+          }
+          return w;
+        });
+      });
+
+      // Step 2: Apply the new transaction's wallet balance changes
+      const newTx = { ...oldTx, ...updatedData };
+      setWallets(prevWallets => {
+        return prevWallets.map(w => {
+          if (newTx.type === "income" && newTx.to_wallet_id === w.id) {
+            const newBalance = w.balance + newTx.amount;
+            syncWalletBalance(w.id, newBalance);
+            return { ...w, balance: newBalance };
+          }
+          if (newTx.type === "expense" && newTx.from_wallet_id === w.id) {
+            const newBalance = w.balance - newTx.amount;
+            syncWalletBalance(w.id, newBalance);
+            return { ...w, balance: newBalance };
+          }
+          if (newTx.type === "transfer") {
+            if (newTx.from_wallet_id === w.id) {
+              const newBalance = w.balance - newTx.amount;
+              syncWalletBalance(w.id, newBalance);
+              return { ...w, balance: newBalance };
+            }
+            if (newTx.to_wallet_id === w.id) {
+              const newBalance = w.balance + newTx.amount;
+              syncWalletBalance(w.id, newBalance);
+              return { ...w, balance: newBalance };
+            }
+          }
+          return w;
+        });
+      });
+
+      // Step 3: Update the transaction in the array
+      setTransactions(prev => prev.map(t => t.id === id ? newTx : t));
+    } catch (e) {
+      console.error("Failed to update transaction:", e);
+    }
   };
   const addProduct = (product: Omit<Product, "id">) => {
     const newProduct: Product = {
@@ -782,7 +1005,7 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
   };
 
   // Settle debt (mark as paid) with wallet update and transaction record
-  const settleDebt = (debtId: string, walletId: string) => {
+  const settleDebt = async (debtId: string, walletId: string) => {
     const debt = debts.find(d => d.id === debtId);
     if (!debt) {
       console.error("Debt not found");
@@ -800,10 +1023,14 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
         if (w.id === walletId) {
           if (debt.type === "payable") {
             // Paying a debt: decrease wallet
-            return { ...w, balance: w.balance - debt.amount };
+            const newBalance = w.balance - debt.amount;
+            syncWalletBalance(walletId, newBalance);
+            return { ...w, balance: newBalance };
           } else {
             // Receiving payment: increase wallet
-            return { ...w, balance: w.balance + debt.amount };
+            const newBalance = w.balance + debt.amount;
+            syncWalletBalance(walletId, newBalance);
+            return { ...w, balance: newBalance };
           }
         }
         return w;
@@ -824,7 +1051,7 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
         to_wallet_id: walletId,
         debt_id: debtId,
       };
-      setTransactions(prev => [...prev, settleTx]);
+      await addTransaction(settleTx);
     } else {
       // Hutang settled = Expense paid
       const settleTx: Transaction = {
@@ -838,7 +1065,7 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
         from_wallet_id: walletId,
         debt_id: debtId,
       };
-      setTransactions(prev => [...prev, settleTx]);
+      await addTransaction(settleTx);
     }
   };
 

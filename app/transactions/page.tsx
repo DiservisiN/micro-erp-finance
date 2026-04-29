@@ -360,7 +360,7 @@ function TransactionsForm({ onSuccess, editingTransaction }: { onSuccess: () => 
     // and remove) the old transaction FIRST, before applying the new one.
     // This prevents duplicates when converting between types (e.g. Income → Debt).
     if (editingTransaction) {
-      deleteTransaction(editingTransaction.id);
+      await deleteTransaction(editingTransaction.id);
     }
 
     const selectedSourceWallet = wallets.find((wallet) => wallet.id === sourceWalletId);
@@ -1451,7 +1451,7 @@ function ExpensesForm({ onSuccess }: { onSuccess: () => void }) {
       from_wallet_id: selectedWallet.id,
       notes: expenseDescription,
     };
-    addTransaction(newTransaction);
+    await addTransaction(newTransaction);
 
     toast.success("Expense recorded successfully");
     setIsSubmitting(false);
@@ -1663,9 +1663,9 @@ function TransactionsDashboard() {
   const filteredIncome = useMemo(() => filterBySearchAndDate(incomeTransactions, "notes"), [incomeTransactions, searchQuery, dateFrom, dateTo]);
   const filteredExpenses = useMemo(() => filterBySearchAndDate(expenses, "description"), [expenses, searchQuery, dateFrom, dateTo]);
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
     if (!confirm("Are you sure you want to delete this transaction?")) return;
-    deleteTransaction(id);
+    await deleteTransaction(id);
     toast.success("Transaction deleted");
   };
 
