@@ -45,7 +45,10 @@ type Product = {
 
 type Investment = {
   id: string;
+  name: string;
+  type: "gold" | "bibit";
   quantity: number;
+  average_buy_price: number;
   current_price: number;
 };
 
@@ -197,12 +200,23 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
           setTransactions(transactionsData as Transaction[]);
         }
 
+        // Fetch investments from Supabase
+        const { data: investmentsData, error: investmentsError } = await supabase
+          .from("investments")
+          .select("*")
+          .order("name", { ascending: true });
+
+        if (investmentsError) {
+          console.error("Failed to fetch investments:", investmentsError);
+        } else if (investmentsData) {
+          setInvestments(investmentsData as Investment[]);
+        }
+
         // For now, keep other data from localStorage until we migrate those tables too
         const saved = localStorage.getItem(STORAGE_KEY);
         if (saved) {
           const parsed = JSON.parse(saved);
           if (parsed.products) setProducts(parsed.products);
-          if (parsed.investments) setInvestments(parsed.investments);
           if (parsed.debts) setDebts(parsed.debts);
           if (parsed.categories) setCategories(parsed.categories);
           if (parsed.goldPrice) setGoldPrice(parsed.goldPrice);
@@ -222,13 +236,12 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
 
     const data = {
       products,
-      investments,
       debts,
       categories,
       goldPrice,
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-  }, [products, investments, debts, categories, goldPrice, isHydrated]);
+  }, [products, debts, categories, goldPrice, isHydrated]);
 
   // Smart Action Handlers
 
