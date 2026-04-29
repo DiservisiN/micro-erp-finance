@@ -18,12 +18,14 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
 
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { formatRupiah } from "@/lib/utils";
+import { useFinanceContext } from "@/context/FinanceContext";
 
 type RepairStatus = "pending" | "processing" | "ready" | "picked_up";
 
@@ -35,6 +37,7 @@ type Repair = {
   problem_description: string;
   estimated_cost: number;
   status: RepairStatus;
+  isPaid?: boolean;
 };
 
 export default function RepairsPage() {
@@ -63,6 +66,19 @@ export default function RepairsPage() {
   const [editDevice, setEditDevice] = useState("");
   const [editProblem, setEditProblem] = useState("");
   const [editCost, setEditCost] = useState("");
+
+  // Payment modal state
+  const [paymentTarget, setPaymentTarget] = useState<Repair | null>(null);
+  const [isPaymentOpen, setIsPaymentOpen] = useState(false);
+  const [isProcessingPayment, setIsProcessingPayment] = useState(false);
+  const [finalFee, setFinalFee] = useState("");
+  const [sparepartId, setSparepartId] = useState("");
+  const [walletId, setWalletId] = useState("");
+  const [paymentNote, setPaymentNote] = useState("");
+  const [paidRepairIds, setPaidRepairIds] = useState<Set<string>>(new Set());
+  const [paymentStatus, setPaymentStatus] = useState<"lunas" | "kasbon">("lunas");
+
+  const { wallets, products, handleRepairPayment, addDebt } = useFinanceContext();
 
   const supabase = useMemo(() => {
     try {
@@ -169,13 +185,101 @@ export default function RepairsPage() {
   }
 
   function handleProcessPayment(repair: Repair) {
-    const params = new URLSearchParams({
-      type: "Electronic Service",
-      fee: repair.estimated_cost.toString(),
-      notes: `Repair payment for ${repair.customer_name} - ${repair.device_name}`,
-      paymentMethod: "lunas",
-    });
-    router.push(`/transactions?${params.toString()}`);
+    setPaymentTarget(repair);
+    setFinalFee(String(repair.estimated_cost));
+    setPaymentNote(`Repair payment for ${repair.customer_name} - ${repair.device_name}`);
+    setPaymentStatus("lunas");
+    setWalletId("");
+    setIsPaymentOpen(true);
+  }
+
+  async function handleConfirmPayment() {
+    if (!paymentTarget || !supabase) return;
+
+    const fee = Number(finalFee || "0");
+
+    if (paymentStatus === "lunas") {
+      // --- PAID NOW: Normal flow ---
+      if (!walletId) {
+        toast.error("Please select a destination wallet");
+        return;
+      }
+
+      setIsProcessingPayment(true);
+
+      try {
+        // Call the context handler (creates income transaction + updates wallet)
+        handleRepairPayment({
+          repairId: paymentTarget.id,
+          finalFee: fee,
+          sparepartId: sparepartId || undefined,
+          walletId,
+          note: paymentNote,
+        });
+
+        // Update repair status to 'picked_up' (paid)
+        const { error } = await supabase
+          .from("repairs")
+          .update({ status: "picked_up" as RepairStatus })
+          .eq("id", paymentTarget.id);
+
+        if (error) {
+          toast.error("Failed to update repair status", { description: error.message });
+        } else {
+          setPaidRepairIds(prev => new Set(prev).add(paymentTarget.id));
+          toast.success("Payment processed successfully");
+          loadRepairs();
+          setIsPaymentOpen(false);
+          setPaymentTarget(null);
+          setFinalFee("");
+          setSparepartId("");
+          setWalletId("");
+          setPaymentNote("");
+          setPaymentStatus("lunas");
+        }
+      } catch (error) {
+        toast.error("An unexpected error occurred");
+      }
+      setIsProcessingPayment(false);
+
+    } else {
+      // --- KASBON: Unpaid / Create receivable debt ---
+      setIsProcessingPayment(true);
+
+      try {
+        // Create a receivable (piutang) debt record
+        addDebt({
+          person_name: paymentTarget.customer_name,
+          type: "receivable",
+          amount: fee,
+          notes: `Unpaid repair - ${paymentTarget.device_name}: ${paymentTarget.problem_description}`,
+        });
+
+        // Update repair status to 'picked_up' (service done, moved to receivables)
+        const { error } = await supabase
+          .from("repairs")
+          .update({ status: "picked_up" as RepairStatus })
+          .eq("id", paymentTarget.id);
+
+        if (error) {
+          toast.error("Failed to update repair status", { description: error.message });
+        } else {
+          setPaidRepairIds(prev => new Set(prev).add(paymentTarget.id));
+          toast.success("Repair marked as kasbon — receivable created");
+          loadRepairs();
+          setIsPaymentOpen(false);
+          setPaymentTarget(null);
+          setFinalFee("");
+          setSparepartId("");
+          setWalletId("");
+          setPaymentNote("");
+          setPaymentStatus("lunas");
+        }
+      } catch (error) {
+        toast.error("An unexpected error occurred");
+      }
+      setIsProcessingPayment(false);
+    }
   }
 
   async function handleCancelRepair() {
@@ -338,7 +442,8 @@ export default function RepairsPage() {
                   <select
                     value={repair.status}
                     onChange={(e) => handleStatusChange(repair.id, e.target.value as RepairStatus)}
-                    className="flex h-9 w-full rounded-md border border-slate-700 bg-slate-800/50 px-3 py-1 text-sm text-white focus:outline-none focus:ring-2 focus:ring-slate-600"
+                    disabled={paidRepairIds.has(repair.id) || repair.isPaid}
+                    className="flex h-9 w-full rounded-md border border-slate-700 bg-slate-800/50 px-3 py-1 text-sm text-white focus:outline-none focus:ring-2 focus:ring-slate-600 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     <option value="pending">Pending</option>
                     <option value="processing">Processing</option>
@@ -351,7 +456,8 @@ export default function RepairsPage() {
                   <button
                     type="button"
                     onClick={() => openEditRepair(repair)}
-                    className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium text-slate-400 border border-slate-700 bg-slate-800/50 transition-all duration-200 hover:text-orange-400 hover:border-orange-500/50 hover:bg-orange-500/10 hover:shadow-[0_0_10px_rgba(249,115,22,0.3)]"
+                    disabled={paidRepairIds.has(repair.id) || repair.isPaid}
+                    className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium text-slate-400 border border-slate-700 bg-slate-800/50 transition-all duration-200 hover:text-orange-400 hover:border-orange-500/50 hover:bg-orange-500/10 hover:shadow-[0_0_10px_rgba(249,115,22,0.3)] disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     <Pencil className="h-3.5 w-3.5" />
                     Edit
@@ -364,14 +470,18 @@ export default function RepairsPage() {
                     <Trash className="h-3.5 w-3.5" />
                     Delete
                   </button>
-                  {repair.status === "picked_up" && (
+                  {paidRepairIds.has(repair.id) || repair.isPaid ? (
+                    <span className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium text-green-400 border border-green-500/50 bg-green-500/10 shadow-[0_0_10px_rgba(34,197,94,0.3)]">
+                      ✅ Lunas (Paid)
+                    </span>
+                  ) : repair.status === "picked_up" ? (
                     <Button
                       className="flex-1 bg-gradient-to-r from-orange-500 to-orange-600 text-white hover:from-orange-600 hover:to-orange-700 shadow-[0_0_15px_rgba(249,115,22,0.4)] transition-all"
                       onClick={() => handleProcessPayment(repair)}
                     >
                       Process Payment
                     </Button>
-                  )}
+                  ) : null}
                   {(repair.status === "pending" || repair.status === "processing") && (
                     <button
                       type="button"
@@ -453,6 +563,147 @@ export default function RepairsPage() {
                   {isSavingEdit ? "Saving..." : "Save Changes"}
                 </Button>
               </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Repair Payment Modal */}
+      <Dialog open={isPaymentOpen} onOpenChange={(v) => { setIsPaymentOpen(v); if (!v) setPaymentTarget(null); }}>
+        <DialogContent className="sm:max-w-[500px] bg-slate-900 border-slate-800 text-white">
+          <DialogHeader>
+            <DialogTitle className="text-white">Process Repair Payment</DialogTitle>
+            <DialogDescription className="text-slate-400">
+              Record payment for the completed repair service.
+            </DialogDescription>
+          </DialogHeader>
+
+          {paymentTarget && (
+            <div className="space-y-4">
+              <div className="rounded-md border border-slate-800 bg-slate-800/50 p-3 text-sm space-y-1">
+                <p><span className="text-slate-400">Customer:</span> {paymentTarget.customer_name}</p>
+                <p><span className="text-slate-400">Device:</span> {paymentTarget.device_name}</p>
+                <p><span className="text-slate-400">Est. Cost:</span> {formatRupiah(paymentTarget.estimated_cost)}</p>
+              </div>
+
+              {/* Payment Status Toggle */}
+              <div className="grid gap-2">
+                <Label className="text-slate-300">Payment Status</Label>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setPaymentStatus("lunas")}
+                    className={`flex-1 px-4 py-2.5 rounded-lg text-sm font-medium border transition-all duration-200 ${
+                      paymentStatus === "lunas"
+                        ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/50 shadow-[0_0_10px_rgba(16,185,129,0.2)]"
+                        : "bg-slate-800/50 text-slate-400 border-slate-700/50 hover:border-slate-600"
+                    }`}
+                  >
+                    ✅ Lunas (Paid Now)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPaymentStatus("kasbon")}
+                    className={`flex-1 px-4 py-2.5 rounded-lg text-sm font-medium border transition-all duration-200 ${
+                      paymentStatus === "kasbon"
+                        ? "bg-orange-500/20 text-orange-400 border-orange-500/50 shadow-[0_0_10px_rgba(249,115,22,0.2)]"
+                        : "bg-slate-800/50 text-slate-400 border-slate-700/50 hover:border-slate-600"
+                    }`}
+                  >
+                    📋 Kasbon (Belum Lunas)
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid gap-2">
+                <Label htmlFor="final-fee" className="text-slate-300">Final Service Fee</Label>
+                <Input
+                  id="final-fee"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={finalFee}
+                  onChange={(e) => setFinalFee(e.target.value)}
+                  className="bg-slate-800 border-slate-700 text-white"
+                />
+              </div>
+
+              <div className="grid gap-2">
+                <Label htmlFor="sparepart" className="text-slate-300">Sparepart Used (Optional)</Label>
+                <select
+                  id="sparepart"
+                  value={sparepartId}
+                  onChange={(e) => setSparepartId(e.target.value)}
+                  className="w-full flex h-10 items-center justify-between rounded-md border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-500 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <option value="">No Sparepart</option>
+                  {products.map((product) => (
+                    <option key={product.id} value={product.id}>{product.name} (Stock: {product.stock})</option>
+                  ))}
+                </select>
+              </div>
+
+              {paymentStatus === "lunas" ? (
+                <div className="grid gap-2">
+                  <Label htmlFor="wallet" className="text-slate-300">Destination Wallet *</Label>
+                  <select
+                    id="wallet"
+                    value={walletId}
+                    onChange={(e) => setWalletId(e.target.value)}
+                    className="w-full flex h-10 items-center justify-between rounded-md border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-500 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <option value="">Choose wallet...</option>
+                    {wallets.map((wallet) => (
+                      <option key={wallet.id} value={wallet.id}>{wallet.name} ({wallet.walletType}) - {formatRupiah(wallet.balance)}</option>
+                    ))}
+                  </select>
+                </div>
+              ) : (
+                <div className="rounded-md border border-orange-500/30 bg-orange-500/10 p-3 text-sm text-orange-300">
+                  <p className="font-medium">💡 Kasbon Mode</p>
+                  <p className="text-orange-400/80 text-xs mt-1">
+                    No wallet needed. A receivable (piutang) record will be created for <strong>{paymentTarget.customer_name}</strong> with amount <strong>{formatRupiah(Number(finalFee || "0"))}</strong>. 
+                    You can settle it later from the Debts page.
+                  </p>
+                </div>
+              )}
+
+              <div className="grid gap-2">
+                <Label htmlFor="payment-note" className="text-slate-300">Note (Optional)</Label>
+                <Input
+                  id="payment-note"
+                  value={paymentNote}
+                  onChange={(e) => setPaymentNote(e.target.value)}
+                  placeholder="Additional notes..."
+                  className="bg-slate-800 border-slate-700 text-white"
+                />
+              </div>
+
+              <DialogFooter className="gap-3">
+                <Button
+                  variant="outline"
+                  onClick={() => { setIsPaymentOpen(false); setPaymentTarget(null); setPaymentStatus("lunas"); }}
+                  disabled={isProcessingPayment}
+                  className="border-slate-700 text-slate-300 hover:bg-slate-800"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleConfirmPayment}
+                  disabled={isProcessingPayment}
+                  className={paymentStatus === "lunas"
+                    ? "bg-emerald-500 text-white hover:bg-emerald-600 shadow-[0_0_10px_rgba(16,185,129,0.3)] transition-all"
+                    : "bg-orange-500 text-white hover:bg-orange-600 shadow-[0_0_10px_rgba(249,115,22,0.3)] transition-all"
+                  }
+                >
+                  {isProcessingPayment
+                    ? "Processing..."
+                    : paymentStatus === "lunas"
+                      ? "Confirm Payment"
+                      : "Create Kasbon"
+                  }
+                </Button>
+              </DialogFooter>
             </div>
           )}
         </DialogContent>

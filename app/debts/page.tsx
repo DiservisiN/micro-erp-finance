@@ -59,7 +59,6 @@ export default function DebtsPage() {
   const [type, setType] = useState<DebtType>("receivable");
   const [amount, setAmount] = useState("");
   const [notes, setNotes] = useState("");
-  const [walletId, setWalletId] = useState("");
 
   // Edit state
   const [editTarget, setEditTarget] = useState<Debt | null>(null);
@@ -68,6 +67,11 @@ export default function DebtsPage() {
   const [editPerson, setEditPerson] = useState("");
   const [editAmount, setEditAmount] = useState("");
   const [editNotes, setEditNotes] = useState("");
+
+  // Settle modal state
+  const [settleTarget, setSettleTarget] = useState<Debt | null>(null);
+  const [isSettleOpen, setIsSettleOpen] = useState(false);
+  const [settleWalletId, setSettleWalletId] = useState("");
 
   // Filter debts by status (only show unpaid) and type
   const unpaidDebts = debts.filter((d) => d.status === "unpaid");
@@ -90,17 +94,26 @@ export default function DebtsPage() {
     setType("receivable");
     setAmount("");
     setNotes("");
-    setWalletId("");
     setIsSaving(false);
   }
 
-  function handleSettleDebt(debtId: string) {
-    if (!walletId) {
-      toast.error("Please select a wallet");
+  function openSettleModal(debt: Debt) {
+    setSettleTarget(debt);
+    setSettleWalletId("");
+    setIsSettleOpen(true);
+  }
+
+  function confirmSettle() {
+    if (!settleTarget) return;
+    if (!settleWalletId) {
+      toast.error("Please select a wallet for settlement");
       return;
     }
-    settleDebt(debtId, walletId);
+    settleDebt(settleTarget.id, settleWalletId);
     toast.success("Debt settled successfully");
+    setIsSettleOpen(false);
+    setSettleTarget(null);
+    setSettleWalletId("");
   }
 
   function handleDeleteDebt(debtId: string) {
@@ -192,23 +205,6 @@ export default function DebtsPage() {
               />
             </div>
 
-            <div className="grid gap-2">
-              <Label htmlFor="wallet">Settlement Wallet</Label>
-              <Select value={walletId} onValueChange={(value) => setWalletId(value ?? "")}>
-                <SelectTrigger id="wallet" className="w-full">
-                  <SelectValue placeholder="Select wallet for settlement" />
-                </SelectTrigger>
-                <SelectContent>
-                  {wallets.map((wallet) => (
-                    <SelectItem key={wallet.id} value={wallet.id}>
-                      {wallet.name} ({wallet.walletType}) - {formatRupiah(wallet.balance)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground">Wallet used when settling this debt</p>
-            </div>
-
             <div className="md:col-span-4">
               <Button type="submit" disabled={isSaving}>
                 {isSaving ? "Saving..." : "Add Record"}
@@ -233,9 +229,7 @@ export default function DebtsPage() {
             <TabsContent value="receivable" className="pt-4">
               <DebtTable
                 rows={receivables}
-                walletId={walletId}
-                wallets={wallets}
-                onSettle={handleSettleDebt}
+                onSettle={openSettleModal}
                 onDelete={handleDeleteDebt}
                 onEdit={openEditDebt}
               />
@@ -244,9 +238,7 @@ export default function DebtsPage() {
             <TabsContent value="payable" className="pt-4">
               <DebtTable
                 rows={payables}
-                walletId={walletId}
-                wallets={wallets}
-                onSettle={handleSettleDebt}
+                onSettle={openSettleModal}
                 onDelete={handleDeleteDebt}
                 onEdit={openEditDebt}
               />
@@ -255,6 +247,78 @@ export default function DebtsPage() {
         </CardContent>
       </Card>
     </section>
+
+      {/* Settle Debt Modal */}
+      <Dialog open={isSettleOpen} onOpenChange={(v) => { setIsSettleOpen(v); if (!v) { setSettleTarget(null); setSettleWalletId(""); } }}>
+        <DialogContent className="sm:max-w-[420px]">
+          <DialogHeader>
+            <DialogTitle>Settle Debt</DialogTitle>
+          </DialogHeader>
+          {settleTarget && (
+            <div className="space-y-4">
+              <div className="rounded-lg border p-4 space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Person</span>
+                  <span className="font-medium">{settleTarget.person_name}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Type</span>
+                  <span className="font-medium">{settleTarget.type === "receivable" ? "Piutang (Receivable)" : "Hutang (Payable)"}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Amount</span>
+                  <span className="font-mono font-semibold">{formatRupiah(settleTarget.amount)}</span>
+                </div>
+                {settleTarget.notes && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Notes</span>
+                    <span className="text-right max-w-[200px] truncate">{settleTarget.notes}</span>
+                  </div>
+                )}
+              </div>
+
+              <div className="grid gap-2">
+                <Label htmlFor="settle-wallet">
+                  {settleTarget.type === "receivable"
+                    ? "Receive payment into wallet *"
+                    : "Pay from wallet *"}
+                </Label>
+                <select
+                  id="settle-wallet"
+                  value={settleWalletId}
+                  onChange={(e) => setSettleWalletId(e.target.value)}
+                  className="w-full flex h-10 items-center justify-between rounded-md border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-500 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <option value="">Select wallet...</option>
+                  {wallets.map((wallet) => (
+                    <option key={wallet.id} value={wallet.id}>
+                      {wallet.name} ({wallet.walletType}) - {formatRupiah(wallet.balance)}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-muted-foreground">
+                  {settleTarget.type === "receivable"
+                    ? "The selected wallet balance will increase by the debt amount."
+                    : "The selected wallet balance will decrease by the debt amount."}
+                </p>
+              </div>
+
+              <div className="flex justify-end gap-3">
+                <Button variant="outline" onClick={() => { setIsSettleOpen(false); setSettleTarget(null); setSettleWalletId(""); }}>
+                  Cancel
+                </Button>
+                <Button
+                  onClick={confirmSettle}
+                  disabled={!settleWalletId}
+                  className="bg-emerald-500 text-white hover:bg-emerald-600 shadow-[0_0_10px_rgba(16,185,129,0.3)] transition-all"
+                >
+                  Confirm Settlement
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Edit Debt Dialog */}
       <Dialog open={isEditOpen} onOpenChange={(v) => { setIsEditOpen(v); if (!v) setEditTarget(null); }}>
@@ -292,16 +356,12 @@ export default function DebtsPage() {
 
 function DebtTable({
   rows,
-  walletId,
-  wallets,
   onSettle,
   onDelete,
   onEdit,
 }: {
   rows: Debt[];
-  walletId: string;
-  wallets: { id: string; name: string; walletType: string; balance: number }[];
-  onSettle: (debtId: string) => void;
+  onSettle: (debt: Debt) => void;
   onDelete: (debtId: string) => void;
   onEdit: (debt: Debt) => void;
 }) {
@@ -341,9 +401,8 @@ function DebtTable({
                   <button
                     type="button"
                     title="Settle / Pay"
-                    disabled={!walletId}
-                    onClick={() => onSettle(item.id)}
-                    className="inline-flex items-center justify-center rounded-md p-1.5 text-muted-foreground transition-all duration-200 hover:text-green-500 hover:bg-green-500/10 disabled:opacity-50 disabled:cursor-not-allowed"
+                    onClick={() => onSettle(item)}
+                    className="inline-flex items-center justify-center rounded-md p-1.5 text-muted-foreground transition-all duration-200 hover:text-green-500 hover:bg-green-500/10"
                   >
                     <CheckCircle2 className="h-3.5 w-3.5" />
                   </button>
@@ -364,5 +423,3 @@ function DebtTable({
     </Table>
   );
 }
-
-

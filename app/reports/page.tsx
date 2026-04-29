@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Download, Pencil, Printer, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -14,13 +14,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
   Table,
   TableBody,
   TableCell,
@@ -28,26 +21,26 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { getSupabaseClient } from "@/lib/supabase/client";
 import { formatRupiah } from "@/lib/utils";
 import { reportsLabels } from "@/config/reports-labels";
+import { useFinanceContext } from "@/context/FinanceContext";
 
 type Transaction = {
   id: string;
-  date: string;
-  created_at: string;
   type: string;
+  category?: string;
   amount: number;
-  admin_fee: number;
-  notes: string;
-  from_wallet_id: string | null;
-  to_wallet_id: string | null;
-  product_id: string | null;
+  admin_fee?: number | null;
+  date: string;
+  notes?: string | null;
+  product_id?: string | null;
+  from_wallet_id?: string | null;
+  to_wallet_id?: string | null;
+  debt_id?: string | null;
 };
 
 function TransactionTable({ 
   transactions, 
-  isLoading, 
   formatDate, 
   formatType,
   onPrint,
@@ -55,9 +48,8 @@ function TransactionTable({
   onDelete 
 }: { 
   transactions: Transaction[]; 
-  isLoading: boolean; 
   formatDate: (date: string) => string; 
-  formatType: (type: string) => string;
+  formatType: (type: string, category?: string) => string;
   onPrint: (tx: Transaction) => void;
   onEdit: (tx: Transaction) => void;
   onDelete: (tx: Transaction) => void;
@@ -75,13 +67,7 @@ function TransactionTable({
         </TableRow>
       </TableHeader>
       <TableBody>
-        {isLoading ? (
-          <TableRow>
-            <TableCell colSpan={6} className="text-center text-slate-500">
-              {reportsLabels.messages.loading}
-            </TableCell>
-          </TableRow>
-        ) : transactions.length === 0 ? (
+        {transactions.length === 0 ? (
           <TableRow>
             <TableCell colSpan={6} className="text-center text-slate-500">
               {reportsLabels.messages.noTransactions}
@@ -90,14 +76,20 @@ function TransactionTable({
         ) : (
           transactions.map((tx) => (
             <TableRow key={tx.id} className="border-slate-800/50 hover:bg-slate-800/40 transition-colors">
-              <TableCell className="whitespace-nowrap text-slate-300">{formatDate(tx.created_at || tx.date)}</TableCell>
+              <TableCell className="whitespace-nowrap text-slate-300">{formatDate(tx.date)}</TableCell>
               <TableCell className="capitalize">
-                <span className="px-2 py-1 rounded-full text-xs font-medium bg-slate-700/30 text-slate-300 border border-slate-700/50">
-                  {formatType(tx.type)}
+                <span className={`px-2 py-1 rounded-full text-xs font-medium border ${
+                  tx.type === 'income' 
+                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                    : tx.type === 'expense'
+                      ? 'bg-red-500/10 text-red-400 border-red-500/30'
+                      : 'bg-slate-700/30 text-slate-300 border-slate-700/50'
+                }`}>
+                  {formatType(tx.type, tx.category)}
                 </span>
               </TableCell>
-              <TableCell className={`font-mono font-semibold ${tx.type === 'expense' ? 'text-red-400' : 'text-emerald-400'}`}>
-                {tx.type === 'expense' ? '-' : ''}{formatRupiah(tx.amount)}
+              <TableCell className={`font-mono font-semibold ${tx.type === 'expense' ? 'text-red-400' : tx.type === 'income' ? 'text-emerald-400' : 'text-blue-400'}`}>
+                {tx.type === 'expense' ? '- ' : tx.type === 'income' ? '+ ' : ''}{formatRupiah(tx.amount)}
               </TableCell>
               <TableCell className="text-slate-300">{tx.admin_fee ? formatRupiah(tx.admin_fee) : "-"}</TableCell>
               <TableCell className="max-w-xs truncate text-slate-300" title={tx.notes || ""}>
@@ -135,9 +127,9 @@ function TransactionTable({
 }
 
 export default function ReportsPage() {
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  // Wire up to global context instead of Supabase
+  const { transactions, deleteTransaction, updateTransaction } = useFinanceContext();
+
   const [activeTab, setActiveTab] = useState("all");
 
   const [selectedReceipt, setSelectedReceipt] = useState<Transaction | null>(null);
@@ -145,121 +137,57 @@ export default function ReportsPage() {
 
   const [deleteTarget, setDeleteTarget] = useState<Transaction | null>(null);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
 
   const [editTarget, setEditTarget] = useState<Transaction | null>(null);
   const [isEditOpen, setIsEditOpen] = useState(false);
-  const [isSavingEdit, setIsSavingEdit] = useState(false);
   const [editAmount, setEditAmount] = useState("");
   const [editAdminFee, setEditAdminFee] = useState("");
   const [editNotes, setEditNotes] = useState("");
 
-  const supabase = useMemo(() => {
-    try {
-      return getSupabaseClient();
-    } catch {
-      return null;
-    }
-  }, []);
+  // ─── Dynamic Summary Metrics ───────────────────────────────────────────
+  const totalIncome = useMemo(() =>
+    transactions
+      .filter((tx) => tx.type === "income")
+      .reduce((sum, tx) => sum + tx.amount, 0),
+    [transactions]
+  );
 
-  const loadTransactions = useCallback(async () => {
-    if (!supabase) {
-      setErrorMessage("Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY.");
-      setIsLoading(false);
-      return;
-    }
+  const totalExpense = useMemo(() =>
+    transactions
+      .filter((tx) => tx.type === "expense")
+      .reduce((sum, tx) => sum + tx.amount, 0),
+    [transactions]
+  );
 
-    setIsLoading(true);
-    const { data, error } = await supabase
-      .from("transactions")
-      .select("id, date, created_at, type, amount, admin_fee, notes, from_wallet_id, to_wallet_id, product_id")
-      .order("created_at", { ascending: false });
+  const netProfit = totalIncome - totalExpense;
+  const profitMargin = totalIncome > 0 ? ((netProfit / totalIncome) * 100).toFixed(1) : "0.0";
 
-    if (error) {
-      setErrorMessage(error.message);
-      setIsLoading(false);
-      return;
-    }
+  // ─── Filter Types ──────────────────────────────────────────────────────
+  const incomeTypes = ["income"];
+  const expenseTypes = ["expense"];
+  const transferTypes = ["transfer", "kasbon"];
 
-    setTransactions((data ?? []) as Transaction[]);
-    setErrorMessage(null);
-    setIsLoading(false);
-  }, [supabase]);
+  // Sort newest-first by date for display
+  const sortedTransactions = useMemo(() =>
+    [...transactions].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
+    [transactions]
+  );
 
-  useEffect(() => {
-    loadTransactions();
-  }, [loadTransactions]);
+  const filteredTransactions = useMemo(() => {
+    if (activeTab === "all") return sortedTransactions;
+    if (activeTab === "income") return sortedTransactions.filter((tx) => incomeTypes.includes(tx.type));
+    if (activeTab === "operating-expenses") return sortedTransactions.filter((tx) => expenseTypes.includes(tx.type));
+    if (activeTab === "assets-transfers") return sortedTransactions.filter((tx) => transferTypes.includes(tx.type));
+    return sortedTransactions;
+  }, [sortedTransactions, activeTab]);
 
-  async function handleDelete() {
-    if (!supabase || !deleteTarget) return;
-    setIsDeleting(true);
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const sb = supabase as any;
-    const tx = deleteTarget;
-
-    // Determine reversal strategy based on transaction type
-    const incomeTypes = ["physical_sale", "electronic_service", "digital_ppob", "affiliate_passive_income", "internet_sharing_biznet"];
-    const expenseTypes = ["inventory_purchase", "money_transfer_or_cash_withdrawal"];
-    const isIncome = incomeTypes.includes(tx.type);
-    const isExpense = expenseTypes.includes(tx.type);
-
-    try {
-      // --- REVERT WALLET BALANCES ---
-      if (isIncome && tx.to_wallet_id) {
-        const { data: wallet } = await sb.from("wallets").select("id, balance").eq("id", tx.to_wallet_id).single();
-        if (wallet) {
-          const newBalance = (Number(wallet.balance) || 0) - tx.amount;
-          await sb.from("wallets").update({ balance: newBalance } as any).eq("id", wallet.id);
-        }
-      }
-
-      if (isExpense && tx.from_wallet_id) {
-        const { data: wallet } = await sb.from("wallets").select("id, balance").eq("id", tx.from_wallet_id).single();
-        if (wallet) {
-          const newBalance = (Number(wallet.balance) || 0) + tx.amount;
-          await sb.from("wallets").update({ balance: newBalance } as any).eq("id", wallet.id);
-        }
-      }
-
-      if (tx.type === "money_transfer_or_cash_withdrawal" && tx.to_wallet_id) {
-        const { data: destWallet } = await sb.from("wallets").select("id, balance").eq("id", tx.to_wallet_id).single();
-        if (destWallet) {
-          const revertAmount = tx.amount + (tx.admin_fee || 0);
-          const newBalance = (Number(destWallet.balance) || 0) - revertAmount;
-          await sb.from("wallets").update({ balance: newBalance } as any).eq("id", destWallet.id);
-        }
-      }
-
-      // --- REVERT PRODUCT STOCK ---
-      if (isIncome && tx.product_id) {
-        const { data: product } = await sb.from("products").select("id, stock, selling_price").eq("id", tx.product_id).single();
-        if (product) {
-          const sellingPrice = Number(product.selling_price) || 1;
-          const restoredQty = sellingPrice > 0 ? Math.round(tx.amount / sellingPrice) : 1;
-          const newStock = (product.stock || 0) + restoredQty;
-          await sb.from("products").update({ stock: newStock } as any).eq("id", product.id);
-        }
-      }
-
-      // --- DELETE THE TRANSACTION RECORD ---
-      const { error } = await sb.from("transactions").delete().eq("id", tx.id);
-
-      if (error) {
-        toast.error("Failed to delete transaction", { description: error.message });
-        setIsDeleting(false);
-        return;
-      }
-
-      toast.success("Transaction deleted and balances reverted successfully");
-      setIsDeleting(false);
-      setIsDeleteOpen(false);
-      setDeleteTarget(null);
-      await loadTransactions();
-    } catch (err) {
-      toast.error("An unexpected error occurred during reversal");
-      setIsDeleting(false);
-    }
+  // ─── Handlers ──────────────────────────────────────────────────────────
+  function handleDelete() {
+    if (!deleteTarget) return;
+    deleteTransaction(deleteTarget.id);
+    toast.success(reportsLabels.messages.deleteSuccess);
+    setIsDeleteOpen(false);
+    setDeleteTarget(null);
   }
 
   function openEdit(tx: Transaction) {
@@ -270,35 +198,23 @@ export default function ReportsPage() {
     setIsEditOpen(true);
   }
 
-  async function handleEditSave() {
-    if (!supabase || !editTarget) return;
-    setIsSavingEdit(true);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const sb = supabase as any;
-    const { error } = await sb.from("transactions").update({
+  function handleEditSave() {
+    if (!editTarget) return;
+    updateTransaction(editTarget.id, {
       amount: Number(editAmount),
       admin_fee: Number(editAdminFee),
       notes: editNotes.trim(),
-    } as any).eq("id", editTarget.id);
-
-    if (error) {
-      toast.error("Failed to update transaction", { description: error.message });
-      setIsSavingEdit(false);
-      return;
-    }
-
-    toast.success("Transaction updated successfully");
-    setIsSavingEdit(false);
+    });
+    toast.success(reportsLabels.messages.updateSuccess);
     setIsEditOpen(false);
     setEditTarget(null);
-    await loadTransactions();
   }
 
   function formatDate(dateString: string) {
     if (!dateString) return "-";
     try {
       const d = new Date(dateString);
-      return new Intl.DateTimeFormat("en-US", {
+      return new Intl.DateTimeFormat("id-ID", {
         year: "numeric",
         month: "short",
         day: "numeric",
@@ -310,55 +226,27 @@ export default function ReportsPage() {
     }
   }
 
-  function formatType(type: string) {
+  function formatType(type: string, category?: string) {
+    // Show category if available (more descriptive), else humanize the type
+    if (category) return category;
     if (!type) return "-";
-    // Convert e.g., "physical_sale" to "Physical Sale"
     return type
       .split("_")
       .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
       .join(" ");
   }
 
-  // Filter transactions based on type
-  const incomeTypes = [
-    "physical_sale",
-    "electronic_service",
-    "digital_ppob",
-    "affiliate_passive_income",
-    "internet_sharing_biznet",
-    "income",
-  ];
-
-  const operatingExpenseTypes = [
-    "expense",
-  ];
-
-  const assetTransferTypes = [
-    "inventory_purchase",
-    "money_transfer",
-    "cash_withdrawal",
-    "balance_transfer",
-    "kasbon",
-  ];
-
-  const filteredTransactions = useMemo(() => {
-    if (activeTab === "all") return transactions;
-    if (activeTab === "income") return transactions.filter((tx) => incomeTypes.includes(tx.type));
-    if (activeTab === "operating-expenses") return transactions.filter((tx) => operatingExpenseTypes.includes(tx.type));
-    if (activeTab === "assets-transfers") return transactions.filter((tx) => assetTransferTypes.includes(tx.type));
-    return transactions;
-  }, [transactions, activeTab]);
-
   function handleExportCSV() {
-    if (transactions.length === 0) return;
+    if (sortedTransactions.length === 0) return;
 
-    const headers = ["Date", "Type", "Amount", "Admin Fee", "Notes"];
-    const rows = transactions.map((tx) => [
-      formatDate(tx.created_at || tx.date).replace(/,/g, ""), // Basic comma removal for date string safety
-      formatType(tx.type),
+    const headers = ["Tanggal", "Tipe", "Kategori", "Jumlah", "Biaya Admin", "Catatan"];
+    const rows = sortedTransactions.map((tx) => [
+      formatDate(tx.date).replace(/,/g, ""),
+      tx.type,
+      tx.category || "-",
       tx.amount.toString(),
       (tx.admin_fee || 0).toString(),
-      `"${(tx.notes || "").replace(/"/g, '""')}"`, // Escape quotes and wrap in quotes for robust CSV
+      `"${(tx.notes || "").replace(/"/g, '""')}"`,
     ]);
 
     const csvContent = [
@@ -376,6 +264,7 @@ export default function ReportsPage() {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    toast.success(reportsLabels.messages.exportSuccess);
   }
 
   return (
@@ -386,30 +275,25 @@ export default function ReportsPage() {
         <p className="text-slate-400 text-sm">{reportsLabels.titles.description}</p>
       </div>
 
-      {errorMessage ? <p className="text-sm text-destructive mb-4">{errorMessage}</p> : null}
-
-      {/* Financial Summary Cards */}
+      {/* Financial Summary Cards — Driven by context data */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <div className="bg-slate-900/40 backdrop-blur-sm border border-slate-800/50 rounded-xl p-6">
           <p className="text-slate-400 text-sm mb-2">{reportsLabels.summaryCards.totalRevenue}</p>
-          <p className="text-3xl font-bold text-emerald-400 font-mono">{formatRupiah(transactions.filter(tx => !tx.type.includes('expense') && !tx.type.includes('withdrawal') && !tx.type.includes('transfer')).reduce((sum, tx) => sum + tx.amount, 0))}</p>
+          <p className="text-3xl font-bold text-emerald-400 font-mono">{formatRupiah(totalIncome)}</p>
+          <p className="text-xs text-slate-500 mt-1">{transactions.filter(tx => tx.type === 'income').length} transaksi</p>
         </div>
         <div className="bg-slate-900/40 backdrop-blur-sm border border-slate-800/50 rounded-xl p-6">
           <p className="text-slate-400 text-sm mb-2">{reportsLabels.summaryCards.totalExpenses}</p>
-          <p className="text-3xl font-bold text-red-400 font-mono">{formatRupiah(transactions.filter(tx => tx.type === 'expense').reduce((sum, tx) => sum + tx.amount, 0))}</p>
+          <p className="text-3xl font-bold text-red-400 font-mono">{formatRupiah(totalExpense)}</p>
+          <p className="text-xs text-slate-500 mt-1">{transactions.filter(tx => tx.type === 'expense').length} transaksi</p>
         </div>
         <div className="bg-slate-900/40 backdrop-blur-sm border border-slate-800/50 rounded-xl p-6">
           <p className="text-slate-400 text-sm mb-2">{reportsLabels.summaryCards.netProfit}</p>
-          <p className="text-3xl font-bold text-orange-400 font-mono">{formatRupiah(transactions.filter(tx => !tx.type.includes('expense') && !tx.type.includes('withdrawal') && !tx.type.includes('transfer')).reduce((sum, tx) => sum + tx.amount, 0) - transactions.filter(tx => tx.type === 'expense').reduce((sum, tx) => sum + tx.amount, 0))}</p>
+          <p className={`text-3xl font-bold font-mono ${netProfit >= 0 ? 'text-orange-400' : 'text-red-400'}`}>{netProfit >= 0 ? '' : '- '}{formatRupiah(Math.abs(netProfit))}</p>
         </div>
         <div className="bg-slate-900/40 backdrop-blur-sm border border-slate-800/50 rounded-xl p-6">
           <p className="text-slate-400 text-sm mb-2">{reportsLabels.summaryCards.profitMargin}</p>
-          <p className="text-3xl font-bold text-blue-400 font-mono">{(() => {
-            const revenue = transactions.filter(tx => !tx.type.includes('expense') && !tx.type.includes('withdrawal') && !tx.type.includes('transfer')).reduce((sum, tx) => sum + tx.amount, 0);
-            const expenses = transactions.filter(tx => tx.type === 'expense').reduce((sum, tx) => sum + tx.amount, 0);
-            const margin = revenue > 0 ? ((revenue - expenses) / revenue * 100).toFixed(1) : '0.0';
-            return `${margin}%`;
-          })()}</p>
+          <p className={`text-3xl font-bold font-mono ${Number(profitMargin) >= 0 ? 'text-blue-400' : 'text-red-400'}`}>{profitMargin}%</p>
         </div>
       </div>
 
@@ -423,7 +307,7 @@ export default function ReportsPage() {
               <TabsTrigger value="operating-expenses" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-orange-500 data-[state=active]:to-orange-600 data-[state=active]:text-white data-[state=active]:shadow-[0_0_15px_rgba(249,115,22,0.4)] transition-all rounded-full px-4 py-2">{reportsLabels.filters.operatingExpenses}</TabsTrigger>
               <TabsTrigger value="assets-transfers" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-orange-500 data-[state=active]:to-orange-600 data-[state=active]:text-white data-[state=active]:shadow-[0_0_15px_rgba(249,115,22,0.4)] transition-all rounded-full px-4 py-2">{reportsLabels.filters.assetsTransfers}</TabsTrigger>
             </TabsList>
-            <Button onClick={handleExportCSV} variant="outline" size="default" className="border-slate-700 text-slate-300 hover:bg-slate-800 hover:text-orange-400 shadow-[0_0_10px_rgba(249,115,22,0.2)] transition-all shrink-0" disabled={isLoading || transactions.length === 0}>
+            <Button onClick={handleExportCSV} variant="outline" size="default" className="border-slate-700 text-slate-300 hover:bg-slate-800 hover:text-orange-400 shadow-[0_0_10px_rgba(249,115,22,0.2)] transition-all shrink-0" disabled={sortedTransactions.length === 0}>
               <Download className="mr-2 h-4 w-4" />
               {reportsLabels.buttons.exportToCSV}
             </Button>
@@ -438,7 +322,6 @@ export default function ReportsPage() {
             </div>
             <TransactionTable 
               transactions={filteredTransactions} 
-              isLoading={isLoading} 
               formatDate={formatDate}
               formatType={formatType}
               onPrint={(tx) => { setSelectedReceipt(tx); setIsReceiptOpen(true); }}
@@ -456,7 +339,6 @@ export default function ReportsPage() {
             </div>
             <TransactionTable 
               transactions={filteredTransactions} 
-              isLoading={isLoading} 
               formatDate={formatDate}
               formatType={formatType}
               onPrint={(tx) => { setSelectedReceipt(tx); setIsReceiptOpen(true); }}
@@ -474,7 +356,6 @@ export default function ReportsPage() {
             </div>
             <TransactionTable 
               transactions={filteredTransactions} 
-              isLoading={isLoading} 
               formatDate={formatDate}
               formatType={formatType}
               onPrint={(tx) => { setSelectedReceipt(tx); setIsReceiptOpen(true); }}
@@ -492,7 +373,6 @@ export default function ReportsPage() {
             </div>
             <TransactionTable 
               transactions={filteredTransactions} 
-              isLoading={isLoading} 
               formatDate={formatDate}
               formatType={formatType}
               onPrint={(tx) => { setSelectedReceipt(tx); setIsReceiptOpen(true); }}
@@ -503,6 +383,7 @@ export default function ReportsPage() {
         </TabsContent>
       </Tabs>
 
+      {/* Receipt Preview Dialog */}
       <Dialog open={isReceiptOpen} onOpenChange={setIsReceiptOpen}>
         <DialogContent className="sm:max-w-[425px] bg-slate-900 border-slate-800 text-white">
           <DialogHeader className="print:hidden">
@@ -517,21 +398,21 @@ export default function ReportsPage() {
                 <div className="text-center font-bold text-lg mb-2">MicroERP Store</div>
                 <div className="text-center text-xs mb-4">Jl. Teknologi No. 1, Jakarta<br/>Telp: 0812-3456-7890</div>
                 <div className="border-b border-dashed border-black mb-2 pb-2">
-                  <div>Date: {formatDate(selectedReceipt.created_at || selectedReceipt.date)}</div>
-                  <div>Trx ID: {selectedReceipt.id.split('-')[0].toUpperCase()}</div>
+                  <div>Date: {formatDate(selectedReceipt.date)}</div>
+                  <div>Trx ID: {selectedReceipt.id.slice(0, 8).toUpperCase()}</div>
                 </div>
                 <div className="mb-4">
-                  <div className="font-semibold">{formatType(selectedReceipt.type)}</div>
+                  <div className="font-semibold">{formatType(selectedReceipt.type, selectedReceipt.category)}</div>
                   <div className="text-xs break-words">{selectedReceipt.notes || "-"}</div>
                 </div>
                 <div className="border-t border-dashed border-black mt-2 pt-2 flex justify-between items-center">
                   <span>Subtotal</span>
                   <span>{formatRupiah(selectedReceipt.amount)}</span>
                 </div>
-                {selectedReceipt.admin_fee > 0 && (
+                {(selectedReceipt.admin_fee ?? 0) > 0 && (
                   <div className="flex justify-between items-center text-xs mt-1">
                     <span>Admin Fee</span>
-                    <span>{formatRupiah(selectedReceipt.admin_fee)}</span>
+                    <span>{formatRupiah(selectedReceipt.admin_fee!)}</span>
                   </div>
                 )}
                 <div className="border-t border-dashed border-black mt-2 pt-2 flex justify-between items-center font-bold">
@@ -561,25 +442,24 @@ export default function ReportsPage() {
             <DialogTitle className="text-white">{reportsLabels.titles.deleteTransaction}</DialogTitle>
           </DialogHeader>
           <p className="text-sm text-slate-400">
-            {reportsLabels.messages.deleteConfirm}
+            Apakah Anda yakin? Ini akan <span className="font-semibold text-red-400">menghapus permanen</span> catatan transaksi ini dan membalikkan saldo dompet.
           </p>
           {deleteTarget && (
             <div className="rounded-md border border-slate-700 bg-slate-800/50 p-3 text-sm space-y-1">
-              <p><span className="text-slate-400">Type:</span> {formatType(deleteTarget.type)}</p>
-              <p><span className="text-slate-400">Amount:</span> {formatRupiah(deleteTarget.amount)}</p>
+              <p><span className="text-slate-400">Tipe:</span> {formatType(deleteTarget.type, deleteTarget.category)}</p>
+              <p><span className="text-slate-400">Jumlah:</span> {formatRupiah(deleteTarget.amount)}</p>
               <p className="text-xs text-slate-400 truncate">{deleteTarget.notes || "No notes"}</p>
             </div>
           )}
           <div className="flex justify-end gap-3 mt-2">
-            <Button variant="outline" onClick={() => { setIsDeleteOpen(false); setDeleteTarget(null); }} disabled={isDeleting} className="border-slate-700 text-slate-300 hover:bg-slate-800">
+            <Button variant="outline" onClick={() => { setIsDeleteOpen(false); setDeleteTarget(null); }} className="border-slate-700 text-slate-300 hover:bg-slate-800">
               {reportsLabels.buttons.cancel}
             </Button>
             <Button
               onClick={handleDelete}
-              disabled={isDeleting}
               className="bg-red-600 text-white hover:bg-red-700 shadow-[0_0_10px_rgba(239,68,68,0.3)] transition-all"
             >
-              {isDeleting ? "Deleting..." : reportsLabels.buttons.delete}
+              {reportsLabels.buttons.delete}
             </Button>
           </div>
         </DialogContent>
@@ -606,9 +486,9 @@ export default function ReportsPage() {
                 <Input id="edit-notes" value={editNotes} onChange={(e) => setEditNotes(e.target.value)} placeholder="Transaction notes" className="bg-slate-800/50 border-slate-700 text-white placeholder:text-slate-500" />
               </div>
               <div className="flex justify-end gap-3">
-                <Button variant="outline" onClick={() => { setIsEditOpen(false); setEditTarget(null); }} disabled={isSavingEdit} className="border-slate-700 text-slate-300 hover:bg-slate-800">{reportsLabels.buttons.cancel}</Button>
-                <Button onClick={handleEditSave} disabled={isSavingEdit} className="bg-gradient-to-r from-orange-500 to-orange-600 text-white hover:from-orange-600 hover:to-orange-700 shadow-[0_0_15px_rgba(249,115,22,0.4)] transition-all">
-                  {isSavingEdit ? "Saving..." : reportsLabels.buttons.saveChanges}
+                <Button variant="outline" onClick={() => { setIsEditOpen(false); setEditTarget(null); }} className="border-slate-700 text-slate-300 hover:bg-slate-800">{reportsLabels.buttons.cancel}</Button>
+                <Button onClick={handleEditSave} className="bg-gradient-to-r from-orange-500 to-orange-600 text-white hover:from-orange-600 hover:to-orange-700 shadow-[0_0_15px_rgba(249,115,22,0.4)] transition-all">
+                  {reportsLabels.buttons.saveChanges}
                 </Button>
               </div>
             </div>

@@ -22,6 +22,7 @@ type Transaction = {
   product_id?: string | null;
   from_wallet_id?: string | null;
   to_wallet_id?: string | null;
+  debt_id?: string | null;
 };
 
 type Product = {
@@ -70,6 +71,8 @@ type FinanceContextValue = {
   debts: Debt[];
   setDebts: (debts: Debt[]) => void;
   categories: Category[];
+  goldPrice: number;
+  setGoldPrice: (price: number) => void;
   addCategory: (category: Omit<Category, "id">) => void;
   deleteCategory: (id: string) => void;
   editCategory: (id: string, updates: Partial<Category>) => void;
@@ -77,12 +80,17 @@ type FinanceContextValue = {
   handleBankTransferService: (bankWalletId: string, cashWalletId: string, amount: number, adminFee: number) => void;
   handleCashWithdrawalService: (cashWalletId: string, bankWalletId: string, amount: number, adminFee: number) => void;
   handlePPOBTransaction: (productName: string, cost: number, sellingPrice: number, sourceWalletId: string, destWalletId: string) => void;
+  handleRepairPayment: (params: { repairId: string; finalFee: number; sparepartId?: string; walletId: string; note?: string }) => void;
   handleProductSale: (productId: string, quantity: number, sellingPrice: number, walletId: string) => void;
   handleRestock: (productId: string, quantity: number, costPrice: number, walletId: string) => void;
   handleDebtPayment: (debtId: string, amount: number, walletId: string) => void;
+  addTransaction: (transaction: Transaction) => void;
+  deleteTransaction: (id: string) => void;
+  updateTransaction: (id: string, updatedData: Partial<Transaction>) => void;
   addProduct: (product: Omit<Product, "id">) => void;
   editProduct: (productId: string, updates: Partial<Product>) => void;
   deleteProduct: (productId: string) => void;
+  updateInvestment: (id: string, updatedData: Partial<Investment>) => void;
   addDebt: (debt: Omit<Debt, "id" | "status">) => void;
   deleteDebt: (debtId: string) => void;
   settleDebt: (debtId: string, walletId: string) => void;
@@ -119,6 +127,7 @@ const defaultState = {
     { id: "1", name: "Electronics", type: "inventory" as const, description: "Electronic devices" },
     { id: "2", name: "Office Supplies", type: "expense" as const, description: "Office items" },
   ],
+  goldPrice: 1300000,
 };
 
 export function FinanceProvider({ children }: { children: ReactNode }) {
@@ -131,6 +140,7 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
   const [investments, setInvestments] = useState<Investment[]>(defaultState.investments);
   const [debts, setDebts] = useState<Debt[]>(defaultState.debts);
   const [categories, setCategories] = useState<Category[]>(defaultState.categories);
+  const [goldPrice, setGoldPrice] = useState<number>(defaultState.goldPrice);
 
   // Load from localStorage on mount (client-side only)
   useEffect(() => {
@@ -146,6 +156,7 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
         if (parsed.investments) setInvestments(parsed.investments);
         if (parsed.debts) setDebts(parsed.debts);
         if (parsed.categories) setCategories(parsed.categories);
+        if (parsed.goldPrice) setGoldPrice(parsed.goldPrice);
       }
     } catch (e) {
       console.error("Failed to load from localStorage:", e);
@@ -164,9 +175,10 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
       investments,
       debts,
       categories,
+      goldPrice,
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-  }, [wallets, transactions, products, investments, debts, categories, isHydrated]);
+  }, [wallets, transactions, products, investments, debts, categories, goldPrice, isHydrated]);
 
   // Smart Action Handlers
 
@@ -410,6 +422,53 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  // Repair Payment: Add fee to wallet, create income transaction, decrease sparepart stock
+  const handleRepairPayment = ({ repairId, finalFee, sparepartId, walletId, note }: { repairId: string; finalFee: number; sparepartId?: string; walletId: string; note?: string }) => {
+    // Add final fee to wallet balance
+    setWallets(prevWallets => {
+      const wallet = prevWallets.find(w => w.id === walletId);
+      if (!wallet) {
+        console.error("Invalid wallet ID for repair payment");
+        return prevWallets;
+      }
+      return prevWallets.map(w => {
+        if (w.id === walletId) {
+          return { ...w, balance: w.balance + finalFee };
+        }
+        return w;
+      });
+    });
+
+    // Create income transaction for Electronic Service
+    const incomeTransaction: Transaction = {
+      id: Date.now().toString(),
+      type: "income",
+      category: "Electronic Service",
+      amount: finalFee,
+      admin_fee: null,
+      date: new Date().toISOString().split('T')[0],
+      notes: note || `Repair payment for repair ID: ${repairId}`,
+      to_wallet_id: walletId,
+    };
+    setTransactions(prev => [...prev, incomeTransaction]);
+
+    // Decrease sparepart stock if provided
+    if (sparepartId) {
+      setProducts(prevProducts => {
+        return prevProducts.map(p => {
+          if (p.id === sparepartId) {
+            if (p.stock < 1) {
+              console.error("Insufficient stock for sparepart");
+              return p;
+            }
+            return { ...p, stock: p.stock - 1 };
+          }
+          return p;
+        });
+      });
+    }
+  };
+
   const handleProductSale = (productId: string, quantity: number, sellingPrice: number, walletId: string) => {
     const totalAmount = quantity * sellingPrice;
 
@@ -538,7 +597,152 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
     });
   };
 
-  // Product CRUD operations
+  // Transaction CRUD operations with accounting rollback
+  const addTransaction = (transaction: Transaction) => {
+    // Apply wallet balance changes based on transaction type
+    setWallets(prevWallets => {
+      return prevWallets.map(w => {
+        if (transaction.type === "income" && transaction.to_wallet_id === w.id) {
+          // Income: add amount to wallet
+          return { ...w, balance: w.balance + transaction.amount };
+        }
+        if (transaction.type === "expense" && transaction.from_wallet_id === w.id) {
+          // Expense: subtract amount from wallet
+          return { ...w, balance: w.balance - transaction.amount };
+        }
+        if (transaction.type === "transfer") {
+          // Transfer: deduct from source, add to destination
+          if (transaction.from_wallet_id === w.id) {
+            return { ...w, balance: w.balance - transaction.amount };
+          }
+          if (transaction.to_wallet_id === w.id) {
+            return { ...w, balance: w.balance + transaction.amount };
+          }
+        }
+        return w;
+      });
+    });
+
+    // Add the transaction to the array
+    setTransactions(prev => [...prev, transaction]);
+  };
+
+  const deleteTransaction = (id: string) => {
+    const tx = transactions.find(t => t.id === id);
+    if (!tx) {
+      console.error("Transaction not found");
+      return;
+    }
+
+    // Reverse the wallet balance changes
+    setWallets(prevWallets => {
+      return prevWallets.map(w => {
+        if (tx.type === "income" && tx.to_wallet_id === w.id) {
+          // Income: subtract amount from wallet
+          return { ...w, balance: w.balance - tx.amount };
+        }
+        if (tx.type === "expense" && tx.from_wallet_id === w.id) {
+          // Expense: add amount back to wallet
+          return { ...w, balance: w.balance + tx.amount };
+        }
+        if (tx.type === "transfer") {
+          // Transfer: reverse the flow
+          if (tx.from_wallet_id === w.id) {
+            // Add back to source wallet
+            return { ...w, balance: w.balance + tx.amount };
+          }
+          if (tx.to_wallet_id === w.id) {
+            // Subtract from destination wallet
+            return { ...w, balance: w.balance - tx.amount };
+          }
+        }
+        return w;
+      });
+    });
+
+    // Cascade: If this was a debt settlement transaction, revert the debt to unpaid
+    const cat = (tx.category || "").toLowerCase();
+    const isDebtSettlement = cat.includes("debt settlement") || cat.includes("bayar piutang") || cat.includes("debt payment") || cat.includes("bayar hutang");
+    if (isDebtSettlement) {
+      if (tx.debt_id) {
+        // Direct link via debt_id
+        setDebts(prev => prev.map(d => d.id === tx.debt_id ? { ...d, status: "unpaid" as const } : d));
+      } else {
+        // Fallback: match by person name extracted from notes and amount
+        const personMatch = (tx.notes || "").match(/(?:settled|paid):\s*(.+?)(?:\s*-|$)/i);
+        if (personMatch) {
+          const personName = personMatch[1].trim().toLowerCase();
+          setDebts(prev => prev.map(d => {
+            if (
+              d.status === "paid" &&
+              d.amount === tx.amount &&
+              d.person_name.toLowerCase() === personName
+            ) {
+              return { ...d, status: "unpaid" as const };
+            }
+            return d;
+          }));
+        }
+      }
+    }
+
+    // Remove the transaction
+    setTransactions(prev => prev.filter(t => t.id !== id));
+  };
+
+  const updateTransaction = (id: string, updatedData: Partial<Transaction>) => {
+    const oldTx = transactions.find(t => t.id === id);
+    if (!oldTx) {
+      console.error("Transaction not found");
+      return;
+    }
+
+    // Step 1: Reverse the old transaction's wallet balance changes
+    setWallets(prevWallets => {
+      return prevWallets.map(w => {
+        if (oldTx.type === "income" && oldTx.to_wallet_id === w.id) {
+          return { ...w, balance: w.balance - oldTx.amount };
+        }
+        if (oldTx.type === "expense" && oldTx.from_wallet_id === w.id) {
+          return { ...w, balance: w.balance + oldTx.amount };
+        }
+        if (oldTx.type === "transfer") {
+          if (oldTx.from_wallet_id === w.id) {
+            return { ...w, balance: w.balance + oldTx.amount };
+          }
+          if (oldTx.to_wallet_id === w.id) {
+            return { ...w, balance: w.balance - oldTx.amount };
+          }
+        }
+        return w;
+      });
+    });
+
+    // Step 2: Apply the new transaction's wallet balance changes
+    const newTx = { ...oldTx, ...updatedData };
+    setWallets(prevWallets => {
+      return prevWallets.map(w => {
+        if (newTx.type === "income" && newTx.to_wallet_id === w.id) {
+          return { ...w, balance: w.balance + newTx.amount };
+        }
+        if (newTx.type === "expense" && newTx.from_wallet_id === w.id) {
+          return { ...w, balance: w.balance - newTx.amount };
+        }
+        if (newTx.type === "transfer") {
+          if (newTx.from_wallet_id === w.id) {
+            return { ...w, balance: w.balance - newTx.amount };
+          }
+          if (newTx.to_wallet_id === w.id) {
+            return { ...w, balance: w.balance + newTx.amount };
+          }
+        }
+        return w;
+      });
+    });
+
+    // Step 3: Update the transaction in the array
+    setTransactions(prev => prev.map(t => t.id === id ? newTx : t));
+  };
   const addProduct = (product: Omit<Product, "id">) => {
     const newProduct: Product = {
       ...product,
@@ -550,6 +754,12 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
   const editProduct = (productId: string, updates: Partial<Product>) => {
     setProducts(prev =>
       prev.map(p => (p.id === productId ? { ...p, ...updates } : p))
+    );
+  };
+
+  const updateInvestment = (id: string, updatedData: Partial<Investment>) => {
+    setInvestments(prev =>
+      prev.map(inv => (inv.id === id ? { ...inv, ...updatedData } : inv))
     );
   };
 
@@ -571,7 +781,7 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
     setDebts(prev => prev.filter(d => d.id !== debtId));
   };
 
-  // Settle debt (mark as paid) with wallet update
+  // Settle debt (mark as paid) with wallet update and transaction record
   const settleDebt = (debtId: string, walletId: string) => {
     const debt = debts.find(d => d.id === debtId);
     if (!debt) {
@@ -599,6 +809,37 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
         return w;
       });
     });
+
+    // Create a transaction record for the settlement (with debt_id for cascade tracking)
+    if (debt.type === "receivable") {
+      // Piutang settled = Income received
+      const settleTx: Transaction = {
+        id: Date.now().toString(),
+        type: "income",
+        category: "Debt Settlement / Bayar Piutang",
+        amount: debt.amount,
+        admin_fee: null,
+        date: new Date().toISOString().split('T')[0],
+        notes: `Piutang settled: ${debt.person_name}${debt.notes ? ` - ${debt.notes}` : ""}`,
+        to_wallet_id: walletId,
+        debt_id: debtId,
+      };
+      setTransactions(prev => [...prev, settleTx]);
+    } else {
+      // Hutang settled = Expense paid
+      const settleTx: Transaction = {
+        id: Date.now().toString(),
+        type: "expense",
+        category: "Debt Payment / Bayar Hutang",
+        amount: debt.amount,
+        admin_fee: null,
+        date: new Date().toISOString().split('T')[0],
+        notes: `Hutang paid: ${debt.person_name}${debt.notes ? ` - ${debt.notes}` : ""}`,
+        from_wallet_id: walletId,
+        debt_id: debtId,
+      };
+      setTransactions(prev => [...prev, settleTx]);
+    }
   };
 
   // Category CRUD operations
@@ -632,6 +873,8 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
     debts,
     setDebts,
     categories,
+    goldPrice,
+    setGoldPrice,
     addCategory,
     deleteCategory,
     editCategory,
@@ -639,12 +882,17 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
     handleBankTransferService,
     handleCashWithdrawalService,
     handlePPOBTransaction,
+    handleRepairPayment,
     handleProductSale,
     handleRestock,
     handleDebtPayment,
+    addTransaction,
+    deleteTransaction,
+    updateTransaction,
     addProduct,
     editProduct,
     deleteProduct,
+    updateInvestment,
     addDebt,
     deleteDebt,
     settleDebt,

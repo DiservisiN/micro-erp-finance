@@ -1039,7 +1039,6 @@ function ImportCsvDialog({
     if (previewRows.length === 0 || validationErrors.length > 0) return;
 
     setIsImporting(true);
-    const { addProduct } = useFinanceContext();
 
     previewRows.forEach((row) => {
       addProduct({

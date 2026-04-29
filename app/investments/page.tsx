@@ -1,10 +1,11 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
-import { AlertCircleIcon, WalletIcon, TrendingUpIcon, Trash2 } from "lucide-react";
+import { AlertCircleIcon, WalletIcon, TrendingUpIcon, Trash2, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import {
   Card,
   CardContent,
@@ -15,13 +16,6 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
   Table,
   TableBody,
   TableCell,
@@ -31,6 +25,7 @@ import {
 } from "@/components/ui/table";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { formatRupiah } from "@/lib/utils";
+import { useFinanceContext } from "@/context/FinanceContext";
 
 type InvestmentType = "gold" | "bibit";
 
@@ -52,18 +47,42 @@ type Wallet = {
 const DEFAULT_GOLD_PRICE = 1_300_000;
 
 export default function InvestmentsPage() {
+  const { wallets, goldPrice, setGoldPrice, updateInvestment } = useFinanceContext();
   const [investments, setInvestments] = useState<Investment[]>([]);
-  const [wallets, setWallets] = useState<Wallet[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [editingInvestment, setEditingInvestment] = useState<Investment | null>(null);
+
+  // Edit form state
+  const [editName, setEditName] = useState("");
+  const [editType, setEditType] = useState<InvestmentType>("gold");
+  const [editQuantity, setEditQuantity] = useState("");
+  const [editAverageBuyPrice, setEditAverageBuyPrice] = useState("");
+  const [editCurrentPrice, setEditCurrentPrice] = useState("");
+
+  // Populate edit form when editingInvestment changes
+  useEffect(() => {
+    if (editingInvestment) {
+      setEditName(editingInvestment.name || "");
+      setEditType(editingInvestment.type || "gold");
+      setEditQuantity(String(editingInvestment.quantity || ""));
+      setEditAverageBuyPrice(String(editingInvestment.average_buy_price || ""));
+      setEditCurrentPrice(String(editingInvestment.current_price || ""));
+    } else {
+      setEditName("");
+      setEditType("gold");
+      setEditQuantity("");
+      setEditAverageBuyPrice("");
+      setEditCurrentPrice("");
+    }
+  }, [editingInvestment]);
 
   const [name, setName] = useState("");
   const [type, setType] = useState<InvestmentType>("gold");
   const [quantity, setQuantity] = useState("");
   const [averageBuyPrice, setAverageBuyPrice] = useState("");
   const [currentPrice, setCurrentPrice] = useState("");
-  const [currentGoldPrice, setCurrentGoldPrice] = useState(String(DEFAULT_GOLD_PRICE));
 
   const supabase = useMemo(() => {
     try {
@@ -100,7 +119,6 @@ export default function InvestmentsPage() {
     }
 
     setInvestments((investmentsResult.data ?? []) as Investment[]);
-    setWallets((walletsResult.data ?? []) as Wallet[]);
     setErrorMessage(null);
     setIsLoading(false);
   }, [supabase]);
@@ -108,6 +126,44 @@ export default function InvestmentsPage() {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  async function handleEditSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!editingInvestment) return;
+
+    setIsSaving(true);
+    const updatedData = {
+      name: editName.trim(),
+      type: editType,
+      quantity: Number(editQuantity || "0"),
+      average_buy_price: Number(editAverageBuyPrice || "0"),
+      current_price: Number(editCurrentPrice || "0"),
+    };
+
+    // Update in context (localStorage)
+    updateInvestment(editingInvestment.id, updatedData);
+
+    // Update in Supabase
+    if (supabase) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error } = await (supabase as any)
+        .from("investments")
+        .update(updatedData as any)
+        .eq("id", editingInvestment.id);
+      if (error) {
+        toast.error("Failed to update investment in database", { description: error.message });
+      }
+    }
+
+    // Update local state
+    setInvestments(prev =>
+      prev.map(inv => inv.id === editingInvestment.id ? { ...inv, ...updatedData } : inv)
+    );
+
+    toast.success("Investment updated successfully");
+    setIsSaving(false);
+    setEditingInvestment(null);
+  }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -175,7 +231,7 @@ export default function InvestmentsPage() {
     .reduce((sum, item) => sum + safeNumber(item.quantity) * safeNumber(item.current_price), 0);
 
   const totalWealth = totalLiquidCash + totalGoldValue;
-  const nishab = 85 * safeNumber(currentGoldPrice);
+  const nishab = 85 * safeNumber(goldPrice);
   const hasReachedNishab = totalWealth >= nishab;
   const estimatedZakat = hasReachedNishab ? totalWealth * 0.025 : 0;
 
@@ -204,8 +260,8 @@ export default function InvestmentsPage() {
                 type="number"
                 min="0"
                 step="1"
-                value={currentGoldPrice}
-                onChange={(event) => setCurrentGoldPrice(event.target.value)}
+                value={goldPrice}
+                onChange={(event) => setGoldPrice(Number(event.target.value))}
               />
             </div>
           </div>
@@ -253,15 +309,15 @@ export default function InvestmentsPage() {
             </div>
             <div className="grid gap-2">
               <Label htmlFor="investment-type">Type</Label>
-              <Select value={type} onValueChange={(value) => setType((value as InvestmentType) ?? "gold")}>
-                <SelectTrigger id="investment-type" className="w-full">
-                  <SelectValue placeholder="Select type" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="gold">Gold</SelectItem>
-                  <SelectItem value="bibit">Bibit</SelectItem>
-                </SelectContent>
-              </Select>
+              <select
+                id="investment-type"
+                value={type}
+                onChange={(e) => setType(e.target.value as InvestmentType)}
+                className="w-full flex h-10 items-center justify-between rounded-md border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-orange-500"
+              >
+                <option value="gold">Gold</option>
+                <option value="bibit">Bibit (Reksadana)</option>
+              </select>
             </div>
             <div className="grid gap-2">
               <Label htmlFor="quantity">Quantity</Label>
@@ -371,6 +427,14 @@ export default function InvestmentsPage() {
                         <TrendingUpIcon className="h-5 w-5 text-orange-500" />
                         <button
                           type="button"
+                          onClick={() => setEditingInvestment(item)}
+                          className="inline-flex items-center justify-center rounded-md p-1.5 text-muted-foreground transition-all duration-200 hover:text-blue-500 hover:bg-blue-500/10"
+                          title="Edit Investment"
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </button>
+                        <button
+                          type="button"
                           onClick={() => handleDeleteInvestment(item.id)}
                           className="inline-flex items-center justify-center rounded-md p-1.5 text-muted-foreground transition-all duration-200 hover:text-red-500 hover:bg-red-500/10"
                           title="Delete Investment"
@@ -408,6 +472,96 @@ export default function InvestmentsPage() {
           </div>
         )}
       </div>
+
+      {/* Edit Investment Modal */}
+      <Dialog open={!!editingInvestment} onOpenChange={(open) => !open && setEditingInvestment(null)}>
+        <DialogContent className="bg-slate-950/95 border-slate-800 text-slate-100 backdrop-blur-xl">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-semibold">Edit Investment</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleEditSubmit} className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label htmlFor="edit-name" className="text-slate-300">Name</Label>
+              <Input
+                id="edit-name"
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                className="bg-slate-900/50 border-slate-700 text-slate-100 focus:ring-orange-500"
+                required
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="edit-type" className="text-slate-300">Type</Label>
+              <select
+                id="edit-type"
+                value={editType}
+                onChange={(e) => setEditType(e.target.value as InvestmentType)}
+                className="w-full flex h-10 items-center justify-between rounded-md border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-orange-500"
+              >
+                <option value="gold">Gold</option>
+                <option value="bibit">Bibit (Reksadana)</option>
+              </select>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="edit-quantity" className="text-slate-300">Quantity</Label>
+              <Input
+                id="edit-quantity"
+                type="number"
+                min="0"
+                step="0.0001"
+                value={editQuantity}
+                onChange={(e) => setEditQuantity(e.target.value)}
+                className="bg-slate-900/50 border-slate-700 text-slate-100 focus:ring-orange-500"
+                required
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="edit-average-buy-price" className="text-slate-300">Average Buy Price</Label>
+              <Input
+                id="edit-average-buy-price"
+                type="number"
+                min="0"
+                step="1"
+                value={editAverageBuyPrice}
+                onChange={(e) => setEditAverageBuyPrice(e.target.value)}
+                className="bg-slate-900/50 border-slate-700 text-slate-100 focus:ring-orange-500"
+                required
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="edit-current-price" className="text-slate-300">Current Price</Label>
+              <Input
+                id="edit-current-price"
+                type="number"
+                min="0"
+                step="1"
+                value={editCurrentPrice}
+                onChange={(e) => setEditCurrentPrice(e.target.value)}
+                className="bg-slate-900/50 border-slate-700 text-slate-100 focus:ring-orange-500"
+                required
+              />
+            </div>
+            <DialogFooter className="gap-3 pt-4">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setEditingInvestment(null)}
+                disabled={isSaving}
+                className="border-slate-700 text-slate-300 hover:bg-slate-800"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                disabled={isSaving}
+                className="bg-orange-500 text-white hover:bg-orange-600 shadow-[0_0_10px_rgba(249,115,22,0.3)] transition-all"
+              >
+                {isSaving ? "Updating..." : "Update Investment"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </section>
   );
 }

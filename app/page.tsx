@@ -84,21 +84,10 @@ export default function Home() {
     const currentMonth = now.getMonth();
     const currentYear = now.getFullYear();
 
-    const incomeTypes = new Set([
-      "physical_sale",
-      "electronic_service",
-      "digital_ppob",
-      "affiliate_passive_income",
-      "internet_sharing_biznet",
-    ]);
-    const expenseTypes = new Set(["expense"]);
-
     let monthlyIncome = 0;
     let monthlyExpenses = 0;
-    let monthlyCOGS = 0;
     let allTimeIncome = 0;
     let allTimeExpenses = 0;
-    let allTimeCOGS = 0;
 
     for (const tx of transactions) {
       const d = new Date(tx.date);
@@ -108,100 +97,65 @@ export default function Home() {
       const adminFee = safeNumber(tx.admin_fee ?? 0);
       const isCurrentMonth = txMonth === currentMonth && txYear === currentYear;
 
-      if (incomeTypes.has(tx.type)) {
+      if (tx.type === "income") {
         allTimeIncome += amount;
         if (isCurrentMonth) monthlyIncome += amount;
-
-        // Calculate COGS for physical sales and digital PPOB
-        if ((tx.type === "physical_sale" || tx.type === "digital_ppob") && tx.product_id) {
-          const product = products.find((p) => p.id === tx.product_id);
-          if (product) {
-            const costPrice = safeNumber(product.cost_price);
-            allTimeCOGS += costPrice;
-            if (isCurrentMonth) monthlyCOGS += costPrice;
-          }
-        }
-      } else if (expenseTypes.has(tx.type)) {
+      } else if (tx.type === "expense") {
         allTimeExpenses += amount + adminFee;
         if (isCurrentMonth) monthlyExpenses += amount + adminFee;
       }
     }
 
-    const monthlyGrossProfit = monthlyIncome - monthlyCOGS;
-    const monthlyNetProfit = monthlyGrossProfit - monthlyExpenses;
-    const allTimeGrossProfit = allTimeIncome - allTimeCOGS;
-    const allTimeNetProfit = allTimeGrossProfit - allTimeExpenses;
+    const monthlyNetProfit = monthlyIncome - monthlyExpenses;
+    const allTimeNetProfit = allTimeIncome - allTimeExpenses;
 
     return {
-      monthlyIncome, monthlyExpenses, monthlyCOGS,
-      monthlyGrossProfit, monthlyNetProfit,
-      allTimeIncome, allTimeExpenses, allTimeCOGS,
-      allTimeGrossProfit, allTimeNetProfit,
+      monthlyIncome,
+      monthlyExpenses,
+      monthlyNetProfit,
+      allTimeIncome,
+      allTimeExpenses,
+      allTimeNetProfit,
     };
-  }, [transactions, products]);
+  }, [transactions]);
 
   /* ---------- computed values ---------- */
-  const businessWalletsTotal = wallets
-    .filter((wallet) => wallet.type === "business")
-    .reduce((sum, wallet) => sum + safeNumber(wallet.balance), 0);
-  const personalWalletsTotal = wallets
-    .filter((wallet) => wallet.type === "personal")
-    .reduce((sum, wallet) => sum + safeNumber(wallet.balance), 0);
-  const inventoryAsset = products
-    .filter((product) => (product.status ?? "in_stock") === "in_stock")
-    .reduce(
-      (sum, product) => sum + safeNumber(product.stock) * safeNumber(product.cost_price),
-      0,
-    );
-  const inventoryInTransit = products
-    .filter((product) => product.status === "in_transit")
-    .reduce(
-      (sum, product) => sum + safeNumber(product.stock) * safeNumber(product.cost_price),
-      0,
-    );
-  const investmentAsset = investments.reduce(
-    (sum, investment) =>
-      sum + safeNumber(investment.quantity) * safeNumber(investment.current_price),
+  const totalWalletBalance = wallets.reduce((sum, wallet) => sum + safeNumber(wallet.balance), 0);
+  const totalInvestmentValue = investments.reduce(
+    (sum, investment) => sum + safeNumber(investment.quantity) * safeNumber(investment.current_price),
     0,
   );
-  const receivables = debts
+  const totalInventoryValue = products
+    .filter((product) => (product.status ?? "in_stock") === "in_stock")
+    .reduce((sum, product) => sum + safeNumber(product.stock) * safeNumber(product.cost_price), 0);
+  const totalReceivables = debts
     .filter((debt) => debt.type === "receivable" && debt.status === "unpaid")
     .reduce((sum, debt) => sum + safeNumber(debt.amount), 0);
-  const liabilities = debts
+  const totalLiabilities = debts
     .filter((debt) => debt.type === "payable" && debt.status === "unpaid")
     .reduce((sum, debt) => sum + safeNumber(debt.amount), 0);
 
-  const modeLiquidAssets = mode === "business" ? businessWalletsTotal : personalWalletsTotal;
-  const modeSpecificAsset = mode === "business" ? inventoryAsset : investmentAsset;
-  const totalAssets = modeLiquidAssets + modeSpecificAsset + receivables + inventoryInTransit;
-
-  const combinedAssets =
-    businessWalletsTotal + personalWalletsTotal + inventoryAsset + investmentAsset + receivables + inventoryInTransit;
-  const netWorth = combinedAssets - liabilities;
+  const totalAssets = totalWalletBalance + totalInvestmentValue + totalInventoryValue + totalReceivables;
+  const netWorth = totalAssets - totalLiabilities;
 
   /* ---------- pie chart data (Asset Distribution) ---------- */
   const pieData = useMemo(() => {
     const slices = [
-      { name: "Liquid Cash", value: modeLiquidAssets },
-      { name: mode === "business" ? "Inventory" : "Investments", value: modeSpecificAsset },
-      { name: "Receivables", value: receivables },
+      { name: "Liquid Cash & Bank", value: totalWalletBalance },
+      { name: "Investments", value: totalInvestmentValue },
+      { name: "Inventory Stock", value: totalInventoryValue },
+      { name: "Receivables (Piutang)", value: totalReceivables },
     ].filter((s) => s.value > 0);
 
     return slices.length > 0 ? slices : [{ name: "No Data", value: 1 }];
-  }, [modeLiquidAssets, modeSpecificAsset, receivables, mode]);
+  }, [totalWalletBalance, totalInvestmentValue, totalInventoryValue, totalReceivables]);
 
   /* ---------- recent transactions ---------- */
   const recentTransactions = useMemo(() => {
-    return transactions.slice(0, 5);
+    return [...transactions]
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+      .slice(0, 5);
   }, [transactions]);
-
-  const incomeTypes = new Set([
-    "physical_sale",
-    "electronic_service",
-    "digital_ppob",
-    "affiliate_passive_income",
-    "internet_sharing_biznet",
-  ]);
 
   const formatTransactionType = (type: string) => {
     return type
@@ -218,52 +172,22 @@ export default function Home() {
   /* ---------- bar chart data (Income vs Expenses vs Profit) ---------- */
   const barData = useMemo(() => {
     // Aggregate last 6 months from transaction data
-    const monthMap = new Map<string, { income: number; expenses: number; cogs: number }>();
-
-    // Income transaction types
-    const incomeTypes = new Set([
-      "physical_sale",
-      "electronic_service",
-      "digital_ppob",
-      "affiliate_passive_income",
-      "internet_sharing_biznet",
-    ]);
-    // Expense transaction types - ONLY pure operating expenses
-    const expenseTypes = new Set([
-      "expense",
-    ]);
+    const monthMap = new Map<string, { income: number; expenses: number }>();
 
     for (const tx of transactions) {
       const d = new Date(tx.date);
       if (isNaN(d.getTime())) continue;
-      // Use local time for consistent comparison
       const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-      const entry = monthMap.get(key) ?? { income: 0, expenses: 0, cogs: 0 };
+      const entry = monthMap.get(key) ?? { income: 0, expenses: 0 };
 
       const amount = safeNumber(tx.amount);
       const adminFee = safeNumber(tx.admin_fee ?? 0);
 
-      if (incomeTypes.has(tx.type)) {
+      if (tx.type === "income") {
         entry.income += amount;
-
-        // Calculate COGS for physical sales and digital PPOB
-        // Note: quantity is not stored in transactions table, assuming quantity = 1 for now
-        if (tx.type === "physical_sale" && tx.product_id) {
-          const product = products.find((p) => p.id === tx.product_id);
-          if (product) {
-            entry.cogs += safeNumber(product.cost_price);
-          }
-        }
-        if (tx.type === "digital_ppob" && tx.product_id) {
-          const product = products.find((p) => p.id === tx.product_id);
-          if (product) {
-            entry.cogs += safeNumber(product.cost_price);
-          }
-        }
-      } else if (expenseTypes.has(tx.type)) {
+      } else if (tx.type === "expense") {
         entry.expenses += amount + adminFee;
       }
-      // Asset exchanges (inventory_purchase, money_transfer) are excluded from both income and expenses
 
       monthMap.set(key, entry);
     }
@@ -290,8 +214,7 @@ export default function Home() {
     return last6.map((key) => {
       const entry = monthMap.get(key)!;
       const monthIdx = parseInt(key.split("-")[1], 10) - 1;
-      const grossProfit = entry.income - entry.cogs;
-      const netProfit = grossProfit - entry.expenses;
+      const netProfit = entry.income - entry.expenses;
       return {
         month: monthNames[monthIdx],
         Income: Math.round(entry.income * 100) / 100,
@@ -299,7 +222,7 @@ export default function Home() {
         Profit: Math.round(netProfit * 100) / 100,
       };
     });
-  }, [transactions, products]);
+  }, [transactions]);
 
   /* ---------- custom tooltip for pie ---------- */
   const PieTooltip = ({ active, payload }: { active?: boolean; payload?: Array<{ name: string; value: number }> }) => {
@@ -375,7 +298,6 @@ export default function Home() {
           />
           <NetProfitCard
             netProfit={financeStats.monthlyNetProfit}
-            grossProfit={financeStats.monthlyGrossProfit}
             isLoading={false}
           />
         </div>
@@ -482,26 +404,28 @@ export default function Home() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {recentTransactions.map((tx) => (
-                    <TableRow key={tx.id} className="border-slate-800 hover:bg-slate-800/50">
-                      <TableCell className="text-slate-300 text-sm">{formatDate(tx.date)}</TableCell>
-                      <TableCell className="text-slate-300 text-sm">
-                        {incomeTypes.has(tx.type) ? (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-orange-500/15 text-orange-500 text-xs font-medium">
-                            {formatTransactionType(tx.type)}
+                  {recentTransactions.map((tx) => {
+                    const isIncome = tx.type === "income";
+                    const isExpense = tx.type === "expense";
+                    return (
+                      <TableRow key={tx.id} className="border-slate-800 hover:bg-slate-800/50">
+                        <TableCell className="text-slate-300 text-sm">{formatDate(tx.date)}</TableCell>
+                        <TableCell className="text-slate-300 text-sm">
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 text-xs font-medium">
+                            {tx.category || formatTransactionType(tx.type)}
                           </span>
-                        ) : (
-                          <span className="text-slate-400 text-xs">{formatTransactionType(tx.type)}</span>
-                        )}
-                      </TableCell>
-                      <TableCell className={`text-sm font-medium ${incomeTypes.has(tx.type) ? "text-orange-500" : "text-slate-300"}`}>
-                        {formatRupiah(tx.amount)}
-                      </TableCell>
-                      <TableCell className="text-slate-500 text-sm text-right truncate max-w-[200px]">
-                        {tx.notes || "-"}
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                        </TableCell>
+                        <TableCell className={`text-sm font-medium ${
+                          isIncome ? "text-emerald-500" : isExpense ? "text-rose-500" : "text-slate-300"
+                        }`}>
+                          {isIncome ? "+" : isExpense ? "-" : ""}{formatRupiah(tx.amount)}
+                        </TableCell>
+                        <TableCell className="text-slate-500 text-sm text-right truncate max-w-[200px]">
+                          {tx.notes || "-"}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             )}
@@ -551,11 +475,9 @@ function StatCard({
 
 function NetProfitCard({
   netProfit,
-  grossProfit,
   isLoading,
 }: {
   netProfit: number;
-  grossProfit: number;
   isLoading: boolean;
 }) {
   const isPositive = netProfit >= 0;
@@ -577,13 +499,8 @@ function NetProfitCard({
           {isLoading ? "Loading..." : formatRupiah(netProfit)}
         </p>
         <p className="text-xs text-slate-500 mt-1">
-          (Revenue - HPP - Expenses)
+          (Revenue - Expenses)
         </p>
-        <div className={`mt-2 p-2 rounded ${bgColor} border ${borderColor}`}>
-          <p className="text-xs text-slate-300">
-            Gross: {formatRupiah(grossProfit)}
-          </p>
-        </div>
       </CardContent>
     </Card>
   );

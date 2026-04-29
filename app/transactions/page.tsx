@@ -45,6 +45,7 @@ type Transaction = {
   product_id?: string | null;
   from_wallet_id?: string | null;
   to_wallet_id?: string | null;
+  debt_id?: string | null;
 };
 
 type TransactionType =
@@ -96,10 +97,10 @@ const transactionTypes: TransactionType[] = [
   "Kasbon (Employee Loan)",
 ];
 
-function TransactionsForm({ onSuccess }: { onSuccess: () => void }) {
+function TransactionsForm({ onSuccess, editingTransaction }: { onSuccess: () => void; editingTransaction: Transaction | null }) {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const { wallets, products, transactions, addDebt, handleTransfer, handleBankTransferService, handleCashWithdrawalService, handlePPOBTransaction, handleProductSale, editProduct, setTransactions } = useFinanceContext();
+  const { wallets, products, transactions, addDebt, handleTransfer, handleBankTransferService, handleCashWithdrawalService, handlePPOBTransaction, handleProductSale, editProduct, setTransactions, deleteTransaction, updateTransaction } = useFinanceContext();
   const [transactionType, setTransactionType] = useState<TransactionType>(
     (searchParams.get("type") as TransactionType) || "Physical Sale"
   );
@@ -148,9 +149,219 @@ function TransactionsForm({ onSuccess }: { onSuccess: () => void }) {
   // Filter products to only show 'in_stock' items for sales
   const availableProducts = products.filter((p) => (p.status ?? "in_stock") === "in_stock");
 
+  // Populate form fields when editing
+  useEffect(() => {
+    if (editingTransaction) {
+      const cat = (editingTransaction.category || "").toLowerCase();
+      const note = (editingTransaction.notes || "").toLowerCase();
+      const combined = `${cat} ${note}`;
+
+      // Smart Transaction Type Mapping: inspect category + notes to determine the correct form type
+      let txType: TransactionType = "Physical Sale"; // final fallback
+
+      if (
+        combined.includes("repair") ||
+        combined.includes("electronic service") ||
+        combined.includes("service fee") ||
+        cat === "electronic service"
+      ) {
+        txType = "Electronic Service";
+      } else if (
+        combined.includes("ppob") ||
+        combined.includes("pulsa") ||
+        combined.includes("token") ||
+        combined.includes("digital ppob")
+      ) {
+        txType = "Digital PPOB (Pulsa/Game)";
+      } else if (
+        combined.includes("jasa transfer") ||
+        combined.includes("fee jasa transfer") ||
+        combined.includes("money transfer") ||
+        (combined.includes("transfer") && combined.includes("admin"))
+      ) {
+        txType = "Money Transfer";
+      } else if (
+        combined.includes("tarik tunai") ||
+        combined.includes("fee tarik tunai") ||
+        combined.includes("cash withdrawal")
+      ) {
+        txType = "Cash Withdrawal";
+      } else if (
+        cat === "balance transfer" ||
+        (editingTransaction.type === "transfer" && combined.includes("balance transfer"))
+      ) {
+        txType = "Balance Transfer";
+      } else if (
+        combined.includes("affiliate") ||
+        combined.includes("commission") ||
+        combined.includes("passive income")
+      ) {
+        txType = "Affiliate / Passive Income";
+      } else if (
+        combined.includes("internet sharing") ||
+        combined.includes("biznet")
+      ) {
+        txType = "Internet Sharing (BIZNET)";
+      } else if (
+        combined.includes("kasbon") ||
+        (editingTransaction.type === "kasbon")
+      ) {
+        txType = "Kasbon (Employee Loan)";
+      } else if (
+        cat === "sales" ||
+        editingTransaction.product_id
+      ) {
+        txType = "Physical Sale";
+      }
+
+      setTransactionType(txType);
+      setNotes(editingTransaction.notes || "");
+      setAdminFee(editingTransaction.admin_fee?.toString() || "0");
+
+      // Populate wallet IDs correctly for the determined type
+      setDestinationWalletId(editingTransaction.to_wallet_id || "");
+      setSourceWalletId(editingTransaction.from_wallet_id || "");
+
+      // Populate the correct amount/input fields based on the resolved transaction type
+      // Reset all amount-related fields first to avoid stale values
+      setAmount("");
+      setServiceFee("");
+      setPpobCost("");
+      setPpobSellingPrice("");
+      setPpobProductName("");
+      setCommissionAmount("");
+      setPlatformName("");
+      setInternetAmount("");
+      setCustomerName("");
+      setEmployeeName("");
+      setProductId("");
+      setQuantity("1");
+      setSparepartProductId("");
+      setPaymentMethod("lunas");
+      setPersonName("");
+
+      switch (txType) {
+        case "Electronic Service":
+          setServiceFee(editingTransaction.amount?.toString() || "");
+          setDestinationWalletId(editingTransaction.to_wallet_id || "");
+          if (editingTransaction.product_id) {
+            setSparepartProductId(editingTransaction.product_id);
+          }
+          break;
+
+        case "Digital PPOB (Pulsa/Game)":
+          // For PPOB income transactions, the amount is the profit; populate selling price
+          // Try to extract cost and selling price from notes if available
+          const costMatch = (editingTransaction.notes || "").match(/Cost:\s*Rp\s*([\d.,]+)/i);
+          const sellMatch = (editingTransaction.notes || "").match(/Sell:\s*Rp\s*([\d.,]+)/i);
+          if (costMatch && sellMatch) {
+            setPpobCost(costMatch[1].replace(/\./g, "").replace(",", ""));
+            setPpobSellingPrice(sellMatch[1].replace(/\./g, "").replace(",", ""));
+          } else {
+            setPpobCost(editingTransaction.amount?.toString() || "");
+            setPpobSellingPrice(editingTransaction.amount?.toString() || "");
+          }
+          // Extract product name from notes
+          const ppobNameMatch = (editingTransaction.notes || "").match(/(?:PPOB|Profit from PPOB):\s*(.+?)(?:\s*\(|$)/i);
+          if (ppobNameMatch) {
+            setPpobProductName(ppobNameMatch[1].trim());
+          }
+          setSourceWalletId(editingTransaction.from_wallet_id || "");
+          setDestinationWalletId(editingTransaction.to_wallet_id || "");
+          break;
+
+        case "Money Transfer":
+          setAmount(editingTransaction.amount?.toString() || "");
+          setSourceWalletId(editingTransaction.from_wallet_id || "");
+          setDestinationWalletId(editingTransaction.to_wallet_id || "");
+          setAdminFee(editingTransaction.admin_fee?.toString() || "0");
+          break;
+
+        case "Cash Withdrawal":
+          setAmount(editingTransaction.amount?.toString() || "");
+          setSourceWalletId(editingTransaction.from_wallet_id || "");
+          setDestinationWalletId(editingTransaction.to_wallet_id || "");
+          setAdminFee(editingTransaction.admin_fee?.toString() || "0");
+          break;
+
+        case "Balance Transfer":
+          setAmount(editingTransaction.amount?.toString() || "");
+          setSourceWalletId(editingTransaction.from_wallet_id || "");
+          setDestinationWalletId(editingTransaction.to_wallet_id || "");
+          break;
+
+        case "Affiliate / Passive Income":
+          setCommissionAmount(editingTransaction.amount?.toString() || "");
+          setDestinationWalletId(editingTransaction.to_wallet_id || "");
+          // Try to extract platform name from notes
+          const platformMatch = (editingTransaction.notes || "").match(/(?:Commission from|from)\s+(.+)/i);
+          if (platformMatch) {
+            setPlatformName(platformMatch[1].trim());
+          }
+          break;
+
+        case "Internet Sharing (BIZNET)":
+          setInternetAmount(editingTransaction.amount?.toString() || "");
+          setDestinationWalletId(editingTransaction.to_wallet_id || "");
+          // Try to extract customer name from notes
+          const internetCustomerMatch = (editingTransaction.notes || "").match(/(?:payment from|from)\s+(.+)/i);
+          if (internetCustomerMatch) {
+            setCustomerName(internetCustomerMatch[1].trim());
+          }
+          break;
+
+        case "Kasbon (Employee Loan)":
+          setAmount(editingTransaction.amount?.toString() || "");
+          setSourceWalletId(editingTransaction.from_wallet_id || "");
+          // Try to extract employee name from notes
+          const kasbonNameMatch = (editingTransaction.notes || "").match(/^([^-]+)/);
+          if (kasbonNameMatch) {
+            setEmployeeName(kasbonNameMatch[1].trim());
+          }
+          break;
+
+        case "Physical Sale":
+        default:
+          setProductId(editingTransaction.product_id || "");
+          setDestinationWalletId(editingTransaction.to_wallet_id || "");
+          setAmount(editingTransaction.amount?.toString() || "");
+          break;
+      }
+    } else {
+      // Reset all fields when not editing
+      setTransactionType("Physical Sale");
+      setAmount("");
+      setNotes("");
+      setDestinationWalletId("");
+      setSourceWalletId("");
+      setAdminFee("0");
+      setProductId("");
+      setQuantity("1");
+      setServiceFee("");
+      setSparepartProductId("");
+      setPpobProductName("");
+      setPpobCost("");
+      setPpobSellingPrice("");
+      setPlatformName("");
+      setCommissionAmount("");
+      setCustomerName("");
+      setInternetAmount("");
+      setEmployeeName("");
+      setPaymentMethod("lunas");
+      setPersonName("");
+    }
+  }, [editingTransaction]);
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setIsSubmitting(true);
+
+    // Bug Fix: If editing an existing transaction, rollback (reverse wallet balances
+    // and remove) the old transaction FIRST, before applying the new one.
+    // This prevents duplicates when converting between types (e.g. Income → Debt).
+    if (editingTransaction) {
+      deleteTransaction(editingTransaction.id);
+    }
 
     const selectedSourceWallet = wallets.find((wallet) => wallet.id === sourceWalletId);
     const selectedDestinationWallet = wallets.find((wallet) => wallet.id === destinationWalletId);
@@ -1033,7 +1244,7 @@ function TransactionsForm({ onSuccess }: { onSuccess: () => void }) {
         </div>
 
         <Button type="submit" disabled={isSubmitting} className="bg-gradient-to-r from-orange-500 to-orange-600 text-white hover:from-orange-600 hover:to-orange-700 shadow-[0_0_15px_rgba(249,115,22,0.4)] transition-all">
-          {isSubmitting ? "Saving..." : "Save Transaction"}
+          {isSubmitting ? "Saving..." : (editingTransaction ? "Update Transaction" : "Save Transaction")}
         </Button>
       </form>
       </div>
@@ -1188,13 +1399,10 @@ function TransactionsForm({ onSuccess }: { onSuccess: () => void }) {
 }
 
 function ExpensesForm({ onSuccess }: { onSuccess: () => void }) {
-  const { wallets, transactions, setTransactions } = useFinanceContext();
-  const categories = [
-    { id: "1", name: "Operational" },
-    { id: "2", name: "Inventory" },
-    { id: "3", name: "Marketing" },
-    { id: "4", name: "Utilities" },
-  ];
+  const { wallets, transactions, setTransactions, categories, addTransaction } = useFinanceContext();
+  // Dynamic expense categories from Settings module
+  const expenseCategories = categories.filter(cat => cat.type === 'expense');
+
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [expenseAmount, setExpenseAmount] = useState("");
   const [expenseDescription, setExpenseDescription] = useState("");
@@ -1214,6 +1422,12 @@ function ExpensesForm({ onSuccess }: { onSuccess: () => void }) {
       return;
     }
 
+    if (!expenseCategory) {
+      toast.error("Please select a category.");
+      setIsSubmitting(false);
+      return;
+    }
+
     const selectedWallet = wallets.find((wallet) => wallet.id === expenseWalletId);
     if (!selectedWallet) {
       toast.error("Please select a wallet.");
@@ -1227,17 +1441,17 @@ function ExpensesForm({ onSuccess }: { onSuccess: () => void }) {
       return;
     }
 
-    // Deduct from wallet and add transaction
+    // Use addTransaction to handle wallet balance and transaction recording
     const newTransaction = {
       id: Date.now().toString(),
       date: expenseDate,
-      type: "expense",
+      type: "expense" as const,
       category: expenseCategory,
       amount: parsedAmount,
       from_wallet_id: selectedWallet.id,
       notes: expenseDescription,
     };
-    setTransactions([...transactions, newTransaction]);
+    addTransaction(newTransaction);
 
     toast.success("Expense recorded successfully");
     setIsSubmitting(false);
@@ -1284,14 +1498,18 @@ function ExpensesForm({ onSuccess }: { onSuccess: () => void }) {
           required
           value={expenseCategory}
           onChange={(e) => setExpenseCategory(e.target.value)}
-          className="flex h-10 w-full rounded-md border border-slate-700 bg-slate-800/50 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
+          className="w-full flex h-10 items-center justify-between rounded-md border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-orange-500"
         >
-          <option value="">Select category</option>
-          {categories.map((cat) => (
-            <option key={cat.id} value={cat.name}>
-              {cat.name}
-            </option>
-          ))}
+          <option value="" disabled>Select category...</option>
+          {expenseCategories.length === 0 ? (
+            <option value="" disabled>No categories — add in Settings</option>
+          ) : (
+            expenseCategories.map((cat) => (
+              <option key={cat.id} value={cat.name}>
+                {cat.name}
+              </option>
+            ))
+          )}
         </select>
       </div>
 
@@ -1348,9 +1566,10 @@ function ExpensesForm({ onSuccess }: { onSuccess: () => void }) {
 }
 
 function TransactionsDashboard() {
-  const { wallets, transactions, setTransactions } = useFinanceContext();
+  const { wallets, transactions, setTransactions, deleteTransaction, updateTransaction } = useFinanceContext();
   const [isIncomeModalOpen, setIsIncomeModalOpen] = useState(false);
   const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
+  const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
 
   // Search & Date Filter state
   const [searchQuery, setSearchQuery] = useState("");
@@ -1446,7 +1665,7 @@ function TransactionsDashboard() {
 
   const handleDelete = (id: string) => {
     if (!confirm("Are you sure you want to delete this transaction?")) return;
-    setTransactions(transactions.filter(t => t.id !== id));
+    deleteTransaction(id);
     toast.success("Transaction deleted");
   };
 
@@ -1590,7 +1809,14 @@ function TransactionsDashboard() {
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button className="p-1.5 rounded-md hover:bg-slate-700/50 text-slate-500 hover:text-slate-300 transition-colors" title="Edit">
+                        <button 
+                          onClick={() => {
+                            setEditingTransaction(transaction);
+                            setIsIncomeModalOpen(true);
+                          }} 
+                          className="p-1.5 rounded-md hover:bg-slate-700/50 text-slate-500 hover:text-slate-300 transition-colors" 
+                          title="Edit"
+                        >
                           <Pencil className="h-3.5 w-3.5" />
                         </button>
                         <button onClick={() => handleDelete(transaction.id)} className="p-1.5 rounded-md hover:bg-red-500/10 text-slate-500 hover:text-red-400 transition-colors" title="Delete">
@@ -1660,7 +1886,14 @@ function TransactionsDashboard() {
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button className="p-1.5 rounded-md hover:bg-slate-700/50 text-slate-500 hover:text-slate-300 transition-colors" title="Edit">
+                        <button 
+                          onClick={() => {
+                            setEditingTransaction(expense as any);
+                            setIsExpenseModalOpen(true);
+                          }} 
+                          className="p-1.5 rounded-md hover:bg-slate-700/50 text-slate-500 hover:text-slate-300 transition-colors" 
+                          title="Edit"
+                        >
                           <Pencil className="h-3.5 w-3.5" />
                         </button>
                         <button onClick={() => handleDelete(expense.id)} className="p-1.5 rounded-md hover:bg-red-500/10 text-slate-500 hover:text-red-400 transition-colors" title="Delete">
@@ -1678,17 +1911,17 @@ function TransactionsDashboard() {
       </div>
 
       {/* Add Income Modal */}
-      <Dialog open={isIncomeModalOpen} onOpenChange={setIsIncomeModalOpen}>
+      <Dialog open={isIncomeModalOpen} onOpenChange={(open) => { setIsIncomeModalOpen(open); if (!open) setEditingTransaction(null); }}>
         <DialogContent className="sm:max-w-[600px] bg-slate-900 border-slate-800 text-white max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="text-white">Add Income Transaction</DialogTitle>
+            <DialogTitle className="text-white">{editingTransaction ? "Edit Transaction" : "Add Income Transaction"}</DialogTitle>
           </DialogHeader>
-          <TransactionsForm onSuccess={handleIncomeSuccess} />
+          <TransactionsForm onSuccess={handleIncomeSuccess} editingTransaction={editingTransaction} />
         </DialogContent>
       </Dialog>
 
       {/* Add Expense Modal */}
-      <Dialog open={isExpenseModalOpen} onOpenChange={setIsExpenseModalOpen}>
+      <Dialog open={isExpenseModalOpen} onOpenChange={(open) => { setIsExpenseModalOpen(open); if (!open) setEditingTransaction(null); }}>
         <DialogContent className="sm:max-w-[500px] bg-slate-900 border-slate-800 text-white">
           <DialogHeader>
             <DialogTitle className="text-white">Add Expense</DialogTitle>
