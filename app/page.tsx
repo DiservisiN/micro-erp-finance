@@ -120,20 +120,35 @@ export default function Home() {
   }, [transactions]);
 
   /* ---------- computed values ---------- */
-  const totalWalletBalance = wallets.reduce((sum, wallet) => sum + safeNumber(wallet.balance), 0);
-  const totalInvestmentValue = investments.reduce(
-    (sum, investment) => sum + safeNumber(investment.quantity) * safeNumber(investment.current_price),
-    0,
-  );
+  // Ultimate safe number parser for Supabase data
+  const getNum = (val: any) => {
+    const parsed = Number(val);
+    return isNaN(parsed) ? 0 : parsed;
+  };
+
+  const totalWalletBalance = wallets.reduce((sum, w) => sum + getNum(w.balance), 0);
+
+  const totalInvestmentValue = investments.reduce((sum, inv) => {
+    const qty = getNum((inv as any).quantity) || 1;
+    const price = getNum((inv as any).current_price) || getNum((inv as any).currentPrice) || 0;
+    return sum + (qty * price);
+  }, 0);
+
   const totalInventoryValue = products
     .filter((product) => (product.status ?? "in_stock") === "in_stock")
-    .reduce((sum, product) => sum + safeNumber(product.stock) * safeNumber(product.cost_price), 0);
+    .reduce((sum, item) => {
+      const stock = getNum(item.stock);
+      const price = getNum(item.cost_price) || getNum((item as any).costPrice) || 0;
+      return sum + (stock * price);
+    }, 0);
+
   const totalReceivables = debts
-    .filter((debt) => debt.type === "receivable" && debt.status === "unpaid")
-    .reduce((sum, debt) => sum + safeNumber(debt.amount), 0);
+    .filter(d => d.type === 'receivable' && d.status === 'unpaid')
+    .reduce((sum, d) => sum + getNum(d.amount), 0);
+
   const totalLiabilities = debts
-    .filter((debt) => debt.type === "payable" && debt.status === "unpaid")
-    .reduce((sum, debt) => sum + safeNumber(debt.amount), 0);
+    .filter(d => d.type === 'payable' && d.status === 'unpaid')
+    .reduce((sum, d) => sum + getNum(d.amount), 0);
 
   const totalAssets = totalWalletBalance + totalInvestmentValue + totalInventoryValue + totalReceivables;
   const netWorth = totalAssets - totalLiabilities;
