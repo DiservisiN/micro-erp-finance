@@ -82,9 +82,9 @@ type FinanceContextValue = {
   categories: Category[];
   goldPrice: number;
   setGoldPrice: (price: number) => void;
-  addCategory: (category: Omit<Category, "id">) => void;
-  deleteCategory: (id: string) => void;
-  editCategory: (id: string, updates: Partial<Category>) => void;
+  addCategory: (category: Omit<Category, "id">) => Promise<void>;
+  deleteCategory: (id: string) => Promise<void>;
+  editCategory: (id: string, updates: Partial<Category>) => Promise<void>;
   handleTransfer: (fromWalletId: string, toWalletId: string, amount: number, fee?: number) => Promise<void>;
   handleBankTransferService: (bankWalletId: string, cashWalletId: string, amount: number, adminFee: number) => void;
   handleCashWithdrawalService: (cashWalletId: string, bankWalletId: string, amount: number, adminFee: number) => void;
@@ -96,12 +96,12 @@ type FinanceContextValue = {
   addTransaction: (transaction: Transaction) => Promise<void>;
   deleteTransaction: (id: string) => Promise<void>;
   updateTransaction: (id: string, updatedData: Partial<Transaction>) => Promise<void>;
-  addProduct: (product: Omit<Product, "id">) => void;
-  editProduct: (productId: string, updates: Partial<Product>) => void;
-  deleteProduct: (productId: string) => void;
-  updateInvestment: (id: string, updatedData: Partial<Investment>) => void;
-  addDebt: (debt: Omit<Debt, "id" | "status">) => void;
-  deleteDebt: (debtId: string) => void;
+  addProduct: (product: Omit<Product, "id">) => Promise<void>;
+  editProduct: (productId: string, updates: Partial<Product>) => Promise<void>;
+  deleteProduct: (productId: string) => Promise<void>;
+  updateInvestment: (id: string, updatedData: Partial<Investment>) => Promise<void>;
+  addDebt: (debt: Omit<Debt, "id" | "status">) => Promise<void>;
+  deleteDebt: (debtId: string) => Promise<void>;
   settleDebt: (debtId: string, walletId: string) => Promise<void>;
 };
 
@@ -212,13 +212,46 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
           setInvestments(investmentsData as Investment[]);
         }
 
-        // For now, keep other data from localStorage until we migrate those tables too
+        // Fetch products from Supabase
+        const { data: productsData, error: productsError } = await supabase
+          .from("products")
+          .select("*")
+          .order("name", { ascending: true });
+
+        if (productsError) {
+          console.error("Failed to fetch products:", productsError);
+        } else if (productsData) {
+          setProducts(productsData as Product[]);
+        }
+
+        // Fetch debts from Supabase
+        const { data: debtsData, error: debtsError } = await supabase
+          .from("debts")
+          .select("*")
+          .order("created_at", { ascending: false });
+
+        if (debtsError) {
+          console.error("Failed to fetch debts:", debtsError);
+        } else if (debtsData) {
+          setDebts(debtsData as Debt[]);
+        }
+
+        // Fetch categories from Supabase
+        const { data: categoriesData, error: categoriesError } = await supabase
+          .from("categories")
+          .select("*")
+          .order("name", { ascending: true });
+
+        if (categoriesError) {
+          console.error("Failed to fetch categories:", categoriesError);
+        } else if (categoriesData) {
+          setCategories(categoriesData as Category[]);
+        }
+
+        // Only keep goldPrice from localStorage (not migrated to Supabase)
         const saved = localStorage.getItem(STORAGE_KEY);
         if (saved) {
           const parsed = JSON.parse(saved);
-          if (parsed.products) setProducts(parsed.products);
-          if (parsed.debts) setDebts(parsed.debts);
-          if (parsed.categories) setCategories(parsed.categories);
           if (parsed.goldPrice) setGoldPrice(parsed.goldPrice);
         }
       } catch (e) {
@@ -235,13 +268,10 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
     if (!isHydrated || typeof window === "undefined") return;
 
     const data = {
-      products,
-      debts,
-      categories,
       goldPrice,
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-  }, [products, debts, categories, goldPrice, isHydrated]);
+  }, [goldPrice, isHydrated]);
 
   // Smart Action Handlers
 
@@ -977,42 +1007,172 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
       console.error("Failed to update transaction:", e);
     }
   };
-  const addProduct = (product: Omit<Product, "id">) => {
+  const addProduct = async (product: Omit<Product, "id">) => {
     const newProduct: Product = {
       ...product,
       id: Date.now().toString(),
     };
-    setProducts(prev => [...prev, newProduct]);
+
+    if (!supabase) {
+      // Fallback to local state only
+      setProducts(prev => [...prev, newProduct]);
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from("products")
+        .insert(newProduct);
+
+      if (error) {
+        console.error("Failed to add product:", error);
+        return;
+      }
+
+      // Update local state after successful Supabase operation
+      setProducts(prev => [...prev, newProduct]);
+    } catch (e) {
+      console.error("Failed to add product:", e);
+    }
   };
 
-  const editProduct = (productId: string, updates: Partial<Product>) => {
-    setProducts(prev =>
-      prev.map(p => (p.id === productId ? { ...p, ...updates } : p))
-    );
+  const editProduct = async (productId: string, updates: Partial<Product>) => {
+    if (!supabase) {
+      // Fallback to local state only
+      setProducts(prev =>
+        prev.map(p => (p.id === productId ? { ...p, ...updates } : p))
+      );
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from("products")
+        .update(updates)
+        .eq("id", productId);
+
+      if (error) {
+        console.error("Failed to update product:", error);
+        return;
+      }
+
+      // Update local state after successful Supabase operation
+      setProducts(prev =>
+        prev.map(p => (p.id === productId ? { ...p, ...updates } : p))
+      );
+    } catch (e) {
+      console.error("Failed to update product:", e);
+    }
   };
 
-  const updateInvestment = (id: string, updatedData: Partial<Investment>) => {
-    setInvestments(prev =>
-      prev.map(inv => (inv.id === id ? { ...inv, ...updatedData } : inv))
-    );
+  const updateInvestment = async (id: string, updatedData: Partial<Investment>) => {
+    if (!supabase) {
+      // Fallback to local state only
+      setInvestments(prev =>
+        prev.map(inv => (inv.id === id ? { ...inv, ...updatedData } : inv))
+      );
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from("investments")
+        .update(updatedData)
+        .eq("id", id);
+
+      if (error) {
+        console.error("Failed to update investment:", error);
+        return;
+      }
+
+      // Update local state after successful Supabase operation
+      setInvestments(prev =>
+        prev.map(inv => (inv.id === id ? { ...inv, ...updatedData } : inv))
+      );
+    } catch (e) {
+      console.error("Failed to update investment:", e);
+    }
   };
 
-  const deleteProduct = (productId: string) => {
-    setProducts(prev => prev.filter(p => p.id !== productId));
+  const deleteProduct = async (productId: string) => {
+    if (!supabase) {
+      // Fallback to local state only
+      setProducts(prev => prev.filter(p => p.id !== productId));
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from("products")
+        .delete()
+        .eq("id", productId);
+
+      if (error) {
+        console.error("Failed to delete product:", error);
+        return;
+      }
+
+      // Update local state after successful Supabase operation
+      setProducts(prev => prev.filter(p => p.id !== productId));
+    } catch (e) {
+      console.error("Failed to delete product:", e);
+    }
   };
 
   // Debt CRUD operations
-  const addDebt = (debt: Omit<Debt, "id" | "status">) => {
+  const addDebt = async (debt: Omit<Debt, "id" | "status">) => {
     const newDebt: Debt = {
       ...debt,
       id: Date.now().toString(),
       status: "unpaid",
     };
-    setDebts(prev => [...prev, newDebt]);
+
+    if (!supabase) {
+      // Fallback to local state only
+      setDebts(prev => [...prev, newDebt]);
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from("debts")
+        .insert(newDebt);
+
+      if (error) {
+        console.error("Failed to add debt:", error);
+        return;
+      }
+
+      // Update local state after successful Supabase operation
+      setDebts(prev => [...prev, newDebt]);
+    } catch (e) {
+      console.error("Failed to add debt:", e);
+    }
   };
 
-  const deleteDebt = (debtId: string) => {
-    setDebts(prev => prev.filter(d => d.id !== debtId));
+  const deleteDebt = async (debtId: string) => {
+    if (!supabase) {
+      // Fallback to local state only
+      setDebts(prev => prev.filter(d => d.id !== debtId));
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from("debts")
+        .delete()
+        .eq("id", debtId);
+
+      if (error) {
+        console.error("Failed to delete debt:", error);
+        return;
+      }
+
+      // Update local state after successful Supabase operation
+      setDebts(prev => prev.filter(d => d.id !== debtId));
+    } catch (e) {
+      console.error("Failed to delete debt:", e);
+    }
   };
 
   // Settle debt (mark as paid) with wallet update and transaction record
@@ -1081,22 +1241,87 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
   };
 
   // Category CRUD operations
-  const addCategory = (category: Omit<Category, "id">) => {
+  const addCategory = async (category: Omit<Category, "id">) => {
     const newCategory: Category = {
       ...category,
       id: Date.now().toString(),
     };
-    setCategories(prev => [...prev, newCategory]);
+
+    if (!supabase) {
+      // Fallback to local state only
+      setCategories(prev => [...prev, newCategory]);
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from("categories")
+        .insert(newCategory);
+
+      if (error) {
+        console.error("Failed to add category:", error);
+        return;
+      }
+
+      // Update local state after successful Supabase operation
+      setCategories(prev => [...prev, newCategory]);
+    } catch (e) {
+      console.error("Failed to add category:", e);
+    }
   };
 
-  const deleteCategory = (id: string) => {
-    setCategories(prev => prev.filter(c => c.id !== id));
+  const deleteCategory = async (id: string) => {
+    if (!supabase) {
+      // Fallback to local state only
+      setCategories(prev => prev.filter(c => c.id !== id));
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from("categories")
+        .delete()
+        .eq("id", id);
+
+      if (error) {
+        console.error("Failed to delete category:", error);
+        return;
+      }
+
+      // Update local state after successful Supabase operation
+      setCategories(prev => prev.filter(c => c.id !== id));
+    } catch (e) {
+      console.error("Failed to delete category:", e);
+    }
   };
 
-  const editCategory = (id: string, updates: Partial<Category>) => {
-    setCategories(prev =>
-      prev.map(c => (c.id === id ? { ...c, ...updates } : c))
-    );
+  const editCategory = async (id: string, updates: Partial<Category>) => {
+    if (!supabase) {
+      // Fallback to local state only
+      setCategories(prev =>
+        prev.map(c => (c.id === id ? { ...c, ...updates } : c))
+      );
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from("categories")
+        .update(updates)
+        .eq("id", id);
+
+      if (error) {
+        console.error("Failed to update category:", error);
+        return;
+      }
+
+      // Update local state after successful Supabase operation
+      setCategories(prev =>
+        prev.map(c => (c.id === id ? { ...c, ...updates } : c))
+      );
+    } catch (e) {
+      console.error("Failed to update category:", e);
+    }
   };
 
   const value = {

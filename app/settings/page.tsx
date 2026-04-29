@@ -64,10 +64,10 @@ export default function SettingsPage() {
   ]);
 
   // Handler functions
-  const handleAddCategory = (e: React.FormEvent) => {
+  const handleAddCategory = async (e: React.FormEvent) => {
     e.preventDefault();
     if (categoryName) {
-      addCategory({
+      await addCategory({
         name: categoryName,
         type: categoryType,
         description: categoryDescription
@@ -78,8 +78,8 @@ export default function SettingsPage() {
     }
   };
 
-  const handleDeleteCategory = (id: string) => {
-    deleteCategory(id);
+  const handleDeleteCategory = async (id: string) => {
+    await deleteCategory(id);
   };
 
   const handleEditCategory = (category: typeof categories[0]) => {
@@ -90,9 +90,9 @@ export default function SettingsPage() {
     setIsCategoryEditOpen(true);
   };
 
-  const handleSaveCategory = () => {
+  const handleSaveCategory = async () => {
     if (editCategoryTarget) {
-      editCategory(editCategoryTarget.id, {
+      await editCategory(editCategoryTarget.id, {
         name: editCategoryName,
         type: editCategoryType,
         description: editCategoryDescription

@@ -110,7 +110,7 @@ export default function InventoryPage() {
     status: "in_stock",
   });
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setIsSaving(true);
 
@@ -132,7 +132,7 @@ export default function InventoryPage() {
     }
 
     // Add product to context
-    addProduct({
+    await addProduct({
       barcode: formState.barcode.trim() || null,
       name: formState.name.trim(),
       category: formState.category === "none" ? null : formState.category.trim() || null,
@@ -203,11 +203,11 @@ export default function InventoryPage() {
     setIsEditOpen(true);
   }
 
-  function handleEditProduct() {
+  async function handleEditProduct() {
     if (!editTarget) return;
     setIsSavingEdit(true);
 
-    editProduct(editTarget.id, {
+    await editProduct(editTarget.id, {
       name: editForm.name.trim(),
       category: editForm.category === "none" ? null : editForm.category.trim() || null,
       cost_price: Number(editForm.cost_price),
@@ -223,9 +223,9 @@ export default function InventoryPage() {
     setEditTarget(null);
   }
 
-  function handleDeleteProduct(productId: string) {
+  async function handleDeleteProduct(productId: string) {
     if (!window.confirm('Hapus produk ini?')) return;
-    deleteProduct(productId);
+    await deleteProduct(productId);
     toast.success("Product deleted successfully");
   }
 
@@ -657,14 +657,14 @@ function InTransitPanel({
   const [refundWalletId, setRefundWalletId] = useState("");
   const [isCancelling, setIsCancelling] = useState(false);
 
-  function markAsReceived(productId: string) {
+  async function markAsReceived(productId: string) {
     setUpdatingId(productId);
-    editProduct(productId, { status: "in_stock" });
+    await editProduct(productId, { status: "in_stock" });
     toast.success("Product marked as received and moved to In Stock");
     setUpdatingId(null);
   }
 
-  function handleCancelOrder() {
+  async function handleCancelOrder() {
     if (!cancelTarget) return;
     setIsCancelling(true);
     const refundAmount = cancelTarget.cost_price * cancelTarget.stock;
@@ -673,11 +673,11 @@ function InTransitPanel({
     try {
       // Refund to wallet if selected
       if (selectedWallet && refundAmount > 0) {
-        handleTransfer("system", selectedWallet.id, refundAmount);
+        await handleTransfer("system", selectedWallet.id, refundAmount);
       }
 
       // Delete the product
-      deleteProduct(cancelTarget.id);
+      await deleteProduct(cancelTarget.id);
 
       toast.success(
         selectedWallet
@@ -1035,13 +1035,13 @@ function ImportCsvDialog({
     });
   }
 
-  function handleImport() {
+  async function handleImport() {
     if (previewRows.length === 0 || validationErrors.length > 0) return;
 
     setIsImporting(true);
 
-    previewRows.forEach((row) => {
-      addProduct({
+    for (const row of previewRows) {
+      await addProduct({
         name: row.name?.trim() ?? "",
         category: row.category?.trim() || null,
         cost_price: Number(row.cost_price) || 0,
@@ -1051,7 +1051,7 @@ function ImportCsvDialog({
         expired_date: row.expired_date?.trim() || null,
         barcode: null,
       });
-    });
+    }
 
     toast.success(`Successfully imported ${previewRows.length} product(s)`);
     resetState();

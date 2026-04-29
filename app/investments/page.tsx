@@ -140,20 +140,8 @@ export default function InvestmentsPage() {
       current_price: Number(editCurrentPrice || "0"),
     };
 
-    // Update in context (localStorage)
-    updateInvestment(editingInvestment.id, updatedData);
-
-    // Update in Supabase
-    if (supabase) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { error } = await (supabase as any)
-        .from("investments")
-        .update(updatedData as any)
-        .eq("id", editingInvestment.id);
-      if (error) {
-        toast.error("Failed to update investment in database", { description: error.message });
-      }
-    }
+    // Update in context (Supabase + local state)
+    await updateInvestment(editingInvestment.id, updatedData);
 
     // Update local state
     setInvestments(prev =>

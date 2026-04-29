@@ -78,11 +78,11 @@ export default function DebtsPage() {
   const receivables = unpaidDebts.filter((item) => item.type === "receivable");
   const payables = unpaidDebts.filter((item) => item.type === "payable");
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setIsSaving(true);
 
-    addDebt({
+    await addDebt({
       person_name: personName.trim(),
       type,
       amount: Number(amount || "0"),
@@ -116,9 +116,9 @@ export default function DebtsPage() {
     setSettleWalletId("");
   }
 
-  function handleDeleteDebt(debtId: string) {
+  async function handleDeleteDebt(debtId: string) {
     if (!window.confirm("Delete this debt record?")) return;
-    deleteDebt(debtId);
+    await deleteDebt(debtId);
     toast.success("Debt record deleted");
   }
 
