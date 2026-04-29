@@ -125,9 +125,7 @@ const defaultState = {
       expired_date: "2027-01-01",
     },
   ],
-  investments: [
-    { id: "1", quantity: 10, current_price: 5000000 },
-  ],
+  investments: [],
   debts: [],
   categories: [
     { id: "1", name: "Electronics", type: "inventory" as const, description: "Electronic devices" },
