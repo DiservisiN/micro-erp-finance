@@ -40,10 +40,10 @@ type Product = {
   barcode: string | null;
   name: string;
   category: string | null;
-  cost_price: number;
-  selling_price: number;
+  costPrice: number;
+  sellingPrice: number;
   stock: number;
-  expired_date: string | null;
+  expiredDate: string | null;
   status: string;
 };
 
@@ -58,15 +58,15 @@ type ProductFormState = {
   barcode: string;
   name: string;
   category: string;
-  cost_price: string;
-  selling_price: string;
+  costPrice: string;
+  sellingPrice: string;
   stock: string;
-  expired_date: string;
+  expiredDate: string;
   status: string;
   walletId: string;
 };
 
-type SortField = "name" | "category" | "cost_price" | "selling_price" | "stock" | "expired_date";
+type SortField = "name" | "category" | "costPrice" | "sellingPrice" | "stock" | "expiredDate";
 type SortDirection = "asc" | "desc";
 
 
@@ -74,10 +74,10 @@ const initialFormState: ProductFormState = {
   barcode: "",
   name: "",
   category: "none",
-  cost_price: "",
-  selling_price: "",
+  costPrice: "",
+  sellingPrice: "",
   stock: "",
-  expired_date: "",
+  expiredDate: "",
   status: "in_stock",
   walletId: "",
 };
@@ -103,10 +103,10 @@ export default function InventoryPage() {
   const [editForm, setEditForm] = useState({
     name: "",
     category: "none",
-    cost_price: "",
-    selling_price: "",
+    costPrice: "",
+    sellingPrice: "",
     stock: "",
-    expired_date: "",
+    expiredDate: "",
     status: "in_stock",
   });
 
@@ -114,8 +114,8 @@ export default function InventoryPage() {
     event.preventDefault();
     setIsSaving(true);
 
-    const costPrice = Number(formState.cost_price);
-    const sellingPrice = Number(formState.selling_price);
+    const costPrice = Number(formState.costPrice);
+    const sellingPrice = Number(formState.sellingPrice);
     const stock = Number(formState.stock);
     const totalCost = costPrice * stock;
     const selectedWallet = wallets.find((w) => w.id === formState.walletId);
@@ -136,10 +136,10 @@ export default function InventoryPage() {
       barcode: formState.barcode.trim() || null,
       name: formState.name.trim(),
       category: formState.category === "none" ? null : formState.category.trim() || null,
-      cost_price: costPrice,
-      selling_price: sellingPrice,
+      costPrice: costPrice,
+      sellingPrice: sellingPrice,
       stock: stock,
-      expired_date: formState.expired_date || null,
+      expiredDate: formState.expiredDate || null,
       status: formState.status || "in_stock",
     });
 
@@ -194,10 +194,10 @@ export default function InventoryPage() {
     setEditForm({
       name: product.name,
       category: product.category || "none",
-      cost_price: String(product.cost_price),
-      selling_price: String(product.selling_price),
+      costPrice: String(product.costPrice),
+      sellingPrice: String(product.sellingPrice),
       stock: String(product.stock),
-      expired_date: product.expired_date || "",
+      expiredDate: product.expiredDate || "",
       status: product.status || "in_stock",
     });
     setIsEditOpen(true);
@@ -210,10 +210,10 @@ export default function InventoryPage() {
     await editProduct(editTarget.id, {
       name: editForm.name.trim(),
       category: editForm.category === "none" ? null : editForm.category.trim() || null,
-      cost_price: Number(editForm.cost_price),
-      selling_price: Number(editForm.selling_price),
+      costPrice: Number(editForm.costPrice),
+      sellingPrice: Number(editForm.sellingPrice),
       stock: Number(editForm.stock),
-      expired_date: editForm.expired_date || null,
+      expiredDate: editForm.expiredDate || null,
       status: editForm.status || "in_stock",
     });
 
@@ -313,17 +313,17 @@ export default function InventoryPage() {
                     <SortButton label="Category" isActive={sortField === "category"} direction={sortDirection} onClick={() => toggleSort("category")} />
                   </TableHead>
                   <TableHead className="text-slate-400 font-medium text-right">
-                    <SortButton label="Cost Price" isActive={sortField === "cost_price"} direction={sortDirection} onClick={() => toggleSort("cost_price")} />
+                    <SortButton label="Cost Price" isActive={sortField === "costPrice"} direction={sortDirection} onClick={() => toggleSort("costPrice")} />
                   </TableHead>
                   <TableHead className="text-slate-400 font-medium text-right">
-                    <SortButton label="Selling Price" isActive={sortField === "selling_price"} direction={sortDirection} onClick={() => toggleSort("selling_price")} />
+                    <SortButton label="Selling Price" isActive={sortField === "sellingPrice"} direction={sortDirection} onClick={() => toggleSort("sellingPrice")} />
                   </TableHead>
                   <TableHead className="text-slate-400 font-medium text-right">
                     <SortButton label="Stock" isActive={sortField === "stock"} direction={sortDirection} onClick={() => toggleSort("stock")} />
                   </TableHead>
                   <TableHead className="text-slate-400 font-medium">Status</TableHead>
                   <TableHead className="text-slate-400 font-medium">
-                    <SortButton label="Expired Date" isActive={sortField === "expired_date"} direction={sortDirection} onClick={() => toggleSort("expired_date")} />
+                    <SortButton label="Expired Date" isActive={sortField === "expiredDate"} direction={sortDirection} onClick={() => toggleSort("expiredDate")} />
                   </TableHead>
                   <TableHead className="text-slate-400 font-medium w-[80px]">Actions</TableHead>
                 </TableRow>
@@ -341,8 +341,8 @@ export default function InventoryPage() {
                     <TableCell className="text-slate-300">{product.barcode ?? "-"}</TableCell>
                     <TableCell className="text-white font-medium">{product.name}</TableCell>
                     <TableCell className="text-slate-400">{product.category ?? "-"}</TableCell>
-                    <TableCell className="text-slate-300 text-right font-mono">{formatRupiah(product.cost_price)}</TableCell>
-                    <TableCell className="text-slate-300 text-right font-mono">{formatRupiah(product.selling_price)}</TableCell>
+                    <TableCell className="text-slate-300 text-right font-mono">{formatRupiah(product.costPrice)}</TableCell>
+                    <TableCell className="text-slate-300 text-right font-mono">{formatRupiah(product.sellingPrice)}</TableCell>
                     <TableCell className="text-slate-300 text-right font-mono">{product.stock}</TableCell>
                     <TableCell>
                       {product.status === "in_stock" ? (
@@ -355,7 +355,7 @@ export default function InventoryPage() {
                         </span>
                       )}
                     </TableCell>
-                    <TableCell className="text-slate-400">{product.expired_date ?? "-"}</TableCell>
+                    <TableCell className="text-slate-400">{product.expiredDate ?? "-"}</TableCell>
                     <TableCell>
                       <button
                         type="button"
@@ -420,11 +420,11 @@ export default function InventoryPage() {
               <div className="grid grid-cols-3 gap-3">
                 <div className="grid gap-2">
                   <Label htmlFor="edit-prod-cost" className="text-slate-300">Cost Price</Label>
-                  <Input id="edit-prod-cost" type="number" min="0" step="0.01" value={editForm.cost_price} onChange={(e) => setEditForm({ ...editForm, cost_price: e.target.value })} className="bg-slate-800 border-slate-700 text-white" />
+                  <Input id="edit-prod-cost" type="number" min="0" step="0.01" value={editForm.costPrice} onChange={(e) => setEditForm({ ...editForm, costPrice: e.target.value })} className="bg-slate-800 border-slate-700 text-white" />
                 </div>
                 <div className="grid gap-2">
                   <Label htmlFor="edit-prod-sell" className="text-slate-300">Selling Price</Label>
-                  <Input id="edit-prod-sell" type="number" min="0" step="0.01" value={editForm.selling_price} onChange={(e) => setEditForm({ ...editForm, selling_price: e.target.value })} className="bg-slate-800 border-slate-700 text-white" />
+                  <Input id="edit-prod-sell" type="number" min="0" step="0.01" value={editForm.sellingPrice} onChange={(e) => setEditForm({ ...editForm, sellingPrice: e.target.value })} className="bg-slate-800 border-slate-700 text-white" />
                 </div>
                 <div className="grid gap-2">
                   <Label htmlFor="edit-prod-stock" className="text-slate-300">Stock</Label>
@@ -434,7 +434,7 @@ export default function InventoryPage() {
 
               <div className="grid gap-2">
                 <Label htmlFor="edit-prod-expired" className="text-slate-300">Expired Date</Label>
-                <Input id="edit-prod-expired" type="date" value={editForm.expired_date} onChange={(e) => setEditForm({ ...editForm, expired_date: e.target.value })} className="bg-slate-800 border-slate-700 text-white" />
+                <Input id="edit-prod-expired" type="date" value={editForm.expiredDate} onChange={(e) => setEditForm({ ...editForm, expiredDate: e.target.value })} className="bg-slate-800 border-slate-700 text-white" />
               </div>
 
               <div className="grid gap-2">
@@ -483,7 +483,7 @@ function AddProductDialog({
   wallets: Wallet[];
   categories: { id: string; name: string }[];
 }) {
-  const totalCost = (Number(formState.cost_price) || 0) * (Number(formState.stock) || 0);
+  const totalCost = (Number(formState.costPrice) || 0) * (Number(formState.stock) || 0);
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogTrigger render={<Button />}>Add Product</DialogTrigger>
@@ -537,29 +537,29 @@ function AddProductDialog({
 
           <div className="grid grid-cols-3 gap-3">
             <div className="grid gap-2">
-              <Label htmlFor="cost_price" className="text-slate-300">Cost Price</Label>
+              <Label htmlFor="costPrice" className="text-slate-300">Cost Price</Label>
               <Input
-                id="cost_price"
+                id="costPrice"
                 required
                 type="number"
                 min="0"
                 step="0.01"
-                value={formState.cost_price}
+                value={formState.costPrice}
                 className="bg-slate-800 border-slate-700 text-white"
-                onChange={(event) => onFormStateChange({ ...formState, cost_price: event.target.value })}
+                onChange={(event) => onFormStateChange({ ...formState, costPrice: event.target.value })}
                 placeholder="0.00"
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="selling_price" className="text-slate-300">Selling Price</Label>
+              <Label htmlFor="sellingPrice" className="text-slate-300">Selling Price</Label>
               <Input
-                id="selling_price"
+                id="sellingPrice"
                 required
                 type="number"
                 min="0"
                 step="0.01"
-                value={formState.selling_price}
-                onChange={(event) => onFormStateChange({ ...formState, selling_price: event.target.value })}
+                value={formState.sellingPrice}
+                onChange={(event) => onFormStateChange({ ...formState, sellingPrice: event.target.value })}
                 placeholder="0.00"
                 className="bg-slate-800 border-slate-700 text-white"
               />
@@ -581,12 +581,12 @@ function AddProductDialog({
           </div>
 
           <div className="grid gap-2">
-            <Label htmlFor="expired_date" className="text-slate-300">Expired Date</Label>
+            <Label htmlFor="expiredDate" className="text-slate-300">Expired Date</Label>
             <Input
-              id="expired_date"
+              id="expiredDate"
               type="date"
-              value={formState.expired_date}
-              onChange={(event) => onFormStateChange({ ...formState, expired_date: event.target.value })}
+              value={formState.expiredDate}
+              onChange={(event) => onFormStateChange({ ...formState, expiredDate: event.target.value })}
               className="bg-slate-800 border-slate-700 text-white"
             />
           </div>
@@ -667,7 +667,7 @@ function InTransitPanel({
   async function handleCancelOrder() {
     if (!cancelTarget) return;
     setIsCancelling(true);
-    const refundAmount = cancelTarget.cost_price * cancelTarget.stock;
+    const refundAmount = cancelTarget.costPrice * cancelTarget.stock;
     const selectedWallet = wallets.find((w) => w.id === refundWalletId);
 
     try {
@@ -695,7 +695,7 @@ function InTransitPanel({
   }
 
   const totalInTransit = products.reduce(
-    (sum, p) => sum + Number(p.cost_price) * p.stock,
+    (sum, p) => sum + Number(p.costPrice) * p.stock,
     0,
   );
 
@@ -712,7 +712,7 @@ function InTransitPanel({
       ) : (
         <>
           {products.map((product) => {
-            const value = Number(product.cost_price) * product.stock;
+            const value = Number(product.costPrice) * product.stock;
             return (
               <div
                 key={product.id}
@@ -734,7 +734,7 @@ function InTransitPanel({
                 <div className="flex items-center gap-2">
                   <div className="text-right mr-1">
                     <p className="text-sm font-semibold tracking-tight">{formatRupiah(value)}</p>
-                    <p className="text-[11px] text-slate-500">@ {formatRupiah(product.cost_price)}/unit</p>
+                    <p className="text-[11px] text-slate-500">@ {formatRupiah(product.costPrice)}/unit</p>
                   </div>
                   <button
                     type="button"
@@ -793,7 +793,7 @@ function InTransitPanel({
                 <p>
                   <span className="text-muted-foreground">Refund Amount:</span>{" "}
                   <span className="font-semibold text-red-400">
-                    {formatRupiah(Number(cancelTarget.cost_price) * cancelTarget.stock)}
+                    {formatRupiah(Number(cancelTarget.costPrice) * cancelTarget.stock)}
                   </span>
                 </p>
               </div>
@@ -928,14 +928,14 @@ function sortValue(product: Product, field: SortField): number | string {
   if (field === "stock") {
     return product.stock;
   }
-  if (field === "cost_price") {
-    return Number(product.cost_price);
+  if (field === "costPrice") {
+    return Number(product.costPrice);
   }
-  if (field === "selling_price") {
-    return Number(product.selling_price);
+  if (field === "sellingPrice") {
+    return Number(product.sellingPrice);
   }
-  if (field === "expired_date") {
-    return product.expired_date ?? "9999-12-31";
+  if (field === "expiredDate") {
+    return product.expiredDate ?? "9999-12-31";
   }
   if (field === "category") {
     return (product.category ?? "").toLowerCase();
@@ -963,7 +963,7 @@ function SortButton({
 }
 
 /* ---------- CSV Import Dialog ---------- */
-const CSV_TEMPLATE_HEADERS = ["name", "category", "cost_price", "selling_price", "stock", "status", "expired_date"];
+const CSV_TEMPLATE_HEADERS = ["name", "category", "costPrice", "sellingPrice", "stock", "status", "expiredDate"];
 const CSV_TEMPLATE_SAMPLE = [
   ["Sample Product", "Electronics", "50000", "75000", "10", "in_stock", "2027-01-01"],
   ["Incoming Goods", "Household", "25000", "40000", "20", "in_transit", ""],
@@ -1018,8 +1018,8 @@ function ImportCsvDialog({
         rows.forEach((row, idx) => {
           const lineNum = idx + 2; // 1-indexed + header
           if (!row.name?.trim()) errors.push(`Row ${lineNum}: "name" is required.`);
-          if (row.cost_price && isNaN(Number(row.cost_price))) errors.push(`Row ${lineNum}: "cost_price" must be a number.`);
-          if (row.selling_price && isNaN(Number(row.selling_price))) errors.push(`Row ${lineNum}: "selling_price" must be a number.`);
+          if (row.costPrice && isNaN(Number(row.costPrice))) errors.push(`Row ${lineNum}: "costPrice" must be a number.`);
+          if (row.sellingPrice && isNaN(Number(row.sellingPrice))) errors.push(`Row ${lineNum}: "sellingPrice" must be a number.`);
           if (row.stock && isNaN(Number(row.stock))) errors.push(`Row ${lineNum}: "stock" must be a number.`);
           if (row.status && !["in_stock", "in_transit"].includes(row.status.trim())) {
             errors.push(`Row ${lineNum}: "status" must be "in_stock" or "in_transit".`);
@@ -1044,11 +1044,11 @@ function ImportCsvDialog({
       await addProduct({
         name: row.name?.trim() ?? "",
         category: row.category?.trim() || null,
-        cost_price: Number(row.cost_price) || 0,
-        selling_price: Number(row.selling_price) || 0,
+        costPrice: Number(row.costPrice) || 0,
+        sellingPrice: Number(row.sellingPrice) || 0,
         stock: Number(row.stock) || 0,
         status: ["in_stock", "in_transit"].includes(row.status?.trim()) ? row.status.trim() : "in_stock",
-        expired_date: row.expired_date?.trim() || null,
+        expiredDate: row.expiredDate?.trim() || null,
         barcode: null,
       });
     }

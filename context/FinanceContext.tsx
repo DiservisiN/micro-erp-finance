@@ -22,13 +22,13 @@ type Transaction = {
   type: string;
   category?: string;
   amount: number;
-  admin_fee?: number | null;
+  adminFee?: number | null;
   date: string;
   notes?: string | null;
-  product_id?: string | null;
-  from_wallet_id?: string | null;
-  to_wallet_id?: string | null;
-  debt_id?: string | null;
+  productId?: string | null;
+  fromWalletId?: string | null;
+  toWalletId?: string | null;
+  debtId?: string | null;
 };
 
 type Product = {
@@ -36,11 +36,11 @@ type Product = {
   barcode: string | null;
   name: string;
   category: string | null;
-  cost_price: number;
-  selling_price: number;
+  costPrice: number;
+  sellingPrice: number;
   stock: number;
   status: string;
-  expired_date: string | null;
+  expiredDate: string | null;
 };
 
 type Investment = {
@@ -48,13 +48,13 @@ type Investment = {
   name: string;
   type: "gold" | "bibit";
   quantity: number;
-  average_buy_price: number;
-  current_price: number;
+  averageBuyPrice: number;
+  currentPrice: number;
 };
 
 type Debt = {
   id: string;
-  person_name: string;
+  personName: string;
   type: "receivable" | "payable";
   status: "unpaid" | "paid";
   amount: number;
@@ -121,11 +121,11 @@ const defaultState = {
       barcode: "-",
       name: "Kabel Data Type C - ROBOT",
       category: "DiservisiN",
-      cost_price: 10000,
-      selling_price: 15000,
+      costPrice: 10000,
+      sellingPrice: 15000,
       stock: 20,
       status: "in_stock",
-      expired_date: "2027-01-01",
+      expiredDate: "2027-01-01",
     },
   ],
   investments: [],
@@ -185,7 +185,13 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
         if (walletsError) {
           console.error("Failed to fetch wallets:", walletsError);
         } else if (walletsData) {
-          setWallets(walletsData as Wallet[]);
+          setWallets(walletsData.map((item: any) => ({
+            id: item.id,
+            name: item.name,
+            type: item.type,
+            walletType: item.wallet_type,
+            balance: Number(item.balance) || 0,
+          })) as Wallet[]);
         }
 
         // Fetch transactions from Supabase
@@ -197,7 +203,19 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
         if (transactionsError) {
           console.error("Failed to fetch transactions:", transactionsError);
         } else if (transactionsData) {
-          setTransactions(transactionsData as Transaction[]);
+          setTransactions(transactionsData.map((item: any) => ({
+            id: item.id,
+            type: item.type,
+            category: item.category,
+            amount: Number(item.amount) || 0,
+            adminFee: item.admin_fee,
+            date: item.date,
+            notes: item.notes,
+            productId: item.product_id,
+            fromWalletId: item.from_wallet_id,
+            toWalletId: item.to_wallet_id,
+            debtId: item.debt_id,
+          })) as Transaction[]);
         }
 
         // Fetch investments from Supabase
@@ -209,7 +227,14 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
         if (investmentsError) {
           console.error("Failed to fetch investments:", investmentsError);
         } else if (investmentsData) {
-          setInvestments(investmentsData as Investment[]);
+          setInvestments(investmentsData.map((item: any) => ({
+            id: item.id,
+            name: item.name,
+            type: item.type,
+            quantity: Number(item.quantity) || 0,
+            averageBuyPrice: Number(item.average_buy_price) || 0,
+            currentPrice: Number(item.current_price) || 0,
+          })));
         }
 
         // Fetch products from Supabase
@@ -221,7 +246,17 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
         if (productsError) {
           console.error("Failed to fetch products:", productsError);
         } else if (productsData) {
-          setProducts(productsData as Product[]);
+          setProducts(productsData.map((item: any) => ({
+            id: item.id,
+            barcode: item.barcode,
+            name: item.name,
+            category: item.category,
+            costPrice: Number(item.cost_price) || 0,
+            sellingPrice: Number(item.selling_price) || 0,
+            stock: Number(item.stock) || 0,
+            status: item.status,
+            expiredDate: item.expired_date,
+          })));
         }
 
         // Fetch debts from Supabase
@@ -233,7 +268,14 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
         if (debtsError) {
           console.error("Failed to fetch debts:", debtsError);
         } else if (debtsData) {
-          setDebts(debtsData as Debt[]);
+          setDebts(debtsData.map((item: any) => ({
+            id: item.id,
+            personName: item.person_name,
+            type: item.type,
+            status: item.status,
+            amount: Number(item.amount) || 0,
+            notes: item.notes,
+          })));
         }
 
         // Fetch categories from Supabase
@@ -245,7 +287,12 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
         if (categoriesError) {
           console.error("Failed to fetch categories:", categoriesError);
         } else if (categoriesData) {
-          setCategories(categoriesData as Category[]);
+          setCategories(categoriesData.map((item: any) => ({
+            id: item.id,
+            name: item.name,
+            type: item.type,
+            description: item.description,
+          })));
         }
 
         // Only keep goldPrice from localStorage (not migrated to Supabase)
@@ -333,11 +380,11 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
       type: "transfer",
       category: "Balance Transfer",
       amount: amount,
-      admin_fee: fee > 0 ? fee : null,
+      adminFee: fee > 0 ? fee : null,
       date: new Date().toISOString().split('T')[0],
       notes: fee > 0 ? `Transfer with ${formatRupiah(fee)} fee` : "Balance transfer",
-      from_wallet_id: fromWalletId,
-      to_wallet_id: toWalletId,
+      fromWalletId: fromWalletId,
+      toWalletId: toWalletId,
     };
 
     setTransactions(prev => [...prev, transferTransaction]);
@@ -349,10 +396,10 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
         type: "income",
         category: "Transfer Fee",
         amount: fee,
-        admin_fee: null,
+        adminFee: null,
         date: new Date().toISOString().split('T')[0],
         notes: `Transfer fee from ${fromWalletId} to ${toWalletId}`,
-        from_wallet_id: fromWalletId,
+        fromWalletId: fromWalletId,
       };
       setTransactions(prev => [...prev, feeTransaction]);
     }
@@ -394,11 +441,11 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
       type: "transfer",
       category: "Jasa Transfer Bank",
       amount: amount,
-      admin_fee: null,
+      adminFee: null,
       date: new Date().toISOString().split('T')[0],
       notes: `Transfer service: ${formatRupiah(amount)} from bank to customer`,
-      from_wallet_id: bankWalletId,
-      to_wallet_id: cashWalletId,
+      fromWalletId: bankWalletId,
+      toWalletId: cashWalletId,
     };
 
     setTransactions(prev => [...prev, transferTransaction]);
@@ -410,10 +457,10 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
         type: "income",
         category: "Fee Jasa Transfer",
         amount: adminFee,
-        admin_fee: null,
+        adminFee: null,
         date: new Date().toISOString().split('T')[0],
         notes: `Admin fee for transfer service`,
-        to_wallet_id: cashWalletId,
+        toWalletId: cashWalletId,
       };
       setTransactions(prev => [...prev, feeTransaction]);
     }
@@ -455,11 +502,11 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
       type: "transfer",
       category: "Jasa Tarik Tunai",
       amount: amount,
-      admin_fee: null,
+      adminFee: null,
       date: new Date().toISOString().split('T')[0],
       notes: `Cash withdrawal service: ${formatRupiah(amount)} given to customer`,
-      from_wallet_id: cashWalletId,
-      to_wallet_id: bankWalletId,
+      fromWalletId: cashWalletId,
+      toWalletId: bankWalletId,
     };
 
     setTransactions(prev => [...prev, transferTransaction]);
@@ -471,10 +518,10 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
         type: "income",
         category: "Fee Tarik Tunai",
         amount: adminFee,
-        admin_fee: null,
+        adminFee: null,
         date: new Date().toISOString().split('T')[0],
         notes: `Admin fee for cash withdrawal service`,
-        to_wallet_id: bankWalletId,
+        toWalletId: bankWalletId,
       };
       setTransactions(prev => [...prev, feeTransaction]);
     }
@@ -517,10 +564,10 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
       type: "transfer",
       category: "PPOB Cost",
       amount: cost,
-      admin_fee: null,
+      adminFee: null,
       date: new Date().toISOString().split('T')[0],
       notes: `PPOB cost for ${productName}`,
-      from_wallet_id: sourceWalletId,
+      fromWalletId: sourceWalletId,
     };
     setTransactions(prev => [...prev, costTransaction]);
 
@@ -531,10 +578,10 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
         type: "income",
         category: "Digital PPOB Profit",
         amount: profit,
-        admin_fee: null,
+        adminFee: null,
         date: new Date().toISOString().split('T')[0],
         notes: `Profit from PPOB: ${productName} (Cost: ${formatRupiah(cost)}, Sell: ${formatRupiah(sellingPrice)})`,
-        to_wallet_id: destWalletId,
+        toWalletId: destWalletId,
       };
       setTransactions(prev => [...prev, profitTransaction]);
     }
@@ -565,10 +612,10 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
       type: "income",
       category: "Electronic Service",
       amount: finalFee,
-      admin_fee: null,
+      adminFee: null,
       date: new Date().toISOString().split('T')[0],
       notes: note || `Repair payment for repair ID: ${repairId}`,
-      to_wallet_id: walletId,
+      toWalletId: walletId,
     };
     await addTransaction(incomeTransaction);
 
@@ -612,10 +659,10 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
       type: "income",
       category: "Sales",
       amount: totalAmount,
-      admin_fee: null,
+      adminFee: null,
       date: new Date().toISOString().split('T')[0],
       notes: `Sold ${quantity} units`,
-      product_id: productId,
+      productId: productId,
     };
     setTransactions(prev => [...prev, newTransaction]);
 
@@ -649,11 +696,11 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
       type: "transfer",
       category: "Inventory Restock",
       amount: totalCost,
-      admin_fee: null,
+      adminFee: null,
       date: new Date().toISOString().split('T')[0],
       notes: `Restocked ${quantity} units`,
-      product_id: productId,
-      from_wallet_id: walletId,
+      productId: productId,
+      fromWalletId: walletId,
     };
     setTransactions(prev => [...prev, newTransaction]);
 
@@ -724,17 +771,17 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
       // Apply wallet balance changes based on transaction type
       setWallets(prevWallets => {
         return prevWallets.map(w => {
-          if (transaction.type === "income" && transaction.to_wallet_id === w.id) {
+          if (transaction.type === "income" && transaction.toWalletId === w.id) {
             return { ...w, balance: w.balance + transaction.amount };
           }
-          if (transaction.type === "expense" && transaction.from_wallet_id === w.id) {
+          if (transaction.type === "expense" && transaction.fromWalletId === w.id) {
             return { ...w, balance: w.balance - transaction.amount };
           }
           if (transaction.type === "transfer") {
-            if (transaction.from_wallet_id === w.id) {
+            if (transaction.fromWalletId === w.id) {
               return { ...w, balance: w.balance - transaction.amount };
             }
-            if (transaction.to_wallet_id === w.id) {
+            if (transaction.toWalletId === w.id) {
               return { ...w, balance: w.balance + transaction.amount };
             }
           }
@@ -746,10 +793,23 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
     }
 
     try {
-      // Insert transaction into Supabase
+      // Insert transaction into Supabase with snake_case payload
+      const snakeCasePayload = {
+        id: transaction.id,
+        type: transaction.type,
+        category: transaction.category,
+        amount: transaction.amount,
+        admin_fee: transaction.adminFee,
+        date: transaction.date,
+        notes: transaction.notes,
+        product_id: transaction.productId,
+        from_wallet_id: transaction.fromWalletId,
+        to_wallet_id: transaction.toWalletId,
+        debt_id: transaction.debtId,
+      };
       const { error } = await supabase
         .from("transactions")
-        .insert(transaction);
+        .insert(snakeCasePayload);
 
       if (error) {
         console.error("Failed to insert transaction:", error);
@@ -759,23 +819,23 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
       // Apply wallet balance changes based on transaction type
       setWallets(prevWallets => {
         return prevWallets.map(w => {
-          if (transaction.type === "income" && transaction.to_wallet_id === w.id) {
+          if (transaction.type === "income" && transaction.toWalletId === w.id) {
             const newBalance = w.balance + transaction.amount;
             syncWalletBalance(w.id, newBalance);
             return { ...w, balance: newBalance };
           }
-          if (transaction.type === "expense" && transaction.from_wallet_id === w.id) {
+          if (transaction.type === "expense" && transaction.fromWalletId === w.id) {
             const newBalance = w.balance - transaction.amount;
             syncWalletBalance(w.id, newBalance);
             return { ...w, balance: newBalance };
           }
           if (transaction.type === "transfer") {
-            if (transaction.from_wallet_id === w.id) {
+            if (transaction.fromWalletId === w.id) {
               const newBalance = w.balance - transaction.amount;
               syncWalletBalance(w.id, newBalance);
               return { ...w, balance: newBalance };
             }
-            if (transaction.to_wallet_id === w.id) {
+            if (transaction.toWalletId === w.id) {
               const newBalance = w.balance + transaction.amount;
               syncWalletBalance(w.id, newBalance);
               return { ...w, balance: newBalance };
@@ -804,17 +864,17 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
       // Reverse the wallet balance changes
       setWallets(prevWallets => {
         return prevWallets.map(w => {
-          if (tx.type === "income" && tx.to_wallet_id === w.id) {
+          if (tx.type === "income" && tx.toWalletId === w.id) {
             return { ...w, balance: w.balance - tx.amount };
           }
-          if (tx.type === "expense" && tx.from_wallet_id === w.id) {
+          if (tx.type === "expense" && tx.fromWalletId === w.id) {
             return { ...w, balance: w.balance + tx.amount };
           }
           if (tx.type === "transfer") {
-            if (tx.from_wallet_id === w.id) {
+            if (tx.fromWalletId === w.id) {
               return { ...w, balance: w.balance + tx.amount };
             }
-            if (tx.to_wallet_id === w.id) {
+            if (tx.toWalletId === w.id) {
               return { ...w, balance: w.balance - tx.amount };
             }
           }
@@ -840,23 +900,23 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
       // Reverse the wallet balance changes
       setWallets(prevWallets => {
         return prevWallets.map(w => {
-          if (tx.type === "income" && tx.to_wallet_id === w.id) {
+          if (tx.type === "income" && tx.toWalletId === w.id) {
             const newBalance = w.balance - tx.amount;
             syncWalletBalance(w.id, newBalance);
             return { ...w, balance: newBalance };
           }
-          if (tx.type === "expense" && tx.from_wallet_id === w.id) {
+          if (tx.type === "expense" && tx.fromWalletId === w.id) {
             const newBalance = w.balance + tx.amount;
             syncWalletBalance(w.id, newBalance);
             return { ...w, balance: newBalance };
           }
           if (tx.type === "transfer") {
-            if (tx.from_wallet_id === w.id) {
+            if (tx.fromWalletId === w.id) {
               const newBalance = w.balance + tx.amount;
               syncWalletBalance(w.id, newBalance);
               return { ...w, balance: newBalance };
             }
-            if (tx.to_wallet_id === w.id) {
+            if (tx.toWalletId === w.id) {
               const newBalance = w.balance - tx.amount;
               syncWalletBalance(w.id, newBalance);
               return { ...w, balance: newBalance };
@@ -885,17 +945,17 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
       // Step 1: Reverse the old transaction's wallet balance changes
       setWallets(prevWallets => {
         return prevWallets.map(w => {
-          if (oldTx.type === "income" && oldTx.to_wallet_id === w.id) {
+          if (oldTx.type === "income" && oldTx.toWalletId === w.id) {
             return { ...w, balance: w.balance - oldTx.amount };
           }
-          if (oldTx.type === "expense" && oldTx.from_wallet_id === w.id) {
+          if (oldTx.type === "expense" && oldTx.fromWalletId === w.id) {
             return { ...w, balance: w.balance + oldTx.amount };
           }
           if (oldTx.type === "transfer") {
-            if (oldTx.from_wallet_id === w.id) {
+            if (oldTx.fromWalletId === w.id) {
               return { ...w, balance: w.balance + oldTx.amount };
             }
-            if (oldTx.to_wallet_id === w.id) {
+            if (oldTx.toWalletId === w.id) {
               return { ...w, balance: w.balance - oldTx.amount };
             }
           }
@@ -907,17 +967,17 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
       const newTx = { ...oldTx, ...updatedData };
       setWallets(prevWallets => {
         return prevWallets.map(w => {
-          if (newTx.type === "income" && newTx.to_wallet_id === w.id) {
+          if (newTx.type === "income" && newTx.toWalletId === w.id) {
             return { ...w, balance: w.balance + newTx.amount };
           }
-          if (newTx.type === "expense" && newTx.from_wallet_id === w.id) {
+          if (newTx.type === "expense" && newTx.fromWalletId === w.id) {
             return { ...w, balance: w.balance - newTx.amount };
           }
           if (newTx.type === "transfer") {
-            if (newTx.from_wallet_id === w.id) {
+            if (newTx.fromWalletId === w.id) {
               return { ...w, balance: w.balance - newTx.amount };
             }
-            if (newTx.to_wallet_id === w.id) {
+            if (newTx.toWalletId === w.id) {
               return { ...w, balance: w.balance + newTx.amount };
             }
           }
@@ -931,10 +991,22 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
     }
 
     try {
-      // Update in Supabase
+      // Update in Supabase with snake_case payload
+      const snakeCasePayload: any = {};
+      if (updatedData.type !== undefined) snakeCasePayload.type = updatedData.type;
+      if (updatedData.category !== undefined) snakeCasePayload.category = updatedData.category;
+      if (updatedData.amount !== undefined) snakeCasePayload.amount = updatedData.amount;
+      if (updatedData.adminFee !== undefined) snakeCasePayload.admin_fee = updatedData.adminFee;
+      if (updatedData.date !== undefined) snakeCasePayload.date = updatedData.date;
+      if (updatedData.notes !== undefined) snakeCasePayload.notes = updatedData.notes;
+      if (updatedData.productId !== undefined) snakeCasePayload.product_id = updatedData.productId;
+      if (updatedData.fromWalletId !== undefined) snakeCasePayload.from_wallet_id = updatedData.fromWalletId;
+      if (updatedData.toWalletId !== undefined) snakeCasePayload.to_wallet_id = updatedData.toWalletId;
+      if (updatedData.debtId !== undefined) snakeCasePayload.debt_id = updatedData.debtId;
+      
       const { error } = await supabase
         .from("transactions")
-        .update(updatedData)
+        .update(snakeCasePayload)
         .eq("id", id);
 
       if (error) {
@@ -945,23 +1017,23 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
       // Step 1: Reverse the old transaction's wallet balance changes
       setWallets(prevWallets => {
         return prevWallets.map(w => {
-          if (oldTx.type === "income" && oldTx.to_wallet_id === w.id) {
+          if (oldTx.type === "income" && oldTx.toWalletId === w.id) {
             const newBalance = w.balance - oldTx.amount;
             syncWalletBalance(w.id, newBalance);
             return { ...w, balance: newBalance };
           }
-          if (oldTx.type === "expense" && oldTx.from_wallet_id === w.id) {
+          if (oldTx.type === "expense" && oldTx.fromWalletId === w.id) {
             const newBalance = w.balance + oldTx.amount;
             syncWalletBalance(w.id, newBalance);
             return { ...w, balance: newBalance };
           }
           if (oldTx.type === "transfer") {
-            if (oldTx.from_wallet_id === w.id) {
+            if (oldTx.fromWalletId === w.id) {
               const newBalance = w.balance + oldTx.amount;
               syncWalletBalance(w.id, newBalance);
               return { ...w, balance: newBalance };
             }
-            if (oldTx.to_wallet_id === w.id) {
+            if (oldTx.toWalletId === w.id) {
               const newBalance = w.balance - oldTx.amount;
               syncWalletBalance(w.id, newBalance);
               return { ...w, balance: newBalance };
@@ -975,23 +1047,23 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
       const newTx = { ...oldTx, ...updatedData };
       setWallets(prevWallets => {
         return prevWallets.map(w => {
-          if (newTx.type === "income" && newTx.to_wallet_id === w.id) {
+          if (newTx.type === "income" && newTx.toWalletId === w.id) {
             const newBalance = w.balance + newTx.amount;
             syncWalletBalance(w.id, newBalance);
             return { ...w, balance: newBalance };
           }
-          if (newTx.type === "expense" && newTx.from_wallet_id === w.id) {
+          if (newTx.type === "expense" && newTx.fromWalletId === w.id) {
             const newBalance = w.balance - newTx.amount;
             syncWalletBalance(w.id, newBalance);
             return { ...w, balance: newBalance };
           }
           if (newTx.type === "transfer") {
-            if (newTx.from_wallet_id === w.id) {
+            if (newTx.fromWalletId === w.id) {
               const newBalance = w.balance - newTx.amount;
               syncWalletBalance(w.id, newBalance);
               return { ...w, balance: newBalance };
             }
-            if (newTx.to_wallet_id === w.id) {
+            if (newTx.toWalletId === w.id) {
               const newBalance = w.balance + newTx.amount;
               syncWalletBalance(w.id, newBalance);
               return { ...w, balance: newBalance };
@@ -1020,9 +1092,20 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
     }
 
     try {
+      // Build snake_case payload for Supabase
+      const payload = {
+        barcode: newProduct.barcode,
+        name: newProduct.name,
+        category: newProduct.category,
+        cost_price: newProduct.costPrice,
+        selling_price: newProduct.sellingPrice,
+        stock: newProduct.stock,
+        status: newProduct.status,
+        expired_date: newProduct.expiredDate,
+      };
       const { error } = await supabase
         .from("products")
-        .insert(newProduct);
+        .insert(payload);
 
       if (error) {
         console.error("Failed to add product:", error);
@@ -1046,9 +1129,20 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
     }
 
     try {
+      // Build snake_case payload for Supabase
+      const payload: any = {};
+      if (updates.barcode !== undefined) payload.barcode = updates.barcode;
+      if (updates.name !== undefined) payload.name = updates.name;
+      if (updates.category !== undefined) payload.category = updates.category;
+      if (updates.costPrice !== undefined) payload.cost_price = updates.costPrice;
+      if (updates.sellingPrice !== undefined) payload.selling_price = updates.sellingPrice;
+      if (updates.stock !== undefined) payload.stock = updates.stock;
+      if (updates.status !== undefined) payload.status = updates.status;
+      if (updates.expiredDate !== undefined) payload.expired_date = updates.expiredDate;
+
       const { error } = await supabase
         .from("products")
-        .update(updates)
+        .update(payload)
         .eq("id", productId);
 
       if (error) {
@@ -1075,9 +1169,17 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
     }
 
     try {
+      // Build snake_case payload for Supabase
+      const payload: any = {};
+      if (updatedData.name !== undefined) payload.name = updatedData.name;
+      if (updatedData.type !== undefined) payload.type = updatedData.type;
+      if (updatedData.quantity !== undefined) payload.quantity = updatedData.quantity;
+      if (updatedData.averageBuyPrice !== undefined) payload.average_buy_price = updatedData.averageBuyPrice;
+      if (updatedData.currentPrice !== undefined) payload.current_price = updatedData.currentPrice;
+
       const { error } = await supabase
         .from("investments")
-        .update(updatedData)
+        .update(payload)
         .eq("id", id);
 
       if (error) {
@@ -1134,9 +1236,17 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
     }
 
     try {
+      // Build snake_case payload for Supabase
+      const payload = {
+        person_name: newDebt.personName,
+        type: newDebt.type,
+        amount: newDebt.amount,
+        status: newDebt.status,
+        notes: newDebt.notes,
+      };
       const { error } = await supabase
         .from("debts")
-        .insert(newDebt);
+        .insert(payload);
 
       if (error) {
         console.error("Failed to add debt:", error);
@@ -1216,11 +1326,11 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
         type: "income",
         category: "Debt Settlement / Bayar Piutang",
         amount: debt.amount,
-        admin_fee: null,
+        adminFee: null,
         date: new Date().toISOString().split('T')[0],
-        notes: `Piutang settled: ${debt.person_name}${debt.notes ? ` - ${debt.notes}` : ""}`,
-        to_wallet_id: walletId,
-        debt_id: debtId,
+        notes: `Piutang settled: ${debt.personName}${debt.notes ? ` - ${debt.notes}` : ""}`,
+        toWalletId: walletId,
+        debtId: debtId,
       };
       await addTransaction(settleTx);
     } else {
@@ -1230,17 +1340,17 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
         type: "expense",
         category: "Debt Payment / Bayar Hutang",
         amount: debt.amount,
-        admin_fee: null,
+        adminFee: null,
         date: new Date().toISOString().split('T')[0],
-        notes: `Hutang paid: ${debt.person_name}${debt.notes ? ` - ${debt.notes}` : ""}`,
-        from_wallet_id: walletId,
-        debt_id: debtId,
+        notes: `Hutang paid: ${debt.personName}${debt.notes ? ` - ${debt.notes}` : ""}`,
+        fromWalletId: walletId,
+        debtId: debtId,
       };
       await addTransaction(settleTx);
     }
   };
 
-  // Category CRUD operations
+// ... (rest of the code remains the same)
   const addCategory = async (category: Omit<Category, "id">) => {
     const newCategory: Category = {
       ...category,
@@ -1254,9 +1364,15 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
     }
 
     try {
+      // Build snake_case payload for Supabase
+      const payload = {
+        name: newCategory.name,
+        type: newCategory.type,
+        description: newCategory.description,
+      };
       const { error } = await supabase
         .from("categories")
-        .insert(newCategory);
+        .insert(payload);
 
       if (error) {
         console.error("Failed to add category:", error);
@@ -1305,9 +1421,15 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
     }
 
     try {
+      // Build snake_case payload for Supabase
+      const payload: any = {};
+      if (updates.name !== undefined) payload.name = updates.name;
+      if (updates.type !== undefined) payload.type = updates.type;
+      if (updates.description !== undefined) payload.description = updates.description;
+
       const { error } = await supabase
         .from("categories")
-        .update(updates)
+        .update(payload)
         .eq("id", id);
 
       if (error) {

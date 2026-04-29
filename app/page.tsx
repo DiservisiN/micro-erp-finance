@@ -64,7 +64,7 @@ type TransactionRow = {
   id: string;
   type: string;
   amount: number | string;
-  admin_fee?: number | string | null;
+  adminFee?: number | string | null;
   date: string;
   notes?: string | null;
   product_id?: string | null;
@@ -94,7 +94,7 @@ export default function Home() {
       const txMonth = d.getMonth();
       const txYear = d.getFullYear();
       const amount = safeNumber(tx.amount);
-      const adminFee = safeNumber(tx.admin_fee ?? 0);
+      const adminFee = safeNumber(tx.adminFee ?? 0);
       const isCurrentMonth = txMonth === currentMonth && txYear === currentYear;
 
       if (tx.type === "income") {
@@ -120,35 +120,29 @@ export default function Home() {
   }, [transactions]);
 
   /* ---------- computed values ---------- */
-  // Ultimate safe number parser for Supabase data
-  const getNum = (val: any) => {
-    const parsed = Number(val);
-    return isNaN(parsed) ? 0 : parsed;
-  };
-
-  const totalWalletBalance = wallets.reduce((sum, w) => sum + getNum(w.balance), 0);
+  const totalWalletBalance = wallets.reduce((sum, w) => sum + (w.balance || 0), 0);
 
   const totalInvestmentValue = investments.reduce((sum, inv) => {
-    const qty = getNum((inv as any).quantity) || 1;
-    const price = getNum((inv as any).current_price) || getNum((inv as any).currentPrice) || 0;
+    const qty = inv.quantity || 1;
+    const price = inv.currentPrice || 0;
     return sum + (qty * price);
   }, 0);
 
   const totalInventoryValue = products
     .filter((product) => (product.status ?? "in_stock") === "in_stock")
     .reduce((sum, item) => {
-      const stock = getNum(item.stock);
-      const price = getNum(item.cost_price) || getNum((item as any).costPrice) || 0;
+      const stock = item.stock || 0;
+      const price = item.costPrice || 0;
       return sum + (stock * price);
     }, 0);
 
   const totalReceivables = debts
     .filter(d => d.type === 'receivable' && d.status === 'unpaid')
-    .reduce((sum, d) => sum + getNum(d.amount), 0);
+    .reduce((sum, d) => sum + (d.amount || 0), 0);
 
   const totalLiabilities = debts
     .filter(d => d.type === 'payable' && d.status === 'unpaid')
-    .reduce((sum, d) => sum + getNum(d.amount), 0);
+    .reduce((sum, d) => sum + (d.amount || 0), 0);
 
   const totalAssets = totalWalletBalance + totalInvestmentValue + totalInventoryValue + totalReceivables;
   const netWorth = totalAssets - totalLiabilities;
@@ -196,7 +190,7 @@ export default function Home() {
       const entry = monthMap.get(key) ?? { income: 0, expenses: 0 };
 
       const amount = safeNumber(tx.amount);
-      const adminFee = safeNumber(tx.admin_fee ?? 0);
+      const adminFee = safeNumber(tx.adminFee ?? 0);
 
       if (tx.type === "income") {
         entry.income += amount;

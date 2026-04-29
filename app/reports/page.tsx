@@ -30,7 +30,7 @@ type Transaction = {
   type: string;
   category?: string;
   amount: number;
-  admin_fee?: number | null;
+  adminFee?: number | null;
   date: string;
   notes?: string | null;
   product_id?: string | null;
@@ -91,7 +91,7 @@ function TransactionTable({
               <TableCell className={`font-mono font-semibold ${tx.type === 'expense' ? 'text-red-400' : tx.type === 'income' ? 'text-emerald-400' : 'text-blue-400'}`}>
                 {tx.type === 'expense' ? '- ' : tx.type === 'income' ? '+ ' : ''}{formatRupiah(tx.amount)}
               </TableCell>
-              <TableCell className="text-slate-300">{tx.admin_fee ? formatRupiah(tx.admin_fee) : "-"}</TableCell>
+              <TableCell className="text-slate-300">{tx.adminFee ? formatRupiah(tx.adminFee) : "-"}</TableCell>
               <TableCell className="max-w-xs truncate text-slate-300" title={tx.notes || ""}>
                 {tx.notes || "-"}
               </TableCell>
@@ -193,7 +193,7 @@ export default function ReportsPage() {
   function openEdit(tx: Transaction) {
     setEditTarget(tx);
     setEditAmount(String(tx.amount));
-    setEditAdminFee(String(tx.admin_fee || 0));
+    setEditAdminFee(String(tx.adminFee || 0));
     setEditNotes(tx.notes || "");
     setIsEditOpen(true);
   }
@@ -202,7 +202,7 @@ export default function ReportsPage() {
     if (!editTarget) return;
     await updateTransaction(editTarget.id, {
       amount: Number(editAmount),
-      admin_fee: Number(editAdminFee),
+      adminFee: Number(editAdminFee),
       notes: editNotes.trim(),
     });
     toast.success(reportsLabels.messages.updateSuccess);
@@ -245,7 +245,7 @@ export default function ReportsPage() {
       tx.type,
       tx.category || "-",
       tx.amount.toString(),
-      (tx.admin_fee || 0).toString(),
+      (tx.adminFee || 0).toString(),
       `"${(tx.notes || "").replace(/"/g, '""')}"`,
     ]);
 
@@ -409,15 +409,15 @@ export default function ReportsPage() {
                   <span>Subtotal</span>
                   <span>{formatRupiah(selectedReceipt.amount)}</span>
                 </div>
-                {(selectedReceipt.admin_fee ?? 0) > 0 && (
+                {(selectedReceipt.adminFee ?? 0) > 0 && (
                   <div className="flex justify-between items-center text-xs mt-1">
                     <span>Admin Fee</span>
-                    <span>{formatRupiah(selectedReceipt.admin_fee!)}</span>
+                    <span>{formatRupiah(selectedReceipt.adminFee!)}</span>
                   </div>
                 )}
                 <div className="border-t border-dashed border-black mt-2 pt-2 flex justify-between items-center font-bold">
                   <span>TOTAL</span>
-                  <span>{formatRupiah(selectedReceipt.amount + (selectedReceipt.admin_fee || 0))}</span>
+                  <span>{formatRupiah(selectedReceipt.amount + (selectedReceipt.adminFee || 0))}</span>
                 </div>
                 <div className="text-center text-xs mt-6">
                   Thank you for your business!

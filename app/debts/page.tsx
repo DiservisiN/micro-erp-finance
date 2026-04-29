@@ -42,7 +42,7 @@ type DebtType = "receivable" | "payable";
 
 type Debt = {
   id: string;
-  person_name: string;
+  personName: string;
   type: DebtType;
   amount: number;
   notes: string | null;
@@ -83,7 +83,7 @@ export default function DebtsPage() {
     setIsSaving(true);
 
     await addDebt({
-      person_name: personName.trim(),
+      personName: personName.trim(),
       type,
       amount: Number(amount || "0"),
       notes: notes.trim() || null,
@@ -124,7 +124,7 @@ export default function DebtsPage() {
 
   function openEditDebt(debt: Debt) {
     setEditTarget(debt);
-    setEditPerson(debt.person_name);
+    setEditPerson(debt.personName);
     setEditAmount(String(debt.amount));
     setEditNotes(debt.notes || "");
     setIsEditOpen(true);
@@ -259,7 +259,7 @@ export default function DebtsPage() {
               <div className="rounded-lg border p-4 space-y-2">
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Person</span>
-                  <span className="font-medium">{settleTarget.person_name}</span>
+                  <span className="font-medium">{settleTarget.personName}</span>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Type</span>
@@ -385,7 +385,7 @@ function DebtTable({
         ) : (
           rows.map((item) => (
             <TableRow key={item.id}>
-              <TableCell className="font-medium">{item.person_name}</TableCell>
+              <TableCell className="font-medium">{item.personName}</TableCell>
               <TableCell className="font-mono">{formatRupiah(item.amount)}</TableCell>
               <TableCell className="text-muted-foreground">{item.notes ?? "-"}</TableCell>
               <TableCell>

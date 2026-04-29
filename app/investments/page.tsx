@@ -34,8 +34,8 @@ type Investment = {
   name: string;
   type: InvestmentType;
   quantity: number | string;
-  average_buy_price: number | string;
-  current_price: number | string;
+  averageBuyPrice: number | string;
+  currentPrice: number | string;
 };
 
 type Wallet = {
@@ -67,8 +67,8 @@ export default function InvestmentsPage() {
       setEditName(editingInvestment.name || "");
       setEditType(editingInvestment.type || "gold");
       setEditQuantity(String(editingInvestment.quantity || ""));
-      setEditAverageBuyPrice(String(editingInvestment.average_buy_price || ""));
-      setEditCurrentPrice(String(editingInvestment.current_price || ""));
+      setEditAverageBuyPrice(String(editingInvestment.averageBuyPrice || ""));
+      setEditCurrentPrice(String(editingInvestment.currentPrice || ""));
     } else {
       setEditName("");
       setEditType("gold");
@@ -118,7 +118,14 @@ export default function InvestmentsPage() {
       return;
     }
 
-    setInvestments((investmentsResult.data ?? []) as Investment[]);
+    setInvestments((investmentsResult.data ?? []).map((item: any) => ({
+      id: item.id,
+      name: item.name,
+      type: item.type,
+      quantity: Number(item.quantity) || 0,
+      averageBuyPrice: Number(item.average_buy_price) || 0,
+      currentPrice: Number(item.current_price) || 0,
+    })) as Investment[]);
     setErrorMessage(null);
     setIsLoading(false);
   }, [supabase]);
@@ -136,8 +143,8 @@ export default function InvestmentsPage() {
       name: editName.trim(),
       type: editType,
       quantity: Number(editQuantity || "0"),
-      average_buy_price: Number(editAverageBuyPrice || "0"),
-      current_price: Number(editCurrentPrice || "0"),
+      averageBuyPrice: Number(editAverageBuyPrice || "0"),
+      currentPrice: Number(editCurrentPrice || "0"),
     };
 
     // Update in context (Supabase + local state)
@@ -216,7 +223,7 @@ export default function InvestmentsPage() {
 
   const totalGoldValue = investments
     .filter((item) => item.type === "gold")
-    .reduce((sum, item) => sum + safeNumber(item.quantity) * safeNumber(item.current_price), 0);
+    .reduce((sum, item) => sum + safeNumber(item.quantity) * safeNumber(item.currentPrice), 0);
 
   const totalWealth = totalLiquidCash + totalGoldValue;
   const nishab = 85 * safeNumber(goldPrice);
@@ -395,8 +402,8 @@ export default function InvestmentsPage() {
 
             {investments.map((item) => {
               const qty = safeNumber(item.quantity);
-              const buy = safeNumber(item.average_buy_price);
-              const current = safeNumber(item.current_price);
+              const buy = safeNumber(item.averageBuyPrice);
+              const current = safeNumber(item.currentPrice);
               const totalValue = qty * current;
               const totalCost = qty * buy;
               const gainLoss = totalValue - totalCost;

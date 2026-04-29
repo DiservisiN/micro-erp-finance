@@ -39,13 +39,13 @@ type Transaction = {
   type: string;
   category?: string;
   amount: number;
-  admin_fee?: number | null;
+  adminFee?: number | null;
   date: string;
   notes?: string | null;
-  product_id?: string | null;
-  from_wallet_id?: string | null;
-  to_wallet_id?: string | null;
-  debt_id?: string | null;
+  productId?: string | null;
+  fromWalletId?: string | null;
+  toWalletId?: string | null;
+  debtId?: string | null;
 };
 
 type TransactionType =
@@ -69,7 +69,7 @@ type Wallet = {
 type Product = {
   id: string;
   name: string;
-  selling_price: number;
+  sellingPrice: number;
   stock: number;
   status?: string;
 };
@@ -209,18 +209,18 @@ function TransactionsForm({ onSuccess, editingTransaction }: { onSuccess: () => 
         txType = "Kasbon (Employee Loan)";
       } else if (
         cat === "sales" ||
-        editingTransaction.product_id
+        editingTransaction.productId
       ) {
         txType = "Physical Sale";
       }
 
       setTransactionType(txType);
       setNotes(editingTransaction.notes || "");
-      setAdminFee(editingTransaction.admin_fee?.toString() || "0");
+      setAdminFee(editingTransaction.adminFee?.toString() || "0");
 
       // Populate wallet IDs correctly for the determined type
-      setDestinationWalletId(editingTransaction.to_wallet_id || "");
-      setSourceWalletId(editingTransaction.from_wallet_id || "");
+      setDestinationWalletId(editingTransaction.toWalletId || "");
+      setSourceWalletId(editingTransaction.fromWalletId || "");
 
       // Populate the correct amount/input fields based on the resolved transaction type
       // Reset all amount-related fields first to avoid stale values
@@ -243,9 +243,9 @@ function TransactionsForm({ onSuccess, editingTransaction }: { onSuccess: () => 
       switch (txType) {
         case "Electronic Service":
           setServiceFee(editingTransaction.amount?.toString() || "");
-          setDestinationWalletId(editingTransaction.to_wallet_id || "");
-          if (editingTransaction.product_id) {
-            setSparepartProductId(editingTransaction.product_id);
+          setDestinationWalletId(editingTransaction.toWalletId || "");
+          if (editingTransaction.productId) {
+            setSparepartProductId(editingTransaction.productId);
           }
           break;
 
@@ -266,33 +266,33 @@ function TransactionsForm({ onSuccess, editingTransaction }: { onSuccess: () => 
           if (ppobNameMatch) {
             setPpobProductName(ppobNameMatch[1].trim());
           }
-          setSourceWalletId(editingTransaction.from_wallet_id || "");
-          setDestinationWalletId(editingTransaction.to_wallet_id || "");
+          setSourceWalletId(editingTransaction.fromWalletId || "");
+          setDestinationWalletId(editingTransaction.toWalletId || "");
           break;
 
         case "Money Transfer":
           setAmount(editingTransaction.amount?.toString() || "");
-          setSourceWalletId(editingTransaction.from_wallet_id || "");
-          setDestinationWalletId(editingTransaction.to_wallet_id || "");
-          setAdminFee(editingTransaction.admin_fee?.toString() || "0");
+          setSourceWalletId(editingTransaction.fromWalletId || "");
+          setDestinationWalletId(editingTransaction.toWalletId || "");
+          setAdminFee(editingTransaction.adminFee?.toString() || "0");
           break;
 
         case "Cash Withdrawal":
           setAmount(editingTransaction.amount?.toString() || "");
-          setSourceWalletId(editingTransaction.from_wallet_id || "");
-          setDestinationWalletId(editingTransaction.to_wallet_id || "");
-          setAdminFee(editingTransaction.admin_fee?.toString() || "0");
+          setSourceWalletId(editingTransaction.fromWalletId || "");
+          setDestinationWalletId(editingTransaction.toWalletId || "");
+          setAdminFee(editingTransaction.adminFee?.toString() || "0");
           break;
 
         case "Balance Transfer":
           setAmount(editingTransaction.amount?.toString() || "");
-          setSourceWalletId(editingTransaction.from_wallet_id || "");
-          setDestinationWalletId(editingTransaction.to_wallet_id || "");
+          setSourceWalletId(editingTransaction.fromWalletId || "");
+          setDestinationWalletId(editingTransaction.toWalletId || "");
           break;
 
         case "Affiliate / Passive Income":
           setCommissionAmount(editingTransaction.amount?.toString() || "");
-          setDestinationWalletId(editingTransaction.to_wallet_id || "");
+          setDestinationWalletId(editingTransaction.toWalletId || "");
           // Try to extract platform name from notes
           const platformMatch = (editingTransaction.notes || "").match(/(?:Commission from|from)\s+(.+)/i);
           if (platformMatch) {
@@ -302,7 +302,7 @@ function TransactionsForm({ onSuccess, editingTransaction }: { onSuccess: () => 
 
         case "Internet Sharing (BIZNET)":
           setInternetAmount(editingTransaction.amount?.toString() || "");
-          setDestinationWalletId(editingTransaction.to_wallet_id || "");
+          setDestinationWalletId(editingTransaction.toWalletId || "");
           // Try to extract customer name from notes
           const internetCustomerMatch = (editingTransaction.notes || "").match(/(?:payment from|from)\s+(.+)/i);
           if (internetCustomerMatch) {
@@ -312,7 +312,7 @@ function TransactionsForm({ onSuccess, editingTransaction }: { onSuccess: () => 
 
         case "Kasbon (Employee Loan)":
           setAmount(editingTransaction.amount?.toString() || "");
-          setSourceWalletId(editingTransaction.from_wallet_id || "");
+          setSourceWalletId(editingTransaction.fromWalletId || "");
           // Try to extract employee name from notes
           const kasbonNameMatch = (editingTransaction.notes || "").match(/^([^-]+)/);
           if (kasbonNameMatch) {
@@ -322,8 +322,8 @@ function TransactionsForm({ onSuccess, editingTransaction }: { onSuccess: () => 
 
         case "Physical Sale":
         default:
-          setProductId(editingTransaction.product_id || "");
-          setDestinationWalletId(editingTransaction.to_wallet_id || "");
+          setProductId(editingTransaction.productId || "");
+          setDestinationWalletId(editingTransaction.toWalletId || "");
           setAmount(editingTransaction.amount?.toString() || "");
           break;
       }
@@ -397,15 +397,15 @@ function TransactionsForm({ onSuccess, editingTransaction }: { onSuccess: () => 
         return fail("Product is still in transit and cannot be sold yet.");
       }
 
-      const saleAmount = selectedProduct.selling_price * parsedQuantity;
+      const saleAmount = selectedProduct.sellingPrice * parsedQuantity;
 
       // Use handleProductSale for lunas payment, or addDebt for kasbon
       if (paymentMethod === "lunas" && selectedDestinationWallet) {
-        handleProductSale(selectedProduct.id, parsedQuantity, selectedProduct.selling_price, selectedDestinationWallet.id);
+        handleProductSale(selectedProduct.id, parsedQuantity, selectedProduct.sellingPrice, selectedDestinationWallet.id);
       } else {
         // Add as debt for kasbon
         addDebt({
-          person_name: personName.trim(),
+          personName: personName.trim(),
           type: "receivable",
           amount: saleAmount,
           notes: `Kasbon: Physical sale (${parsedQuantity}x ${selectedProduct.name})`,
@@ -430,7 +430,7 @@ function TransactionsForm({ onSuccess, editingTransaction }: { onSuccess: () => 
         // Just deduct from source and record as debt
         handleBankTransferService(selectedSourceWallet.id, "kasbon", parsedAmount, parsedAdminFee);
         addDebt({
-          person_name: personName.trim(),
+          personName: personName.trim(),
           type: "receivable",
           amount: parsedAmount + parsedAdminFee,
           notes: `Kasbon: Money Transfer`,
@@ -455,7 +455,7 @@ function TransactionsForm({ onSuccess, editingTransaction }: { onSuccess: () => 
         // Deduct from source and record as debt
         handleCashWithdrawalService(selectedSourceWallet.id, "kasbon", parsedAmount, parsedAdminFee);
         addDebt({
-          person_name: personName.trim(),
+          personName: personName.trim(),
           type: "receivable",
           amount: parsedAmount + parsedAdminFee,
           notes: `Kasbon: Cash Withdrawal`,
@@ -491,7 +491,7 @@ function TransactionsForm({ onSuccess, editingTransaction }: { onSuccess: () => 
         }
         // Update product stock using editProduct from context
         editProduct(selectedSparepart.id, { stock: selectedSparepart.stock - 1 });
-        totalIncome += selectedSparepart.selling_price;
+        totalIncome += selectedSparepart.sellingPrice;
       }
 
       // Handle wallet updates and debt recording
@@ -501,7 +501,7 @@ function TransactionsForm({ onSuccess, editingTransaction }: { onSuccess: () => 
       } else {
         // Record as debt
         addDebt({
-          person_name: personName.trim() || "Customer",
+          personName: personName.trim() || "Customer",
           type: "receivable",
           amount: totalIncome,
           notes: `Electronic service fee` + (selectedSparepart ? ` + sparepart (${selectedSparepart.name})` : ""),
@@ -541,7 +541,7 @@ function TransactionsForm({ onSuccess, editingTransaction }: { onSuccess: () => 
         // For kasbon, deduct cost and record debt for selling price
         handlePPOBTransaction(ppobProductName.trim(), parsedPpobCost, parsedPpobSelling, selectedSourceWallet.id, "kasbon");
         addDebt({
-          person_name: personName.trim() || "Customer",
+          personName: personName.trim() || "Customer",
           type: "receivable",
           amount: parsedPpobSelling,
           notes: `PPOB ${ppobProductName.trim()}`,
@@ -562,7 +562,7 @@ function TransactionsForm({ onSuccess, editingTransaction }: { onSuccess: () => 
       } else {
         // Record as debt
         addDebt({
-          person_name: personName.trim() || "Affiliate",
+          personName: personName.trim() || "Affiliate",
           type: "receivable",
           amount: parsedCommission,
           notes: `Commission from ${platformName.trim()}`,
@@ -594,7 +594,7 @@ function TransactionsForm({ onSuccess, editingTransaction }: { onSuccess: () => 
       } else {
         // Record as debt
         addDebt({
-          person_name: personName.trim() || customerName.trim(),
+          personName: personName.trim() || customerName.trim(),
           type: "receivable",
           amount: parsedInternetAmount,
           notes: `Internet sharing payment from ${customerName.trim()}`,
@@ -703,7 +703,7 @@ function TransactionsForm({ onSuccess, editingTransaction }: { onSuccess: () => 
                   <option value="">Choose product</option>
                   {availableProducts.map((product) => (
                     <option key={product.id} value={product.id}>
-                      {product.name} (Stock: {product.stock}, Price: {formatRupiah(product.selling_price)})
+                      {product.name} (Stock: {product.stock}, Price: {formatRupiah(product.sellingPrice)})
                     </option>
                   ))}
                 </select>
@@ -909,7 +909,7 @@ function TransactionsForm({ onSuccess, editingTransaction }: { onSuccess: () => 
                   <option value="">No Sparepart</option>
                   {products.map((product) => (
                     <option key={product.id} value={product.id}>
-                      {product.name} (Stock: {product.stock}, Price: {formatRupiah(product.selling_price)})
+                      {product.name} (Stock: {product.stock}, Price: {formatRupiah(product.sellingPrice)})
                     </option>
                   ))}
                 </select>
@@ -1448,7 +1448,7 @@ function ExpensesForm({ onSuccess }: { onSuccess: () => void }) {
       type: "expense" as const,
       category: expenseCategory,
       amount: parsedAmount,
-      from_wallet_id: selectedWallet.id,
+      fromWalletId: selectedWallet.id,
       notes: expenseDescription,
     };
     await addTransaction(newTransaction);
@@ -1585,8 +1585,8 @@ function TransactionsDashboard() {
     amount: t.amount,
     description: t.notes || "",
     expense_category: t.category,
-    from_wallet_id: t.from_wallet_id,
-    wallet_name: wallets.find(w => w.id === t.from_wallet_id)?.name || "Unknown",
+    from_wallet_id: t.fromWalletId,
+    wallet_name: wallets.find(w => w.id === t.fromWalletId)?.name || "Unknown",
   })), [transactions, wallets]);
 
   const totalIncome = incomeTransactions.reduce((sum, t) => sum + (t.amount || 0), 0);

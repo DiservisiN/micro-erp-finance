@@ -249,7 +249,7 @@ export default function RepairsPage() {
       try {
         // Create a receivable (piutang) debt record
         addDebt({
-          person_name: paymentTarget.customer_name,
+          personName: paymentTarget.customer_name,
           type: "receivable",
           amount: fee,
           notes: `Unpaid repair - ${paymentTarget.device_name}: ${paymentTarget.problem_description}`,
