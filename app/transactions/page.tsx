@@ -84,7 +84,6 @@ type Expense = {
   wallet_name: string;
 };
 
-
 const transactionTypes: TransactionType[] = [
   "Physical Sale",
   "Money Transfer",
@@ -100,17 +99,12 @@ const transactionTypes: TransactionType[] = [
 function TransactionsForm({ onSuccess, editingTransaction }: { onSuccess: () => void; editingTransaction: Transaction | null }) {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const { wallets, products, transactions, addDebt, handleTransfer, handleBankTransferService, handleCashWithdrawalService, handlePPOBTransaction, handleProductSale, editProduct, setTransactions, deleteTransaction, updateTransaction } = useFinanceContext();
+  // Mengambil addTransaction dari Context untuk mempermudah manipulasi saldo secara langsung
+  const { wallets, products, transactions, addDebt, handleTransfer, handleBankTransferService, handleCashWithdrawalService, handlePPOBTransaction, handleProductSale, editProduct, setTransactions, deleteTransaction, updateTransaction, addTransaction } = useFinanceContext();
   const [transactionType, setTransactionType] = useState<TransactionType>(
     (searchParams.get("type") as TransactionType) || "Physical Sale"
   );
-  // Categories are hardcoded for now - can be moved to context if needed
-  const categories = [
-    { id: "1", name: "Operational" },
-    { id: "2", name: "Inventory" },
-    { id: "3", name: "Marketing" },
-    { id: "4", name: "Utilities" },
-  ];
+  
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [productId, setProductId] = useState("");
@@ -131,7 +125,6 @@ function TransactionsForm({ onSuccess, editingTransaction }: { onSuccess: () => 
   const [notes, setNotes] = useState(searchParams.get("notes") || "");
   const [employeeName, setEmployeeName] = useState("");
 
-  // Balance Transfer states
   const [isTransferDialogOpen, setIsTransferDialogOpen] = useState(false);
   const [transferFromWallet, setTransferFromWallet] = useState("");
   const [transferToWallet, setTransferToWallet] = useState("");
@@ -140,77 +133,38 @@ function TransactionsForm({ onSuccess, editingTransaction }: { onSuccess: () => 
   const [transferNotes, setTransferNotes] = useState("");
   const [isTransferring, setIsTransferring] = useState(false);
 
-  // Kasbon states
   const [paymentMethod, setPaymentMethod] = useState<"lunas" | "kasbon">(
     (searchParams.get("paymentMethod") as "lunas" | "kasbon") || "lunas"
   );
   const [personName, setPersonName] = useState("");
 
-  // Filter products to only show 'in_stock' items for sales
   const availableProducts = products.filter((p) => (p.status ?? "in_stock") === "in_stock");
 
-  // Populate form fields when editing
   useEffect(() => {
     if (editingTransaction) {
       const cat = (editingTransaction.category || "").toLowerCase();
       const note = (editingTransaction.notes || "").toLowerCase();
       const combined = `${cat} ${note}`;
 
-      // Smart Transaction Type Mapping: inspect category + notes to determine the correct form type
-      let txType: TransactionType = "Physical Sale"; // final fallback
+      let txType: TransactionType = "Physical Sale";
 
-      if (
-        combined.includes("repair") ||
-        combined.includes("electronic service") ||
-        combined.includes("service fee") ||
-        cat === "electronic service"
-      ) {
+      if (combined.includes("repair") || combined.includes("electronic service") || combined.includes("service fee") || cat === "electronic service") {
         txType = "Electronic Service";
-      } else if (
-        combined.includes("ppob") ||
-        combined.includes("pulsa") ||
-        combined.includes("token") ||
-        combined.includes("digital ppob")
-      ) {
+      } else if (combined.includes("ppob") || combined.includes("pulsa") || combined.includes("token") || combined.includes("digital ppob")) {
         txType = "Digital PPOB (Pulsa/Game)";
-      } else if (
-        combined.includes("jasa transfer") ||
-        combined.includes("fee jasa transfer") ||
-        combined.includes("money transfer") ||
-        (combined.includes("transfer") && combined.includes("admin"))
-      ) {
+      } else if (combined.includes("jasa transfer") || combined.includes("fee jasa transfer") || combined.includes("money transfer") || (combined.includes("transfer") && combined.includes("admin"))) {
         txType = "Money Transfer";
-      } else if (
-        combined.includes("tarik tunai") ||
-        combined.includes("fee tarik tunai") ||
-        combined.includes("cash withdrawal")
-      ) {
+      } else if (combined.includes("tarik tunai") || combined.includes("fee tarik tunai") || combined.includes("cash withdrawal")) {
         txType = "Cash Withdrawal";
-      } else if (
-        cat === "balance transfer" ||
-        (editingTransaction.type === "transfer" && combined.includes("balance transfer"))
-      ) {
+      } else if (cat === "balance transfer" || (editingTransaction.type === "transfer" && combined.includes("balance transfer"))) {
         txType = "Balance Transfer";
-      } else if (
-        combined.includes("affiliate") ||
-        combined.includes("commission") ||
-        combined.includes("passive income")
-      ) {
+      } else if (combined.includes("affiliate") || combined.includes("commission") || combined.includes("passive income")) {
         txType = "Affiliate / Passive Income";
-      } else if (
-        combined.includes("internet sharing") ||
-        combined.includes("biznet")
-      ) {
+      } else if (combined.includes("internet sharing") || combined.includes("biznet")) {
         txType = "Internet Sharing (BIZNET)";
-      } else if (
-        combined.includes("kasbon") ||
-        (editingTransaction.type === "kasbon")
-      ) {
+      } else if (combined.includes("kasbon") || (editingTransaction.type === "kasbon")) {
         txType = "Kasbon (Employee Loan)";
-      } else if (
-        cat === "sales" ||
-        editingTransaction.productId
-      ) {
+      } else if (cat === "sales" || editingTransaction.productId) {
         txType = "Physical Sale";
       }
 
@@ -218,12 +172,9 @@ function TransactionsForm({ onSuccess, editingTransaction }: { onSuccess: () => 
       setNotes(editingTransaction.notes || "");
       setAdminFee(editingTransaction.adminFee?.toString() || "0");
 
-      // Populate wallet IDs correctly for the determined type
       setDestinationWalletId(editingTransaction.toWalletId || "");
       setSourceWalletId(editingTransaction.fromWalletId || "");
 
-      // Populate the correct amount/input fields based on the resolved transaction type
-      // Reset all amount-related fields first to avoid stale values
       setAmount("");
       setServiceFee("");
       setPpobCost("");
@@ -250,8 +201,6 @@ function TransactionsForm({ onSuccess, editingTransaction }: { onSuccess: () => 
           break;
 
         case "Digital PPOB (Pulsa/Game)":
-          // For PPOB income transactions, the amount is the profit; populate selling price
-          // Try to extract cost and selling price from notes if available
           const costMatch = (editingTransaction.notes || "").match(/Cost:\s*Rp\s*([\d.,]+)/i);
           const sellMatch = (editingTransaction.notes || "").match(/Sell:\s*Rp\s*([\d.,]+)/i);
           if (costMatch && sellMatch) {
@@ -261,7 +210,6 @@ function TransactionsForm({ onSuccess, editingTransaction }: { onSuccess: () => 
             setPpobCost(editingTransaction.amount?.toString() || "");
             setPpobSellingPrice(editingTransaction.amount?.toString() || "");
           }
-          // Extract product name from notes
           const ppobNameMatch = (editingTransaction.notes || "").match(/(?:PPOB|Profit from PPOB):\s*(.+?)(?:\s*\(|$)/i);
           if (ppobNameMatch) {
             setPpobProductName(ppobNameMatch[1].trim());
@@ -293,7 +241,6 @@ function TransactionsForm({ onSuccess, editingTransaction }: { onSuccess: () => 
         case "Affiliate / Passive Income":
           setCommissionAmount(editingTransaction.amount?.toString() || "");
           setDestinationWalletId(editingTransaction.toWalletId || "");
-          // Try to extract platform name from notes
           const platformMatch = (editingTransaction.notes || "").match(/(?:Commission from|from)\s+(.+)/i);
           if (platformMatch) {
             setPlatformName(platformMatch[1].trim());
@@ -303,7 +250,6 @@ function TransactionsForm({ onSuccess, editingTransaction }: { onSuccess: () => 
         case "Internet Sharing (BIZNET)":
           setInternetAmount(editingTransaction.amount?.toString() || "");
           setDestinationWalletId(editingTransaction.toWalletId || "");
-          // Try to extract customer name from notes
           const internetCustomerMatch = (editingTransaction.notes || "").match(/(?:payment from|from)\s+(.+)/i);
           if (internetCustomerMatch) {
             setCustomerName(internetCustomerMatch[1].trim());
@@ -313,7 +259,6 @@ function TransactionsForm({ onSuccess, editingTransaction }: { onSuccess: () => 
         case "Kasbon (Employee Loan)":
           setAmount(editingTransaction.amount?.toString() || "");
           setSourceWalletId(editingTransaction.fromWalletId || "");
-          // Try to extract employee name from notes
           const kasbonNameMatch = (editingTransaction.notes || "").match(/^([^-]+)/);
           if (kasbonNameMatch) {
             setEmployeeName(kasbonNameMatch[1].trim());
@@ -328,7 +273,6 @@ function TransactionsForm({ onSuccess, editingTransaction }: { onSuccess: () => 
           break;
       }
     } else {
-      // Reset all fields when not editing
       setTransactionType("Physical Sale");
       setAmount("");
       setNotes("");
@@ -356,9 +300,6 @@ function TransactionsForm({ onSuccess, editingTransaction }: { onSuccess: () => 
     event.preventDefault();
     setIsSubmitting(true);
 
-    // Bug Fix: If editing an existing transaction, rollback (reverse wallet balances
-    // and remove) the old transaction FIRST, before applying the new one.
-    // This prevents duplicates when converting between types (e.g. Income → Debt).
     if (editingTransaction) {
       await deleteTransaction(editingTransaction.id);
     }
@@ -382,6 +323,12 @@ function TransactionsForm({ onSuccess, editingTransaction }: { onSuccess: () => 
       setIsSubmitting(false);
     };
 
+    const getIsoDate = () => new Date().toISOString().split('T')[0];
+    const newTxId = Date.now().toString();
+
+    // ==========================================
+    // MODULE 1: PHYSICAL SALE
+    // ==========================================
     if (transactionType === "Physical Sale") {
       if (!selectedProduct || (paymentMethod === "lunas" && !selectedDestinationWallet) || parsedQuantity <= 0) {
         return fail("Product, quantity, and destination wallet are required.");
@@ -392,19 +339,18 @@ function TransactionsForm({ onSuccess, editingTransaction }: { onSuccess: () => 
       if (selectedProduct.stock < parsedQuantity) {
         return fail("Insufficient product stock.");
       }
-      // Safety check: Prevent selling 'On the Way' items
       if ((selectedProduct.status ?? "in_stock") !== "in_stock") {
         return fail("Product is still in transit and cannot be sold yet.");
       }
 
       const saleAmount = selectedProduct.sellingPrice * parsedQuantity;
 
-      // Use handleProductSale for lunas payment, or addDebt for kasbon
       if (paymentMethod === "lunas" && selectedDestinationWallet) {
         handleProductSale(selectedProduct.id, parsedQuantity, selectedProduct.sellingPrice, selectedDestinationWallet.id);
       } else {
-        // Add as debt for kasbon
-        addDebt({
+        // PERBAIKAN: Kurangi stok produk secara manual karena handleProductSale tidak dipanggil
+        await editProduct(selectedProduct.id, { stock: selectedProduct.stock - parsedQuantity });
+        await addDebt({
           personName: personName.trim(),
           type: "receivable",
           amount: saleAmount,
@@ -412,56 +358,57 @@ function TransactionsForm({ onSuccess, editingTransaction }: { onSuccess: () => 
         });
       }
 
-    } else if (transactionType === "Money Transfer") {
-      if (!selectedSourceWallet || !selectedDestinationWallet || parsedAmount <= 0 || parsedAdminFee < 0) {
-        return fail("Amount, admin fee, source wallet, and destination wallet are required.");
+    // ==========================================
+    // MODULE 2: MONEY TRANSFER & CASH WITHDRAWAL
+    // ==========================================
+    } else if (transactionType === "Money Transfer" || transactionType === "Cash Withdrawal") {
+      // Validasi awal
+      if (!selectedSourceWallet || parsedAmount <= 0 || parsedAdminFee < 0) {
+        return fail("Amount, admin fee, and source wallet are required.");
       }
-      if (selectedSourceWallet.id === selectedDestinationWallet.id) {
+      if (paymentMethod === "lunas" && !selectedDestinationWallet) {
+        return fail("Destination wallet is required for paid transactions.");
+      }
+      if (selectedSourceWallet.id === destinationWalletId) {
         return fail("Source and destination wallet must be different.");
       }
       if (selectedSourceWallet.balance < parsedAmount) {
         return fail("Insufficient source wallet balance.");
       }
 
-      // Use handleBankTransferService for Jasa Transfer Bank
+      const isTransfer = transactionType === "Money Transfer";
+
       if (paymentMethod === "lunas" && selectedDestinationWallet) {
-        handleBankTransferService(selectedSourceWallet.id, selectedDestinationWallet.id, parsedAmount, parsedAdminFee);
+        if (isTransfer) {
+          handleBankTransferService(selectedSourceWallet.id, selectedDestinationWallet.id, parsedAmount, parsedAdminFee);
+        } else {
+          handleCashWithdrawalService(selectedSourceWallet.id, selectedDestinationWallet.id, parsedAmount, parsedAdminFee);
+        }
       } else {
-        // Just deduct from source and record as debt
-        handleBankTransferService(selectedSourceWallet.id, "kasbon", parsedAmount, parsedAdminFee);
-        addDebt({
+        // PERBAIKAN KASBON TRANSFER/TARIK TUNAI: 
+        // 1. Kurangi uang di source wallet seolah-olah terjadi pengeluaran
+        await addTransaction({
+          id: newTxId,
+          type: "expense",
+          category: isTransfer ? "Kasbon Money Transfer" : "Kasbon Cash Withdrawal",
+          amount: parsedAmount,
+          fromWalletId: selectedSourceWallet.id,
+          date: getIsoDate(),
+          notes: `Modal kasbon untuk ${personName.trim()}`,
+        });
+
+        // 2. Catat hutang orang tersebut (Pokok + Biaya Admin)
+        await addDebt({
           personName: personName.trim(),
           type: "receivable",
           amount: parsedAmount + parsedAdminFee,
-          notes: `Kasbon: Money Transfer`,
+          notes: `Kasbon: ${isTransfer ? "Jasa Transfer" : "Tarik Tunai"}`,
         });
       }
 
-    } else if (transactionType === "Cash Withdrawal") {
-      if (!selectedSourceWallet || !selectedDestinationWallet || parsedAmount <= 0 || parsedAdminFee < 0) {
-        return fail("Amount, admin fee, source wallet, and destination wallet are required.");
-      }
-      if (selectedSourceWallet.id === selectedDestinationWallet.id) {
-        return fail("Source and destination wallet must be different.");
-      }
-      if (selectedSourceWallet.balance < parsedAmount) {
-        return fail("Insufficient source wallet balance.");
-      }
-
-      // Use handleCashWithdrawalService for Jasa Tarik Tunai
-      if (paymentMethod === "lunas" && selectedDestinationWallet) {
-        handleCashWithdrawalService(selectedSourceWallet.id, selectedDestinationWallet.id, parsedAmount, parsedAdminFee);
-      } else {
-        // Deduct from source and record as debt
-        handleCashWithdrawalService(selectedSourceWallet.id, "kasbon", parsedAmount, parsedAdminFee);
-        addDebt({
-          personName: personName.trim(),
-          type: "receivable",
-          amount: parsedAmount + parsedAdminFee,
-          notes: `Kasbon: Cash Withdrawal`,
-        });
-      }
-
+    // ==========================================
+    // MODULE 3: BALANCE TRANSFER
+    // ==========================================
     } else if (transactionType === "Balance Transfer") {
       if (!selectedSourceWallet || !selectedDestinationWallet || parsedAmount <= 0) {
         return fail("Amount, source wallet, and destination wallet are required.");
@@ -472,10 +419,11 @@ function TransactionsForm({ onSuccess, editingTransaction }: { onSuccess: () => 
       if (selectedSourceWallet.balance < parsedAmount) {
         return fail("Insufficient source wallet balance.");
       }
-
-      // Use handleTransfer for balance transfer
       handleTransfer(selectedSourceWallet.id, selectedDestinationWallet.id, parsedAmount, 0);
 
+    // ==========================================
+    // MODULE 4: ELECTRONIC SERVICE
+    // ==========================================
     } else if (transactionType === "Electronic Service") {
       if ((paymentMethod === "lunas" && !selectedDestinationWallet) || parsedServiceFee < 0) {
         return fail("Service fee and destination wallet are required.");
@@ -489,37 +437,34 @@ function TransactionsForm({ onSuccess, editingTransaction }: { onSuccess: () => 
         if (selectedSparepart.stock < 1) {
           return fail("Selected sparepart is out of stock.");
         }
-        // Update product stock using editProduct from context
-        editProduct(selectedSparepart.id, { stock: selectedSparepart.stock - 1 });
+        await editProduct(selectedSparepart.id, { stock: selectedSparepart.stock - 1 });
         totalIncome += selectedSparepart.sellingPrice;
       }
 
-      // Handle wallet updates and debt recording
       if (paymentMethod === "lunas" && selectedDestinationWallet) {
-        // Use handleTransfer to add income to wallet
-        handleTransfer("income", selectedDestinationWallet.id, totalIncome, 0);
+        // PERBAIKAN: Gunakan addTransaction alih-alih handleTransfer ber-id "income"
+        await addTransaction({
+          id: newTxId,
+          type: "income",
+          category: "Electronic Service",
+          amount: totalIncome,
+          toWalletId: selectedDestinationWallet.id,
+          productId: selectedSparepart?.id,
+          date: getIsoDate(),
+          notes: notes || (selectedSparepart ? `Service fee + sparepart (${selectedSparepart.name})` : "Electronic service fee"),
+        });
       } else {
-        // Record as debt
-        addDebt({
+        await addDebt({
           personName: personName.trim() || "Customer",
           type: "receivable",
           amount: totalIncome,
-          notes: `Electronic service fee` + (selectedSparepart ? ` + sparepart (${selectedSparepart.name})` : ""),
+          notes: `Kasbon Service Elektronik` + (selectedSparepart ? ` + sparepart (${selectedSparepart.name})` : ""),
         });
       }
 
-      // Log transaction
-      const newTransaction = {
-        id: Date.now().toString(),
-        date: new Date().toISOString(),
-        type: "electronic_service" as const,
-        amount: totalIncome,
-        to_wallet_id: paymentMethod === "lunas" ? selectedDestinationWallet!.id : null,
-        product_id: selectedSparepart?.id ?? null,
-        notes: notes || (selectedSparepart ? `Service fee + sparepart (${selectedSparepart.name})` : "Electronic service fee"),
-      };
-      setTransactions([...transactions, newTransaction as Transaction]);
-
+    // ==========================================
+    // MODULE 5: DIGITAL PPOB
+    // ==========================================
     } else if (transactionType === "Digital PPOB (Pulsa/Game)") {
       if (!selectedSourceWallet || (paymentMethod === "lunas" && !selectedDestinationWallet) || !ppobProductName.trim()) {
         return fail("Product name, source wallet, and destination wallet are required.");
@@ -534,20 +479,33 @@ function TransactionsForm({ onSuccess, editingTransaction }: { onSuccess: () => 
         return fail("Insufficient source wallet balance.");
       }
 
-      // Use handlePPOBTransaction for proper profit tracking
       if (paymentMethod === "lunas" && selectedDestinationWallet) {
         handlePPOBTransaction(ppobProductName.trim(), parsedPpobCost, parsedPpobSelling, selectedSourceWallet.id, selectedDestinationWallet.id);
       } else {
-        // For kasbon, deduct cost and record debt for selling price
-        handlePPOBTransaction(ppobProductName.trim(), parsedPpobCost, parsedPpobSelling, selectedSourceWallet.id, "kasbon");
-        addDebt({
+        // PERBAIKAN KASBON PPOB:
+        // 1. Kurangi modal dari wallet (expense)
+        await addTransaction({
+          id: newTxId,
+          type: "expense",
+          category: "PPOB Capital (Kasbon)",
+          amount: parsedPpobCost,
+          fromWalletId: selectedSourceWallet.id,
+          date: getIsoDate(),
+          notes: `Capital for PPOB ${ppobProductName.trim()}`,
+        });
+        
+        // 2. Catat hutang seharga Harga Jual
+        await addDebt({
           personName: personName.trim() || "Customer",
           type: "receivable",
           amount: parsedPpobSelling,
-          notes: `PPOB ${ppobProductName.trim()}`,
+          notes: `Kasbon PPOB: ${ppobProductName.trim()}`,
         });
       }
 
+    // ==========================================
+    // MODULE 6: AFFILIATE / PASSIVE INCOME
+    // ==========================================
     } else if (transactionType === "Affiliate / Passive Income") {
       if ((paymentMethod === "lunas" && !selectedDestinationWallet) || !platformName.trim() || parsedCommission <= 0) {
         return fail("Platform, commission amount, and destination wallet are required.");
@@ -557,29 +515,28 @@ function TransactionsForm({ onSuccess, editingTransaction }: { onSuccess: () => 
       }
 
       if (paymentMethod === "lunas" && selectedDestinationWallet) {
-        // Add commission to destination wallet
-        handleTransfer("income", selectedDestinationWallet.id, parsedCommission, 0);
+        // PERBAIKAN: Gunakan addTransaction
+        await addTransaction({
+          id: newTxId,
+          type: "income",
+          category: "Affiliate / Passive Income",
+          amount: parsedCommission,
+          toWalletId: selectedDestinationWallet.id,
+          date: getIsoDate(),
+          notes: notes || `Commission from ${platformName.trim()}`,
+        });
       } else {
-        // Record as debt
-        addDebt({
+        await addDebt({
           personName: personName.trim() || "Affiliate",
           type: "receivable",
           amount: parsedCommission,
-          notes: `Commission from ${platformName.trim()}`,
+          notes: `Unpaid Commission from ${platformName.trim()}`,
         });
       }
 
-      // Log transaction
-      const newTransaction = {
-        id: Date.now().toString(),
-        date: new Date().toISOString(),
-        type: "affiliate_passive_income" as const,
-        amount: parsedCommission,
-        to_wallet_id: paymentMethod === "lunas" ? selectedDestinationWallet!.id : null,
-        notes: notes || `Commission from ${platformName.trim()}`,
-      };
-      setTransactions([...transactions, newTransaction as Transaction]);
-
+    // ==========================================
+    // MODULE 7: INTERNET SHARING
+    // ==========================================
     } else if (transactionType === "Internet Sharing (BIZNET)") {
       if ((paymentMethod === "lunas" && !selectedDestinationWallet) || !customerName.trim() || parsedInternetAmount <= 0) {
         return fail("Customer name, amount, and destination wallet are required.");
@@ -589,29 +546,28 @@ function TransactionsForm({ onSuccess, editingTransaction }: { onSuccess: () => 
       }
 
       if (paymentMethod === "lunas" && selectedDestinationWallet) {
-        // Add payment to destination wallet
-        handleTransfer("income", selectedDestinationWallet.id, parsedInternetAmount, 0);
+        // PERBAIKAN: Gunakan addTransaction
+        await addTransaction({
+          id: newTxId,
+          type: "income",
+          category: "Internet Sharing (BIZNET)",
+          amount: parsedInternetAmount,
+          toWalletId: selectedDestinationWallet.id,
+          date: getIsoDate(),
+          notes: notes || `Internet sharing payment from ${customerName.trim()}`,
+        });
       } else {
-        // Record as debt
-        addDebt({
+        await addDebt({
           personName: personName.trim() || customerName.trim(),
           type: "receivable",
           amount: parsedInternetAmount,
-          notes: `Internet sharing payment from ${customerName.trim()}`,
+          notes: `Unpaid Internet sharing from ${customerName.trim()}`,
         });
       }
 
-      // Log transaction
-      const newTransaction = {
-        id: Date.now().toString(),
-        date: new Date().toISOString(),
-        type: "internet_sharing_biznet" as const,
-        amount: parsedInternetAmount,
-        to_wallet_id: paymentMethod === "lunas" ? selectedDestinationWallet!.id : null,
-        notes: notes || `Internet sharing payment from ${customerName.trim()}`,
-      };
-      setTransactions([...transactions, newTransaction as Transaction]);
-
+    // ==========================================
+    // MODULE 8: KASBON KARYAWAN (HUTANG TUNAI)
+    // ==========================================
     } else if (transactionType === "Kasbon (Employee Loan)") {
       if (!selectedSourceWallet || !employeeName.trim() || parsedAmount <= 0) {
         return fail("Source wallet, employee name, and amount are required.");
@@ -620,26 +576,32 @@ function TransactionsForm({ onSuccess, editingTransaction }: { onSuccess: () => 
         return fail("Insufficient source wallet balance.");
       }
 
-      // Deduct from source wallet using handleTransfer
-      handleTransfer(selectedSourceWallet.id, "expense", parsedAmount, 0);
-
-      // Log kasbon transaction
-      const kasbonNotes = notes ? `${employeeName.trim()} - ${notes}` : employeeName.trim();
-      const newTransaction = {
-        id: Date.now().toString(),
-        date: new Date().toISOString(),
-        type: "kasbon" as const,
+      // PERBAIKAN: 
+      // 1. Kurangi uang di wallet
+      await addTransaction({
+        id: newTxId,
+        type: "expense",
+        category: "Kasbon Employee",
         amount: parsedAmount,
-        from_wallet_id: selectedSourceWallet.id,
-        notes: kasbonNotes,
-      };
-      setTransactions([...transactions, newTransaction as Transaction]);
+        fromWalletId: selectedSourceWallet.id,
+        date: getIsoDate(),
+        notes: notes ? `Diberikan ke ${employeeName.trim()} - ${notes}` : `Kasbon untuk ${employeeName.trim()}`,
+      });
+
+      // 2. Buat Piutang (Debt) atas nama karyawan
+      await addDebt({
+        personName: employeeName.trim(),
+        type: "receivable", // Piutang yang harus ditagih
+        amount: parsedAmount,
+        notes: `Hutang Kasbon Karyawan`,
+      });
     }
 
-    toast.success("Transaction saved");
-    // Refresh the dashboard to update monthly stats
+    toast.success("Transaction saved successfully!");
     router.refresh();
     onSuccess();
+    
+    // Reset Form
     setProductId("");
     setQuantity("1");
     setDestinationWalletId("");
@@ -716,12 +678,12 @@ function TransactionsForm({ onSuccess, editingTransaction }: { onSuccess: () => 
 
             <div className="grid gap-4 md:grid-cols-2 mt-2">
               <div className="grid gap-2">
-                <Label htmlFor="payment-method">Payment Method</Label>
+                <Label htmlFor="payment-method" className="text-slate-300">Payment Method</Label>
                 <select
                   id="payment-method"
                   value={paymentMethod}
                   onChange={(e) => setPaymentMethod(e.target.value as "lunas" | "kasbon")}
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                  className="flex h-10 w-full rounded-md border border-slate-700 bg-slate-800/50 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
                 >
                   <option value="lunas">Lunas (Paid)</option>
                   <option value="kasbon">Kasbon (Unpaid Debt)</option>
@@ -730,18 +692,18 @@ function TransactionsForm({ onSuccess, editingTransaction }: { onSuccess: () => 
 
               {paymentMethod === "kasbon" ? (
                 <div className="grid gap-2">
-                  <Label htmlFor="person-name">Customer Name</Label>
-                  <Input id="person-name" required value={personName} onChange={(e) => setPersonName(e.target.value)} placeholder="Required for Kasbon" />
+                  <Label htmlFor="person-name" className="text-slate-300">Customer Name</Label>
+                  <Input id="person-name" required value={personName} onChange={(e) => setPersonName(e.target.value)} placeholder="Required for Kasbon" className="bg-slate-800/50 border-slate-700 text-white"/>
                 </div>
               ) : (
                 <div className="grid gap-2">
-                  <Label>Destination Wallet</Label>
+                  <Label className="text-slate-300">Destination Wallet</Label>
                   <select
                     value={destinationWalletId}
                     onChange={(e) => setDestinationWalletId(e.target.value)}
-                                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                    className="flex h-10 w-full rounded-md border border-slate-700 bg-slate-800/50 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
                   >
-                    <option value="">"Choose destination wallet"</option>
+                    <option value="">Choose destination wallet</option>
                     {wallets.map((wallet) => (
                       <option key={wallet.id} value={wallet.id}>
                         {wallet.name} ({wallet.walletType}) - {formatRupiah(wallet.balance)}
@@ -755,27 +717,27 @@ function TransactionsForm({ onSuccess, editingTransaction }: { onSuccess: () => 
         ) : null}
 
         {transactionType === "Money Transfer" ? (
-          <div className="grid gap-4 rounded-lg border p-4">
+          <div className="grid gap-4 rounded-lg border border-slate-800/50 bg-slate-800/30 p-4">
             <div className="grid gap-4 md:grid-cols-2">
               <div className="grid gap-2">
-                <Label htmlFor="transfer-amount">Amount</Label>
-                <Input id="transfer-amount" type="number" min="0.01" step="0.01" required value={amount} onChange={(event) => setAmount(event.target.value)} className="focus:ring-2 focus:ring-orange-500 focus:ring-offset-2" />
+                <Label htmlFor="transfer-amount" className="text-slate-300">Amount</Label>
+                <Input id="transfer-amount" type="number" min="0.01" step="0.01" required value={amount} onChange={(event) => setAmount(event.target.value)} className="bg-slate-800/50 border-slate-700 text-white focus:ring-2 focus:ring-orange-500" />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="transfer-admin-fee">Admin Fee</Label>
-                <Input id="transfer-admin-fee" type="number" min="0" step="0.01" required value={adminFee} onChange={(event) => setAdminFee(event.target.value)} className="focus:ring-2 focus:ring-orange-500 focus:ring-offset-2" />
+                <Label htmlFor="transfer-admin-fee" className="text-slate-300">Admin Fee</Label>
+                <Input id="transfer-admin-fee" type="number" min="0" step="0.01" required value={adminFee} onChange={(event) => setAdminFee(event.target.value)} className="bg-slate-800/50 border-slate-700 text-white focus:ring-2 focus:ring-orange-500" />
               </div>
             </div>
             <div className="grid gap-4 md:grid-cols-2">
               <div className="grid gap-2">
-                <Label htmlFor="transfer-source-wallet">Sending Wallet (Digital) *</Label>
+                <Label htmlFor="transfer-source-wallet" className="text-slate-300">Sending Wallet (Digital) *</Label>
                 <select
                   id="transfer-source-wallet"
                   value={sourceWalletId}
                   onChange={(e) => setSourceWalletId(e.target.value)}
-                                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
+                  className="flex h-10 w-full rounded-md border border-slate-700 bg-slate-800/50 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
                 >
-                  <option value="">"Choose sending wallet"</option>
+                  <option value="">Choose sending wallet</option>
                   {wallets.map((wallet) => (
                     <option key={wallet.id} value={wallet.id}>
                       {wallet.name} ({wallet.walletType}) - {formatRupiah(wallet.balance)}
@@ -784,14 +746,14 @@ function TransactionsForm({ onSuccess, editingTransaction }: { onSuccess: () => 
                 </select>
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="transfer-destination-wallet">Receiving Wallet (Cash) *</Label>
+                <Label htmlFor="transfer-destination-wallet" className="text-slate-300">Receiving Wallet (Cash) *</Label>
                 <select
                   id="transfer-destination-wallet"
                   value={destinationWalletId}
                   onChange={(e) => setDestinationWalletId(e.target.value)}
-                                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
+                  className="flex h-10 w-full rounded-md border border-slate-700 bg-slate-800/50 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
                 >
-                  <option value="">"Choose receiving wallet"</option>
+                  <option value="">Choose receiving wallet</option>
                   {wallets.map((wallet) => (
                     <option key={wallet.id} value={wallet.id}>
                       {wallet.name} ({wallet.walletType}) - {formatRupiah(wallet.balance)}
@@ -802,12 +764,12 @@ function TransactionsForm({ onSuccess, editingTransaction }: { onSuccess: () => 
             </div>
             <div className="grid gap-4 md:grid-cols-2">
               <div className="grid gap-2">
-                <Label htmlFor="transfer-payment-method">Payment Method</Label>
+                <Label htmlFor="transfer-payment-method" className="text-slate-300">Payment Method</Label>
                 <select
                   id="transfer-payment-method"
                   value={paymentMethod}
                   onChange={(e) => setPaymentMethod(e.target.value as "lunas" | "kasbon")}
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
+                  className="flex h-10 w-full rounded-md border border-slate-700 bg-slate-800/50 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
                 >
                   <option value="lunas">Lunas (Paid)</option>
                   <option value="kasbon">Kasbon (Unpaid Debt)</option>
@@ -815,8 +777,8 @@ function TransactionsForm({ onSuccess, editingTransaction }: { onSuccess: () => 
               </div>
               {paymentMethod === "kasbon" && (
                 <div className="grid gap-2">
-                  <Label htmlFor="transfer-person-name">Kasbon Name *</Label>
-                  <Input id="transfer-person-name" required value={personName} onChange={(e) => setPersonName(e.target.value)} placeholder="Required for Kasbon" className="focus:ring-2 focus:ring-orange-500 focus:ring-offset-2" />
+                  <Label htmlFor="transfer-person-name" className="text-slate-300">Kasbon Name *</Label>
+                  <Input id="transfer-person-name" required value={personName} onChange={(e) => setPersonName(e.target.value)} placeholder="Required for Kasbon" className="bg-slate-800/50 border-slate-700 text-white focus:ring-2 focus:ring-orange-500" />
                 </div>
               )}
             </div>
@@ -824,27 +786,27 @@ function TransactionsForm({ onSuccess, editingTransaction }: { onSuccess: () => 
         ) : null}
 
         {transactionType === "Cash Withdrawal" ? (
-          <div className="grid gap-4 rounded-lg border p-4">
+          <div className="grid gap-4 rounded-lg border border-slate-800/50 bg-slate-800/30 p-4">
             <div className="grid gap-4 md:grid-cols-2">
               <div className="grid gap-2">
-                <Label htmlFor="withdrawal-amount">Amount</Label>
-                <Input id="withdrawal-amount" type="number" min="0.01" step="0.01" required value={amount} onChange={(event) => setAmount(event.target.value)} className="focus:ring-2 focus:ring-orange-500 focus:ring-offset-2" />
+                <Label htmlFor="withdrawal-amount" className="text-slate-300">Amount</Label>
+                <Input id="withdrawal-amount" type="number" min="0.01" step="0.01" required value={amount} onChange={(event) => setAmount(event.target.value)} className="bg-slate-800/50 border-slate-700 text-white focus:ring-2 focus:ring-orange-500" />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="withdrawal-admin-fee">Admin Fee</Label>
-                <Input id="withdrawal-admin-fee" type="number" min="0" step="0.01" required value={adminFee} onChange={(event) => setAdminFee(event.target.value)} className="focus:ring-2 focus:ring-orange-500 focus:ring-offset-2" />
+                <Label htmlFor="withdrawal-admin-fee" className="text-slate-300">Admin Fee</Label>
+                <Input id="withdrawal-admin-fee" type="number" min="0" step="0.01" required value={adminFee} onChange={(event) => setAdminFee(event.target.value)} className="bg-slate-800/50 border-slate-700 text-white focus:ring-2 focus:ring-orange-500" />
               </div>
             </div>
             <div className="grid gap-4 md:grid-cols-2">
               <div className="grid gap-2">
-                <Label htmlFor="withdrawal-source-wallet">Source Wallet (Cash) *</Label>
+                <Label htmlFor="withdrawal-source-wallet" className="text-slate-300">Source Wallet (Cash) *</Label>
                 <select
                   id="withdrawal-source-wallet"
                   value={sourceWalletId}
                   onChange={(e) => setSourceWalletId(e.target.value)}
-                                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
+                  className="flex h-10 w-full rounded-md border border-slate-700 bg-slate-800/50 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
                 >
-                  <option value="">"Choose source wallet"</option>
+                  <option value="">Choose source wallet</option>
                   {wallets.map((wallet) => (
                     <option key={wallet.id} value={wallet.id}>
                       {wallet.name} ({wallet.walletType}) - {formatRupiah(wallet.balance)}
@@ -853,14 +815,14 @@ function TransactionsForm({ onSuccess, editingTransaction }: { onSuccess: () => 
                 </select>
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="withdrawal-destination-wallet">Destination Wallet (Digital) *</Label>
+                <Label htmlFor="withdrawal-destination-wallet" className="text-slate-300">Destination Wallet (Digital) *</Label>
                 <select
                   id="withdrawal-destination-wallet"
                   value={destinationWalletId}
                   onChange={(e) => setDestinationWalletId(e.target.value)}
-                                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
+                  className="flex h-10 w-full rounded-md border border-slate-700 bg-slate-800/50 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
                 >
-                  <option value="">"Choose destination wallet"</option>
+                  <option value="">Choose destination wallet</option>
                   {wallets.map((wallet) => (
                     <option key={wallet.id} value={wallet.id}>
                       {wallet.name} ({wallet.walletType}) - {formatRupiah(wallet.balance)}
@@ -871,12 +833,12 @@ function TransactionsForm({ onSuccess, editingTransaction }: { onSuccess: () => 
             </div>
             <div className="grid gap-4 md:grid-cols-2">
               <div className="grid gap-2">
-                <Label htmlFor="withdrawal-payment-method">Payment Method</Label>
+                <Label htmlFor="withdrawal-payment-method" className="text-slate-300">Payment Method</Label>
                 <select
                   id="withdrawal-payment-method"
                   value={paymentMethod}
                   onChange={(e) => setPaymentMethod(e.target.value as "lunas" | "kasbon")}
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
+                  className="flex h-10 w-full rounded-md border border-slate-700 bg-slate-800/50 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
                 >
                   <option value="lunas">Lunas (Paid)</option>
                   <option value="kasbon">Kasbon (Unpaid Debt)</option>
@@ -884,8 +846,8 @@ function TransactionsForm({ onSuccess, editingTransaction }: { onSuccess: () => 
               </div>
               {paymentMethod === "kasbon" && (
                 <div className="grid gap-2">
-                  <Label htmlFor="withdrawal-person-name">Kasbon Name *</Label>
-                  <Input id="withdrawal-person-name" required value={personName} onChange={(e) => setPersonName(e.target.value)} placeholder="Required for Kasbon" className="focus:ring-2 focus:ring-orange-500 focus:ring-offset-2" />
+                  <Label htmlFor="withdrawal-person-name" className="text-slate-300">Kasbon Name *</Label>
+                  <Input id="withdrawal-person-name" required value={personName} onChange={(e) => setPersonName(e.target.value)} placeholder="Required for Kasbon" className="bg-slate-800/50 border-slate-700 text-white focus:ring-2 focus:ring-orange-500" />
                 </div>
               )}
             </div>
@@ -893,18 +855,18 @@ function TransactionsForm({ onSuccess, editingTransaction }: { onSuccess: () => 
         ) : null}
 
         {transactionType === "Electronic Service" ? (
-          <div className="grid gap-4 rounded-lg border p-4">
+          <div className="grid gap-4 rounded-lg border border-slate-800/50 bg-slate-800/30 p-4">
             <div className="grid gap-4 md:grid-cols-2">
               <div className="grid gap-2">
-                <Label htmlFor="service-fee">Service Fee</Label>
-                <Input id="service-fee" type="number" min="0" step="0.01" required value={serviceFee} onChange={(event) => setServiceFee(event.target.value)} />
+                <Label htmlFor="service-fee" className="text-slate-300">Service Fee</Label>
+                <Input id="service-fee" type="number" min="0" step="0.01" required value={serviceFee} onChange={(event) => setServiceFee(event.target.value)} className="bg-slate-800/50 border-slate-700 text-white" />
               </div>
               <div className="grid gap-2">
-                <Label>Sparepart Used (Optional)</Label>
+                <Label className="text-slate-300">Sparepart Used (Optional)</Label>
                 <select
                   value={sparepartProductId}
                   onChange={(e) => setSparepartProductId(e.target.value)}
-                                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                  className="flex h-10 w-full rounded-md border border-slate-700 bg-slate-800/50 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
                 >
                   <option value="">No Sparepart</option>
                   {products.map((product) => (
@@ -918,12 +880,12 @@ function TransactionsForm({ onSuccess, editingTransaction }: { onSuccess: () => 
 
             <div className="grid gap-4 md:grid-cols-2 mt-2">
               <div className="grid gap-2">
-                <Label htmlFor="payment-method">Payment Method</Label>
+                <Label htmlFor="payment-method" className="text-slate-300">Payment Method</Label>
                 <select
                   id="payment-method"
                   value={paymentMethod}
                   onChange={(e) => setPaymentMethod(e.target.value as "lunas" | "kasbon")}
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                  className="flex h-10 w-full rounded-md border border-slate-700 bg-slate-800/50 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
                 >
                   <option value="lunas">Lunas (Paid)</option>
                   <option value="kasbon">Kasbon (Unpaid Debt)</option>
@@ -932,18 +894,18 @@ function TransactionsForm({ onSuccess, editingTransaction }: { onSuccess: () => 
 
               {paymentMethod === "kasbon" ? (
                 <div className="grid gap-2">
-                  <Label htmlFor="person-name">Customer Name</Label>
-                  <Input id="person-name" required value={personName} onChange={(e) => setPersonName(e.target.value)} placeholder="Required for Kasbon" />
+                  <Label htmlFor="person-name" className="text-slate-300">Customer Name</Label>
+                  <Input id="person-name" required value={personName} onChange={(e) => setPersonName(e.target.value)} placeholder="Required for Kasbon" className="bg-slate-800/50 border-slate-700 text-white" />
                 </div>
               ) : (
                 <div className="grid gap-2">
-                  <Label>Destination Wallet</Label>
+                  <Label className="text-slate-300">Destination Wallet</Label>
                   <select
                     value={destinationWalletId}
                     onChange={(e) => setDestinationWalletId(e.target.value)}
-                                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                    className="flex h-10 w-full rounded-md border border-slate-700 bg-slate-800/50 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
                   >
-                    <option value="">"Choose destination wallet"</option>
+                    <option value="">Choose destination wallet</option>
                     {wallets.map((wallet) => (
                       <option key={wallet.id} value={wallet.id}>
                         {wallet.name} ({wallet.walletType}) - {formatRupiah(wallet.balance)}
@@ -957,31 +919,31 @@ function TransactionsForm({ onSuccess, editingTransaction }: { onSuccess: () => 
         ) : null}
 
         {transactionType === "Digital PPOB (Pulsa/Game)" ? (
-          <div className="grid gap-4 rounded-lg border p-4">
+          <div className="grid gap-4 rounded-lg border border-slate-800/50 bg-slate-800/30 p-4">
             <div className="grid gap-4 md:grid-cols-3">
               <div className="grid gap-2">
-                <Label htmlFor="ppob-product-name">Product Name</Label>
-                <Input id="ppob-product-name" required value={ppobProductName} onChange={(event) => setPpobProductName(event.target.value)} placeholder="e.g. Pulsa 20K" />
+                <Label htmlFor="ppob-product-name" className="text-slate-300">Product Name</Label>
+                <Input id="ppob-product-name" required value={ppobProductName} onChange={(event) => setPpobProductName(event.target.value)} placeholder="e.g. Pulsa 20K" className="bg-slate-800/50 border-slate-700 text-white" />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="ppob-cost">Capital / Cost</Label>
-                <Input id="ppob-cost" required type="number" min="0.01" step="0.01" value={ppobCost} onChange={(event) => setPpobCost(event.target.value)} />
+                <Label htmlFor="ppob-cost" className="text-slate-300">Capital / Cost</Label>
+                <Input id="ppob-cost" required type="number" min="0.01" step="0.01" value={ppobCost} onChange={(event) => setPpobCost(event.target.value)} className="bg-slate-800/50 border-slate-700 text-white" />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="ppob-selling-price">Selling Price</Label>
-                <Input id="ppob-selling-price" required type="number" min="0.01" step="0.01" value={ppobSellingPrice} onChange={(event) => setPpobSellingPrice(event.target.value)} />
+                <Label htmlFor="ppob-selling-price" className="text-slate-300">Selling Price</Label>
+                <Input id="ppob-selling-price" required type="number" min="0.01" step="0.01" value={ppobSellingPrice} onChange={(event) => setPpobSellingPrice(event.target.value)} className="bg-slate-800/50 border-slate-700 text-white" />
               </div>
             </div>
 
             <div className="grid gap-4 md:grid-cols-3 mt-2">
               <div className="grid gap-2">
-                <Label>Source Wallet (Capital)</Label>
+                <Label className="text-slate-300">Source Wallet (Capital)</Label>
                 <select
                   value={sourceWalletId}
                   onChange={(e) => setSourceWalletId(e.target.value)}
-                                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                  className="flex h-10 w-full rounded-md border border-slate-700 bg-slate-800/50 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
                 >
-                  <option value="">"Choose source wallet"</option>
+                  <option value="">Choose source wallet</option>
                   {wallets.map((wallet) => (
                     <option key={wallet.id} value={wallet.id}>
                       {wallet.name} ({wallet.walletType}) - {formatRupiah(wallet.balance)}
@@ -991,12 +953,12 @@ function TransactionsForm({ onSuccess, editingTransaction }: { onSuccess: () => 
               </div>
 
               <div className="grid gap-2">
-                <Label htmlFor="payment-method">Payment Method</Label>
+                <Label htmlFor="payment-method" className="text-slate-300">Payment Method</Label>
                 <select
                   id="payment-method"
                   value={paymentMethod}
                   onChange={(e) => setPaymentMethod(e.target.value as "lunas" | "kasbon")}
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                  className="flex h-10 w-full rounded-md border border-slate-700 bg-slate-800/50 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
                 >
                   <option value="lunas">Lunas (Paid)</option>
                   <option value="kasbon">Kasbon (Unpaid Debt)</option>
@@ -1005,18 +967,18 @@ function TransactionsForm({ onSuccess, editingTransaction }: { onSuccess: () => 
 
               {paymentMethod === "kasbon" ? (
                 <div className="grid gap-2">
-                  <Label htmlFor="person-name">Customer Name</Label>
-                  <Input id="person-name" required value={personName} onChange={(e) => setPersonName(e.target.value)} placeholder="Required for Kasbon" />
+                  <Label htmlFor="person-name" className="text-slate-300">Customer Name</Label>
+                  <Input id="person-name" required value={personName} onChange={(e) => setPersonName(e.target.value)} placeholder="Required for Kasbon" className="bg-slate-800/50 border-slate-700 text-white" />
                 </div>
               ) : (
                 <div className="grid gap-2">
-                  <Label>Destination Wallet (Income)</Label>
+                  <Label className="text-slate-300">Destination Wallet (Income)</Label>
                   <select
                     value={destinationWalletId}
                     onChange={(e) => setDestinationWalletId(e.target.value)}
-                                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                    className="flex h-10 w-full rounded-md border border-slate-700 bg-slate-800/50 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
                   >
-                    <option value="">"Choose destination wallet"</option>
+                    <option value="">Choose destination wallet</option>
                     {wallets.map((wallet) => (
                       <option key={wallet.id} value={wallet.id}>
                         {wallet.name} ({wallet.walletType}) - {formatRupiah(wallet.balance)}
@@ -1030,26 +992,26 @@ function TransactionsForm({ onSuccess, editingTransaction }: { onSuccess: () => 
         ) : null}
 
         {transactionType === "Affiliate / Passive Income" ? (
-          <div className="grid gap-4 rounded-lg border p-4">
+          <div className="grid gap-4 rounded-lg border border-slate-800/50 bg-slate-800/30 p-4">
             <div className="grid gap-4 md:grid-cols-2">
               <div className="grid gap-2">
-                <Label htmlFor="platform-name">Platform Name</Label>
-                <Input id="platform-name" required value={platformName} onChange={(event) => setPlatformName(event.target.value)} />
+                <Label htmlFor="platform-name" className="text-slate-300">Platform Name</Label>
+                <Input id="platform-name" required value={platformName} onChange={(event) => setPlatformName(event.target.value)} className="bg-slate-800/50 border-slate-700 text-white" />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="commission-amount">Commission Amount</Label>
-                <Input id="commission-amount" required type="number" min="0.01" step="0.01" value={commissionAmount} onChange={(event) => setCommissionAmount(event.target.value)} />
+                <Label htmlFor="commission-amount" className="text-slate-300">Commission Amount</Label>
+                <Input id="commission-amount" required type="number" min="0.01" step="0.01" value={commissionAmount} onChange={(event) => setCommissionAmount(event.target.value)} className="bg-slate-800/50 border-slate-700 text-white" />
               </div>
             </div>
 
             <div className="grid gap-4 md:grid-cols-2 mt-2">
               <div className="grid gap-2">
-                <Label htmlFor="payment-method">Payment Method</Label>
+                <Label htmlFor="payment-method" className="text-slate-300">Payment Method</Label>
                 <select
                   id="payment-method"
                   value={paymentMethod}
                   onChange={(e) => setPaymentMethod(e.target.value as "lunas" | "kasbon")}
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                  className="flex h-10 w-full rounded-md border border-slate-700 bg-slate-800/50 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
                 >
                   <option value="lunas">Lunas (Paid)</option>
                   <option value="kasbon">Kasbon (Unpaid Debt)</option>
@@ -1058,18 +1020,18 @@ function TransactionsForm({ onSuccess, editingTransaction }: { onSuccess: () => 
 
               {paymentMethod === "kasbon" ? (
                 <div className="grid gap-2">
-                  <Label htmlFor="person-name">Customer Name</Label>
-                  <Input id="person-name" required value={personName} onChange={(e) => setPersonName(e.target.value)} placeholder="Required for Kasbon" />
+                  <Label htmlFor="person-name" className="text-slate-300">Customer Name</Label>
+                  <Input id="person-name" required value={personName} onChange={(e) => setPersonName(e.target.value)} placeholder="Required for Kasbon" className="bg-slate-800/50 border-slate-700 text-white" />
                 </div>
               ) : (
                 <div className="grid gap-2">
-                  <Label>Destination Wallet</Label>
+                  <Label className="text-slate-300">Destination Wallet</Label>
                   <select
                     value={destinationWalletId}
                     onChange={(e) => setDestinationWalletId(e.target.value)}
-                                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                    className="flex h-10 w-full rounded-md border border-slate-700 bg-slate-800/50 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
                   >
-                    <option value="">"Choose destination wallet"</option>
+                    <option value="">Choose destination wallet</option>
                     {wallets.map((wallet) => (
                       <option key={wallet.id} value={wallet.id}>
                         {wallet.name} ({wallet.walletType}) - {formatRupiah(wallet.balance)}
@@ -1083,26 +1045,26 @@ function TransactionsForm({ onSuccess, editingTransaction }: { onSuccess: () => 
         ) : null}
 
         {transactionType === "Internet Sharing (BIZNET)" ? (
-          <div className="grid gap-4 rounded-lg border p-4">
+          <div className="grid gap-4 rounded-lg border border-slate-800/50 bg-slate-800/30 p-4">
             <div className="grid gap-4 md:grid-cols-2">
               <div className="grid gap-2">
-                <Label htmlFor="customer-name">Customer Name</Label>
-                <Input id="customer-name" required value={customerName} onChange={(event) => setCustomerName(event.target.value)} />
+                <Label htmlFor="customer-name" className="text-slate-300">Customer Name</Label>
+                <Input id="customer-name" required value={customerName} onChange={(event) => setCustomerName(event.target.value)} className="bg-slate-800/50 border-slate-700 text-white" />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="internet-amount">Amount</Label>
-                <Input id="internet-amount" required type="number" min="0.01" step="0.01" value={internetAmount} onChange={(event) => setInternetAmount(event.target.value)} />
+                <Label htmlFor="internet-amount" className="text-slate-300">Amount</Label>
+                <Input id="internet-amount" required type="number" min="0.01" step="0.01" value={internetAmount} onChange={(event) => setInternetAmount(event.target.value)} className="bg-slate-800/50 border-slate-700 text-white" />
               </div>
             </div>
 
             <div className="grid gap-4 md:grid-cols-2 mt-2">
               <div className="grid gap-2">
-                <Label htmlFor="payment-method">Payment Method</Label>
+                <Label htmlFor="payment-method" className="text-slate-300">Payment Method</Label>
                 <select
                   id="payment-method"
                   value={paymentMethod}
                   onChange={(e) => setPaymentMethod(e.target.value as "lunas" | "kasbon")}
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                  className="flex h-10 w-full rounded-md border border-slate-700 bg-slate-800/50 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
                 >
                   <option value="lunas">Lunas (Paid)</option>
                   <option value="kasbon">Kasbon (Unpaid Debt)</option>
@@ -1111,18 +1073,18 @@ function TransactionsForm({ onSuccess, editingTransaction }: { onSuccess: () => 
 
               {paymentMethod === "kasbon" ? (
                 <div className="grid gap-2">
-                  <Label htmlFor="person-name">Kasbon Name</Label>
-                  <Input id="person-name" required value={personName} onChange={(e) => setPersonName(e.target.value)} placeholder="Required for Kasbon" />
+                  <Label htmlFor="person-name" className="text-slate-300">Kasbon Name</Label>
+                  <Input id="person-name" required value={personName} onChange={(e) => setPersonName(e.target.value)} placeholder="Required for Kasbon" className="bg-slate-800/50 border-slate-700 text-white" />
                 </div>
               ) : (
                 <div className="grid gap-2">
-                  <Label>Destination Wallet</Label>
+                  <Label className="text-slate-300">Destination Wallet</Label>
                   <select
                     value={destinationWalletId}
                     onChange={(e) => setDestinationWalletId(e.target.value)}
-                                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                    className="flex h-10 w-full rounded-md border border-slate-700 bg-slate-800/50 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
                   >
-                    <option value="">"Choose destination wallet"</option>
+                    <option value="">Choose destination wallet</option>
                     {wallets.map((wallet) => (
                       <option key={wallet.id} value={wallet.id}>
                         {wallet.name} ({wallet.walletType}) - {formatRupiah(wallet.balance)}
@@ -1136,17 +1098,17 @@ function TransactionsForm({ onSuccess, editingTransaction }: { onSuccess: () => 
         ) : null}
 
         {transactionType === "Kasbon (Employee Loan)" ? (
-          <div className="grid gap-4 rounded-lg border p-4">
+          <div className="grid gap-4 rounded-lg border border-slate-800/50 bg-slate-800/30 p-4">
             <div className="grid gap-4 md:grid-cols-2">
               <div className="grid gap-2">
-                <Label htmlFor="kasbon-source-wallet">Source Wallet *</Label>
+                <Label htmlFor="kasbon-source-wallet" className="text-slate-300">Source Wallet *</Label>
                 <select
                   id="kasbon-source-wallet"
                   value={sourceWalletId}
                   onChange={(e) => setSourceWalletId(e.target.value)}
-                                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
+                  className="flex h-10 w-full rounded-md border border-slate-700 bg-slate-800/50 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
                 >
-                  <option value="">"Choose source wallet"</option>
+                  <option value="">Choose source wallet</option>
                   {wallets.map((wallet) => (
                     <option key={wallet.id} value={wallet.id}>
                       {wallet.name} ({wallet.walletType}) - {formatRupiah(wallet.balance)}
@@ -1155,7 +1117,7 @@ function TransactionsForm({ onSuccess, editingTransaction }: { onSuccess: () => 
                 </select>
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="kasbon-amount">Amount *</Label>
+                <Label htmlFor="kasbon-amount" className="text-slate-300">Amount *</Label>
                 <Input
                   id="kasbon-amount"
                   type="number"
@@ -1165,37 +1127,37 @@ function TransactionsForm({ onSuccess, editingTransaction }: { onSuccess: () => 
                   value={amount}
                   onChange={(event) => setAmount(event.target.value)}
                   placeholder="0.00"
-                  className="focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
+                  className="bg-slate-800/50 border-slate-700 text-white focus:ring-2 focus:ring-orange-500"
                 />
               </div>
             </div>
 
             <div className="grid gap-2">
-              <Label htmlFor="kasbon-employee-name">Employee / Borrower Name *</Label>
+              <Label htmlFor="kasbon-employee-name" className="text-slate-300">Employee / Borrower Name *</Label>
               <Input
                 id="kasbon-employee-name"
                 required
                 value={employeeName}
                 onChange={(e) => setEmployeeName(e.target.value)}
                 placeholder="e.g. John Doe"
-                className="focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
+                className="bg-slate-800/50 border-slate-700 text-white focus:ring-2 focus:ring-orange-500"
               />
             </div>
           </div>
         ) : null}
 
         {transactionType === "Balance Transfer" ? (
-          <div className="grid gap-4 rounded-lg border p-4">
+          <div className="grid gap-4 rounded-lg border border-slate-800/50 bg-slate-800/30 p-4">
             <div className="grid gap-4 md:grid-cols-2">
               <div className="grid gap-2">
-                <Label htmlFor="balance-transfer-source">From Wallet *</Label>
+                <Label htmlFor="balance-transfer-source" className="text-slate-300">From Wallet *</Label>
                 <select
                   id="balance-transfer-source"
                   value={sourceWalletId}
                   onChange={(e) => setSourceWalletId(e.target.value)}
-                                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
+                  className="flex h-10 w-full rounded-md border border-slate-700 bg-slate-800/50 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
                 >
-                  <option value="">"Choose source wallet"</option>
+                  <option value="">Choose source wallet</option>
                   {wallets.map((wallet) => (
                     <option key={wallet.id} value={wallet.id}>
                       {wallet.name} ({wallet.walletType}) - {formatRupiah(wallet.balance)}
@@ -1204,14 +1166,14 @@ function TransactionsForm({ onSuccess, editingTransaction }: { onSuccess: () => 
                 </select>
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="balance-transfer-destination">To Wallet *</Label>
+                <Label htmlFor="balance-transfer-destination" className="text-slate-300">To Wallet *</Label>
                 <select
                   id="balance-transfer-destination"
                   value={destinationWalletId}
                   onChange={(e) => setDestinationWalletId(e.target.value)}
-                                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
+                  className="flex h-10 w-full rounded-md border border-slate-700 bg-slate-800/50 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
                 >
-                  <option value="">"Choose destination wallet"</option>
+                  <option value="">Choose destination wallet</option>
                   {wallets.map((wallet) => (
                     <option key={wallet.id} value={wallet.id}>
                       {wallet.name} ({wallet.walletType}) - {formatRupiah(wallet.balance)}
@@ -1222,7 +1184,7 @@ function TransactionsForm({ onSuccess, editingTransaction }: { onSuccess: () => 
             </div>
 
             <div className="grid gap-2">
-              <Label htmlFor="balance-transfer-amount">Amount *</Label>
+              <Label htmlFor="balance-transfer-amount" className="text-slate-300">Amount *</Label>
               <Input
                 id="balance-transfer-amount"
                 type="number"
@@ -1232,7 +1194,7 @@ function TransactionsForm({ onSuccess, editingTransaction }: { onSuccess: () => 
                 value={amount}
                 onChange={(event) => setAmount(event.target.value)}
                 placeholder="0.00"
-                className="focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
+                className="bg-slate-800/50 border-slate-700 text-white focus:ring-2 focus:ring-orange-500"
               />
             </div>
           </div>
@@ -1248,159 +1210,12 @@ function TransactionsForm({ onSuccess, editingTransaction }: { onSuccess: () => 
         </Button>
       </form>
       </div>
-
-      {/* Balance Transfer Dialog */}
-      <Dialog open={isTransferDialogOpen} onOpenChange={setIsTransferDialogOpen}>
-        <DialogContent className="sm:max-w-[500px] bg-slate-900 border-slate-800">
-          <DialogHeader>
-            <DialogTitle className="text-white">Balance Transfer</DialogTitle>
-          </DialogHeader>
-          <form
-            onSubmit={async (e) => {
-              e.preventDefault();
-
-              const fromWallet = wallets.find((w) => w.id === transferFromWallet);
-              const toWallet = wallets.find((w) => w.id === transferToWallet);
-              const parsedAmount = Number(transferAmount || "0");
-
-              if (!fromWallet || !toWallet) {
-                toast.error("Please select both source and destination wallets.");
-                return;
-              }
-              if (fromWallet.id === toWallet.id) {
-                toast.error("Source and destination wallet must be different.");
-                return;
-              }
-              if (parsedAmount <= 0) {
-                toast.error("Amount must be greater than 0.");
-                return;
-              }
-              if (fromWallet.balance < parsedAmount) {
-                toast.error("Insufficient source wallet balance.");
-                return;
-              }
-
-              setIsTransferring(true);
-
-              try {
-                // Use handleTransfer from FinanceContext
-                handleTransfer(fromWallet.id, toWallet.id, parsedAmount, 0);
-
-                toast.success("Balance transferred successfully");
-                setIsTransferDialogOpen(false);
-                setTransferFromWallet("");
-                setTransferToWallet("");
-                setTransferAmount("");
-                setTransferNotes("");
-                setTransferDate(new Date().toISOString().split('T')[0]);
-              } catch (error) {
-                toast.error("Transfer failed", { description: error instanceof Error ? error.message : "Unknown error" });
-              } finally {
-                setIsTransferring(false);
-              }
-            }}
-            className="space-y-4"
-          >
-            <div className="grid gap-2">
-              <Label htmlFor="transfer-from">From Wallet</Label>
-              <select
-                id="transfer-from"
-                value={transferFromWallet}
-                onChange={(e) => setTransferFromWallet(e.target.value)}
-                className="flex h-10 w-full rounded-md border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
-              >
-                <option value="">Select source wallet</option>
-                {wallets.map((wallet) => (
-                  <option key={wallet.id} value={wallet.id}>
-                    {wallet.name} ({wallet.walletType}) - {formatRupiah(wallet.balance)}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="grid gap-2">
-              <Label htmlFor="transfer-to">To Wallet</Label>
-              <select
-                id="transfer-to"
-                value={transferToWallet}
-                onChange={(e) => setTransferToWallet(e.target.value)}
-                className="flex h-10 w-full rounded-md border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
-              >
-                <option value="">Select destination wallet</option>
-                {wallets.map((wallet) => (
-                  <option key={wallet.id} value={wallet.id}>
-                    {wallet.name} ({wallet.walletType}) - {formatRupiah(wallet.balance)}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="grid gap-2">
-              <Label htmlFor="transfer-amount">Amount</Label>
-              <Input
-                id="transfer-amount"
-                type="number"
-                min="0.01"
-                step="0.01"
-                required
-                value={transferAmount}
-                onChange={(e) => setTransferAmount(e.target.value)}
-                placeholder="0.00"
-                className="bg-slate-800 border-slate-700 text-white focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
-              />
-            </div>
-
-            <div className="grid gap-2">
-              <Label htmlFor="transfer-date">Date</Label>
-              <Input
-                id="transfer-date"
-                type="date"
-                required
-                value={transferDate}
-                onChange={(e) => setTransferDate(e.target.value)}
-                className="bg-slate-800 border-slate-700 text-white focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
-              />
-            </div>
-
-            <div className="grid gap-2">
-              <Label htmlFor="transfer-notes">Notes</Label>
-              <Input
-                id="transfer-notes"
-                value={transferNotes}
-                onChange={(e) => setTransferNotes(e.target.value)}
-                placeholder="Optional note"
-                className="bg-slate-800 border-slate-700 text-white focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
-              />
-            </div>
-
-            <div className="flex justify-end gap-3">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setIsTransferDialogOpen(false)}
-                disabled={isTransferring}
-                className="border-slate-700 text-white hover:bg-slate-800"
-              >
-                Cancel
-              </Button>
-              <Button
-                type="submit"
-                disabled={isTransferring}
-                className="bg-orange-500 text-white hover:bg-orange-600 shadow-[0_0_10px_rgba(249,115,22,0.3)] transition-all"
-              >
-                {isTransferring ? "Transferring..." : "Confirm Transfer"}
-              </Button>
-            </div>
-          </form>
-        </DialogContent>
-      </Dialog>
     </section>
   );
 }
 
 function ExpensesForm({ onSuccess }: { onSuccess: () => void }) {
   const { wallets, transactions, setTransactions, categories, addTransaction } = useFinanceContext();
-  // Dynamic expense categories from Settings module
   const expenseCategories = categories.filter(cat => cat.type === 'expense');
 
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -1441,17 +1256,19 @@ function ExpensesForm({ onSuccess }: { onSuccess: () => void }) {
       return;
     }
 
-    // Use addTransaction to handle wallet balance and transaction recording
+    // PERBAIKAN: Selaraskan payload dengan kunci "fromWalletId" (camelCase)
+    // agar bisa ditangkap oleh FinanceContext dengan benar
     const newTransaction = {
       id: Date.now().toString(),
       date: expenseDate,
-      type: "expense" as const,
+      type: "expense",
       category: expenseCategory,
       amount: parsedAmount,
       fromWalletId: selectedWallet.id,
       notes: expenseDescription,
     };
-    await addTransaction(newTransaction);
+    
+    await addTransaction(newTransaction as Transaction);
 
     toast.success("Expense recorded successfully");
     setIsSubmitting(false);
@@ -1571,13 +1388,10 @@ function TransactionsDashboard() {
   const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
 
-  // Search & Date Filter state
   const [searchQuery, setSearchQuery] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
 
-  // Derive income and expense transactions from FinanceContext
-  // Only transactions with type === 'expense' count as expenses (not transfers/asset conversions)
   const incomeTransactions = useMemo(() => transactions.filter(t => t.type !== "expense" && t.type !== "transfer"), [transactions]);
   const expenses = useMemo(() => transactions.filter(t => t.type === "expense").map(t => ({
     id: t.id,
@@ -1645,7 +1459,6 @@ function TransactionsDashboard() {
     return map[color] || map.slate;
   };
 
-  // Filter logic
   const filterBySearchAndDate = (items: any[], notesKey: string) => {
     return items.filter((item) => {
       const q = searchQuery.toLowerCase();
@@ -1679,7 +1492,6 @@ function TransactionsDashboard() {
 
   return (
     <div className="flex flex-col w-full gap-6 bg-[#020617] min-h-screen p-6">
-      {/* 1. HEADER WITH ADD BUTTONS + SEARCH/FILTER (FULL WIDTH) */}
       <div className="w-full bg-slate-900/50 backdrop-blur-sm border border-slate-800/50 rounded-xl p-6 space-y-4">
         <div className="flex items-center justify-between">
           <div>
@@ -1698,7 +1510,6 @@ function TransactionsDashboard() {
           </div>
         </div>
 
-        {/* Search & Date Filter Row */}
         <div className="flex flex-wrap items-center gap-3">
           <div className="relative flex-1 min-w-[200px] max-w-sm">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
@@ -1737,7 +1548,6 @@ function TransactionsDashboard() {
         </div>
       </div>
 
-      {/* 2. STATS BAR (FULL WIDTH) */}
       <div className="w-full grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="bg-slate-900/40 backdrop-blur-sm border border-slate-800/50 rounded-xl p-6">
           <p className="text-slate-400 text-sm">Total Income</p>
@@ -1753,10 +1563,7 @@ function TransactionsDashboard() {
         </div>
       </div>
 
-
-      {/* 3. MAIN DATA & TABLES (FULL WIDTH) */}
       <div className="w-full flex flex-col gap-6">
-        {/* Income Table */}
         <div className="bg-slate-900/40 backdrop-blur-sm border border-slate-800/50 rounded-xl p-6">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-semibold text-white">Income Transactions</h3>
@@ -1832,7 +1639,6 @@ function TransactionsDashboard() {
         </Table>
       </div>
 
-        {/* Expenses Table */}
         <div className="bg-slate-900/40 backdrop-blur-sm border border-slate-800/50 rounded-xl p-6">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-semibold text-white">Expense Transactions</h3>
@@ -1910,7 +1716,6 @@ function TransactionsDashboard() {
       </div>
       </div>
 
-      {/* Add Income Modal */}
       <Dialog open={isIncomeModalOpen} onOpenChange={(open) => { setIsIncomeModalOpen(open); if (!open) setEditingTransaction(null); }}>
         <DialogContent className="sm:max-w-[600px] bg-slate-900 border-slate-800 text-white max-h-[90vh] overflow-y-auto">
           <DialogHeader>
@@ -1920,7 +1725,6 @@ function TransactionsDashboard() {
         </DialogContent>
       </Dialog>
 
-      {/* Add Expense Modal */}
       <Dialog open={isExpenseModalOpen} onOpenChange={(open) => { setIsExpenseModalOpen(open); if (!open) setEditingTransaction(null); }}>
         <DialogContent className="sm:max-w-[500px] bg-slate-900 border-slate-800 text-white">
           <DialogHeader>
