@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { AlertCircleIcon, WalletIcon, TrendingUpIcon, Trash2, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -15,16 +15,9 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { formatRupiah } from "@/lib/utils";
+// Pastikan context di-import dengan benar
 import { useFinanceContext } from "@/context/FinanceContext";
 
 type InvestmentType = "gold" | "bibit";
@@ -38,30 +31,30 @@ type Investment = {
   currentPrice: number | string;
 };
 
-type Wallet = {
-  id: string;
-  type: "business" | "personal";
-  balance: number | string;
-};
-
-const DEFAULT_GOLD_PRICE = 1_300_000;
-
 export default function InvestmentsPage() {
-  const { wallets, goldPrice, setGoldPrice, updateInvestment } = useFinanceContext();
-  const [investments, setInvestments] = useState<Investment[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  // 1. MENGGUNAKAN CONTEXT SEBAGAI SUMBER UTAMA (Single Source of Truth)
+  // Kita mengambil 'investments' dan 'setInvestments' langsung dari global context.
+  // Dengan ini, kita tidak perlu lagi state lokal maupun fungsi loadData() yang berat.
+  const { 
+    wallets, 
+    goldPrice, 
+    setGoldPrice, 
+    updateInvestment,
+    investments,        
+    setInvestments      
+  } = useFinanceContext();
+
   const [isSaving, setIsSaving] = useState(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [editingInvestment, setEditingInvestment] = useState<Investment | null>(null);
 
-  // Edit form state
+  // State untuk form Edit
   const [editName, setEditName] = useState("");
   const [editType, setEditType] = useState<InvestmentType>("gold");
   const [editQuantity, setEditQuantity] = useState("");
   const [editAverageBuyPrice, setEditAverageBuyPrice] = useState("");
   const [editCurrentPrice, setEditCurrentPrice] = useState("");
 
-  // Populate edit form when editingInvestment changes
+  // Mengisi form edit otomatis saat tombol "Edit" ditekan
   useEffect(() => {
     if (editingInvestment) {
       setEditName(editingInvestment.name || "");
@@ -78,62 +71,16 @@ export default function InvestmentsPage() {
     }
   }, [editingInvestment]);
 
+  // State untuk form Tambah (Add)
   const [name, setName] = useState("");
   const [type, setType] = useState<InvestmentType>("gold");
   const [quantity, setQuantity] = useState("");
   const [averageBuyPrice, setAverageBuyPrice] = useState("");
   const [currentPrice, setCurrentPrice] = useState("");
 
-  const supabase = useMemo(() => {
-    try {
-      return getSupabaseClient();
-    } catch {
-      return null;
-    }
-  }, []);
+  const supabase = getSupabaseClient();
 
-  const loadData = useCallback(async () => {
-    if (!supabase) {
-      setErrorMessage("Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY.");
-      setIsLoading(false);
-      return;
-    }
-
-    setIsLoading(true);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const sb: any = supabase;
-    const [investmentsResult, walletsResult] = await Promise.all([
-      sb
-        .from("investments")
-        .select("id, name, type, quantity, average_buy_price, current_price")
-        .order("name", { ascending: true }),
-      sb.from("wallets").select("id, type, balance"),
-    ]);
-
-    if (investmentsResult.error || walletsResult.error) {
-      setErrorMessage(
-        investmentsResult.error?.message ?? walletsResult.error?.message ?? "Failed to load investments data.",
-      );
-      setIsLoading(false);
-      return;
-    }
-
-    setInvestments((investmentsResult.data ?? []).map((item: any) => ({
-      id: item.id,
-      name: item.name,
-      type: item.type,
-      quantity: Number(item.quantity) || 0,
-      averageBuyPrice: Number(item.average_buy_price) || 0,
-      currentPrice: Number(item.current_price) || 0,
-    })) as Investment[]);
-    setErrorMessage(null);
-    setIsLoading(false);
-  }, [supabase]);
-
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
-
+  // 2. FUNGSI EDIT
   async function handleEditSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!editingInvestment) return;
@@ -147,23 +94,19 @@ export default function InvestmentsPage() {
       currentPrice: Number(editCurrentPrice || "0"),
     };
 
-    // Update in context (Supabase + local state)
+    // Memanggil updateInvestment dari Context.
+    // Fungsi ini akan secara otomatis memperbarui database DAN state global.
     await updateInvestment(editingInvestment.id, updatedData);
-
-    // Update local state
-    setInvestments(prev =>
-      prev.map(inv => inv.id === editingInvestment.id ? { ...inv, ...updatedData } : inv)
-    );
 
     toast.success("Investment updated successfully");
     setIsSaving(false);
     setEditingInvestment(null);
   }
 
+  // 3. FUNGSI TAMBAH (ADD)
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!supabase) {
-      setErrorMessage("Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY.");
       toast.error("Supabase is not configured.");
       return;
     }
@@ -177,25 +120,44 @@ export default function InvestmentsPage() {
       current_price: Number(currentPrice || "0"),
     };
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error } = await (supabase as any).from("investments").insert(payload as any);
+    // Menyimpan data langsung ke Supabase
+    const { data, error } = await supabase
+      .from("investments")
+      .insert(payload)
+      .select()
+      .single(); // Wajib menggunakan select() agar UUID asli dari database dikembalikan
+
     if (error) {
-      setErrorMessage(error.message);
       toast.error("Failed to add investment", { description: error.message });
       setIsSaving(false);
       return;
     }
 
+    if (data) {
+      // Sinkronisasikan secara manual ke state Global Context
+      // Agar UI ter-update real-time tanpa harus refresh halaman
+      const newInvestment: Investment = {
+        id: data.id,
+        name: data.name,
+        type: data.type as InvestmentType,
+        quantity: Number(data.quantity),
+        averageBuyPrice: Number(data.average_buy_price),
+        currentPrice: Number(data.current_price),
+      };
+      setInvestments([...investments, newInvestment]);
+    }
+
     toast.success("Investment added");
+    // Reset Form
     setName("");
     setType("gold");
     setQuantity("");
     setAverageBuyPrice("");
     setCurrentPrice("");
     setIsSaving(false);
-    await loadData();
   }
 
+  // 4. FUNGSI HAPUS (DELETE)
   async function handleDeleteInvestment(id: string) {
     if (!supabase) {
       toast.error("Supabase is not configured.");
@@ -206,6 +168,7 @@ export default function InvestmentsPage() {
       return;
     }
 
+    // Hapus dari Supabase
     const { error } = await supabase.from("investments").delete().eq("id", id);
 
     if (error) {
@@ -213,10 +176,12 @@ export default function InvestmentsPage() {
       return;
     }
 
+    // Perbarui Global Context agar item langsung hilang dari tampilan
+    setInvestments(investments.filter((inv) => inv.id !== id));
     toast.success("Investment deleted");
-    await loadData();
   }
 
+  // Kalkulasi Keuangan
   const totalLiquidCash = wallets
     .filter((wallet) => wallet.type === "business" || wallet.type === "personal")
     .reduce((sum, wallet) => sum + safeNumber(wallet.balance), 0);
@@ -236,8 +201,6 @@ export default function InvestmentsPage() {
         <h2 className="text-2xl font-semibold">Investments</h2>
         <p className="text-muted-foreground">Track investment performance and calculate Zakat Mal eligibility.</p>
       </div>
-
-      {errorMessage ? <p className="text-sm text-destructive">{errorMessage}</p> : null}
 
       <Card className="border-primary/40 ring-2 ring-primary/20">
         <CardHeader>
@@ -372,100 +335,96 @@ export default function InvestmentsPage() {
           <p className="text-sm text-muted-foreground">Monitor your active accounts and investment performance.</p>
         </div>
 
-        {isLoading ? (
-          <div className="text-center text-muted-foreground py-8">Loading accounts...</div>
-        ) : (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {wallets.map((wallet) => (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {wallets.map((wallet) => (
+            <div 
+              key={wallet.id} 
+              className="relative overflow-hidden rounded-xl bg-slate-900/50 p-6 backdrop-blur-md border border-slate-800 transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_0_15px_rgba(249,115,22,0.3)]"
+            >
+              <div className="flex flex-col justify-between h-full space-y-4">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    {wallet.type} Wallet
+                  </span>
+                  <WalletIcon className="h-5 w-5 text-orange-500" />
+                </div>
+                <div>
+                  <p className="text-3xl font-bold tracking-tight text-foreground">
+                    {formatRupiah(wallet.balance)}
+                  </p>
+                </div>
+                <div className="flex items-center justify-between pt-4 border-t border-slate-800/50">
+                  <span className="text-xs text-orange-500/80 font-medium tracking-wide">Active Balance</span>
+                </div>
+              </div>
+            </div>
+          ))}
+
+          {investments.map((item) => {
+            const qty = safeNumber(item.quantity);
+            const buy = safeNumber(item.averageBuyPrice);
+            const current = safeNumber(item.currentPrice);
+            const totalValue = qty * current;
+            const totalCost = qty * buy;
+            const gainLoss = totalValue - totalCost;
+
+            return (
               <div 
-                key={wallet.id} 
+                key={item.id} 
                 className="relative overflow-hidden rounded-xl bg-slate-900/50 p-6 backdrop-blur-md border border-slate-800 transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_0_15px_rgba(249,115,22,0.3)]"
               >
                 <div className="flex flex-col justify-between h-full space-y-4">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                      {wallet.type} Wallet
+                      {item.name} ({item.type})
                     </span>
-                    <WalletIcon className="h-5 w-5 text-orange-500" />
+                    <div className="flex items-center gap-2">
+                      <TrendingUpIcon className="h-5 w-5 text-orange-500" />
+                      <button
+                        type="button"
+                        onClick={() => setEditingInvestment(item)}
+                        className="inline-flex items-center justify-center rounded-md p-1.5 text-muted-foreground transition-all duration-200 hover:text-blue-500 hover:bg-blue-500/10"
+                        title="Edit Investment"
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteInvestment(item.id)}
+                        className="inline-flex items-center justify-center rounded-md p-1.5 text-muted-foreground transition-all duration-200 hover:text-red-500 hover:bg-red-500/10"
+                        title="Delete Investment"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
                   </div>
                   <div>
                     <p className="text-3xl font-bold tracking-tight text-foreground">
-                      {formatRupiah(wallet.balance)}
+                      {formatRupiah(totalValue)}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Qty: {qty} • Avg: {formatRupiah(buy)}
                     </p>
                   </div>
                   <div className="flex items-center justify-between pt-4 border-t border-slate-800/50">
-                    <span className="text-xs text-orange-500/80 font-medium tracking-wide">Active Balance</span>
+                    <span className="text-xs font-medium text-slate-400">Gain/Loss</span>
+                    <span 
+                      className={`text-sm font-semibold ${gainLoss >= 0 ? "text-emerald-500" : "text-destructive"}`}
+                    >
+                      {gainLoss >= 0 ? "+" : ""}{formatRupiah(gainLoss)}
+                    </span>
                   </div>
                 </div>
               </div>
-            ))}
-
-            {investments.map((item) => {
-              const qty = safeNumber(item.quantity);
-              const buy = safeNumber(item.averageBuyPrice);
-              const current = safeNumber(item.currentPrice);
-              const totalValue = qty * current;
-              const totalCost = qty * buy;
-              const gainLoss = totalValue - totalCost;
-
-              return (
-                <div 
-                  key={item.id} 
-                  className="relative overflow-hidden rounded-xl bg-slate-900/50 p-6 backdrop-blur-md border border-slate-800 transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_0_15px_rgba(249,115,22,0.3)]"
-                >
-                  <div className="flex flex-col justify-between h-full space-y-4">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                        {item.name} ({item.type})
-                      </span>
-                      <div className="flex items-center gap-2">
-                        <TrendingUpIcon className="h-5 w-5 text-orange-500" />
-                        <button
-                          type="button"
-                          onClick={() => setEditingInvestment(item)}
-                          className="inline-flex items-center justify-center rounded-md p-1.5 text-muted-foreground transition-all duration-200 hover:text-blue-500 hover:bg-blue-500/10"
-                          title="Edit Investment"
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteInvestment(item.id)}
-                          className="inline-flex items-center justify-center rounded-md p-1.5 text-muted-foreground transition-all duration-200 hover:text-red-500 hover:bg-red-500/10"
-                          title="Delete Investment"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </div>
-                    </div>
-                    <div>
-                      <p className="text-3xl font-bold tracking-tight text-foreground">
-                        {formatRupiah(totalValue)}
-                      </p>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Qty: {qty} • Avg: {formatRupiah(buy)}
-                      </p>
-                    </div>
-                    <div className="flex items-center justify-between pt-4 border-t border-slate-800/50">
-                      <span className="text-xs font-medium text-slate-400">Gain/Loss</span>
-                      <span 
-                        className={`text-sm font-semibold ${gainLoss >= 0 ? "text-emerald-500" : "text-destructive"}`}
-                      >
-                        {gainLoss >= 0 ? "+" : ""}{formatRupiah(gainLoss)}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-            
-            {!isLoading && wallets.length === 0 && investments.length === 0 && (
-              <div className="col-span-full text-center text-muted-foreground py-8 border border-dashed border-slate-800 rounded-xl">
-                No wallets or investments found.
-              </div>
-            )}
-          </div>
-        )}
+            );
+          })}
+          
+          {wallets.length === 0 && investments.length === 0 && (
+            <div className="col-span-full text-center text-muted-foreground py-8 border border-dashed border-slate-800 rounded-xl">
+              No wallets or investments found.
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Edit Investment Modal */}
@@ -565,5 +524,3 @@ function safeNumber(value: number | string) {
   const numericValue = typeof value === "number" ? value : Number(value);
   return Number.isFinite(numericValue) ? numericValue : 0;
 }
-
-
