@@ -18,15 +18,23 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Pencil, Trash2, X } from "lucide-react";
+import { Pencil, Trash2 } from "lucide-react";
 import { useFinanceContext } from "@/context/FinanceContext";
 
 export default function SettingsPage() {
-  // State untuk melacak tab mana yang sedang aktif
   const [activeTab, setActiveTab] = useState("general");
 
-  // Use FinanceContext for wallets and categories
-  const { wallets, setWallets, categories, addCategory, deleteCategory, editCategory } = useFinanceContext();
+  // DOKUMENTASI: Kita mengimpor fungsi addWallet, editWallet, dan deleteWallet dari context
+  const { 
+    wallets, 
+    categories, 
+    addCategory, 
+    deleteCategory, 
+    editCategory,
+    addWallet,       
+    editWallet,      
+    deleteWallet     
+  } = useFinanceContext();
 
   // Category form state
   const [categoryName, setCategoryName] = useState("");
@@ -45,6 +53,7 @@ export default function SettingsPage() {
   const [walletCategory, setWalletCategory] = useState<"Bank" | "E-Wallet" | "Cash">("Bank");
   const [walletBalance, setWalletBalance] = useState("");
   const [editWalletTarget, setEditWalletTarget] = useState<typeof wallets[0] | null>(null);
+  const [isSavingWallet, setIsSavingWallet] = useState(false);
 
   // Navigation preferences state
   const [landingPage, setLandingPage] = useState("Dashboard");
@@ -102,8 +111,11 @@ export default function SettingsPage() {
     }
   };
 
-  const handleDeleteWallet = (id: string) => {
-    setWallets(wallets.filter(w => w.id !== id));
+  // DOKUMENTASI: Fungsi ini sekarang akan memanggil logika penghapusan ke Supabase
+  const handleDeleteWallet = async (id: string) => {
+    if(window.confirm("Apakah kamu yakin ingin menghapus wallet ini?")) {
+      await deleteWallet(id);
+    }
   };
 
   const handleEditWallet = (wallet: typeof wallets[0]) => {
@@ -113,6 +125,40 @@ export default function SettingsPage() {
     setWalletCategory(wallet.walletType);
     setWalletBalance(wallet.balance.toString());
     setIsWalletModalOpen(true);
+  };
+
+  // DOKUMENTASI: Handler utama untuk menyimpan dan mengupdate wallet ke Supabase
+  const handleSaveWallet = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!walletName || !walletBalance) return;
+    
+    setIsSavingWallet(true);
+
+    if (editWalletTarget) {
+      // Jika mode Edit, panggil fungsi editWallet
+      await editWallet(editWalletTarget.id, {
+        name: walletName,
+        type: walletType,
+        walletType: walletCategory,
+        balance: Number(walletBalance)
+      });
+    } else {
+      // Jika mode Tambah, panggil fungsi addWallet
+      await addWallet({
+        name: walletName,
+        type: walletType,
+        walletType: walletCategory,
+        balance: Number(walletBalance)
+      });
+    }
+
+    setWalletName("");
+    setWalletType("business");
+    setWalletCategory("Bank");
+    setWalletBalance("");
+    setEditWalletTarget(null);
+    setIsSavingWallet(false);
+    setIsWalletModalOpen(false);
   };
 
   return (
@@ -179,7 +225,6 @@ export default function SettingsPage() {
         {/* === KONTEN TAB BUSINESS === */}
         {activeTab === "business" && (
           <>
-            {/* Add New Category Form */}
             <div className="w-full bg-slate-900/40 backdrop-blur-sm border border-slate-800/50 rounded-xl p-6">
               <h3 className="text-lg font-semibold text-white mb-2">Add New Category</h3>
               <p className="text-slate-400 text-sm mb-4">Create a new category for inventory or expenses.</p>
@@ -224,7 +269,6 @@ export default function SettingsPage() {
               </form>
             </div>
 
-            {/* Categories Table */}
             <div className="w-full bg-slate-900/40 backdrop-blur-sm border border-slate-800/50 rounded-xl p-6">
               <h3 className="text-lg font-semibold text-white mb-2">Categories</h3>
               <p className="text-slate-400 text-sm mb-4">Manage your inventory and expense categories.</p>
@@ -284,7 +328,14 @@ export default function SettingsPage() {
                 <p className="text-sm text-slate-400">Manage your digital wallets, bank accounts, and cash.</p>
               </div>
               <button 
-                onClick={() => setIsWalletModalOpen(true)}
+                onClick={() => {
+                  setEditWalletTarget(null);
+                  setWalletName("");
+                  setWalletType("business");
+                  setWalletCategory("Bank");
+                  setWalletBalance("");
+                  setIsWalletModalOpen(true);
+                }}
                 className="bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-400 hover:to-orange-500 text-white px-5 py-2 rounded-lg font-medium transition-all shadow-[0_0_15px_rgba(249,115,22,0.3)]"
               >
                 + Add Wallet
@@ -400,35 +451,7 @@ export default function SettingsPage() {
           <DialogHeader>
             <DialogTitle className="text-white">{editWalletTarget ? "Edit Wallet" : "Add New Wallet"}</DialogTitle>
           </DialogHeader>
-          <form 
-            className="space-y-4"
-            onSubmit={(e) => {
-              e.preventDefault();
-              if (walletName && walletBalance) {
-                if (editWalletTarget) {
-                  setWallets(wallets.map(w => 
-                    w.id === editWalletTarget.id 
-                      ? { ...w, name: walletName, type: walletType, walletType: walletCategory, balance: Number(walletBalance) }
-                      : w
-                  ));
-                } else {
-                  setWallets([...wallets, {
-                    id: Date.now().toString(),
-                    name: walletName,
-                    type: walletType,
-                    walletType: walletCategory,
-                    balance: Number(walletBalance)
-                  }]);
-                }
-                setWalletName("");
-                setWalletType("business");
-                setWalletCategory("Bank");
-                setWalletBalance("");
-                setEditWalletTarget(null);
-                setIsWalletModalOpen(false);
-              }
-            }}
-          >
+          <form className="space-y-4" onSubmit={handleSaveWallet}>
             <div className="grid gap-2">
               <Label htmlFor="wallet-name" className="text-slate-300">Wallet Name</Label>
               <Input
@@ -472,15 +495,17 @@ export default function SettingsPage() {
                 type="button"
                 variant="outline"
                 onClick={() => setIsWalletModalOpen(false)}
+                disabled={isSavingWallet}
                 className="border-slate-700 text-slate-300 hover:bg-slate-800"
               >
                 Cancel
               </Button>
               <Button
                 type="submit"
+                disabled={isSavingWallet}
                 className="bg-gradient-to-r from-orange-500 to-orange-600 text-white hover:from-orange-600 hover:to-orange-700 shadow-[0_0_15px_rgba(249,115,22,0.4)] transition-all"
               >
-                {editWalletTarget ? "Save Changes" : "Add Wallet"}
+                {isSavingWallet ? "Saving..." : (editWalletTarget ? "Save Changes" : "Add Wallet")}
               </Button>
             </div>
           </form>

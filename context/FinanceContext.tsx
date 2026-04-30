@@ -103,6 +103,9 @@ type FinanceContextValue = {
   addDebt: (debt: Omit<Debt, "id" | "status">) => Promise<void>;
   deleteDebt: (debtId: string) => Promise<void>;
   settleDebt: (debtId: string, walletId: string) => Promise<void>;
+  addWallet: (wallet: Omit<Wallet, "id">) => Promise<void>;
+  editWallet: (id: string, updates: Partial<Wallet>) => Promise<void>;
+  deleteWallet: (id: string) => Promise<void>;
 };
 
 const FinanceContext = createContext<FinanceContextValue | undefined>(undefined);
@@ -1458,10 +1461,111 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
       console.error("Failed to update category:", e);
     }
   };
+// ==========================================
+  // FUNGSI CRUD UNTUK WALLETS KE SUPABASE
+  // ==========================================
 
+  const addWallet = async (wallet: Omit<Wallet, "id">) => {
+    if (!supabase) {
+      // Jika Supabase tidak ada, simpan di state lokal saja
+      const newWallet: Wallet = { ...wallet, id: Date.now().toString() };
+      setWallets(prev => [...prev, newWallet]);
+      return;
+    }
+
+    try {
+      // Menyiapkan format data yang sesuai dengan kolom di Supabase (snake_case)
+      const payload = {
+        name: wallet.name,
+        type: wallet.type,
+        wallet_type: wallet.walletType,
+        balance: wallet.balance,
+      };
+
+      const { data, error } = await supabase
+        .from("wallets")
+        .insert(payload)
+        .select()
+        .single(); // Mengambil kembali data yang baru dibuat beserta UUID aslinya
+
+      if (error) {
+        console.error("Gagal menambah wallet:", error);
+        return;
+      }
+
+      if (data) {
+        // Sinkronisasi data asli dari database ke tampilan UI
+        const newWallet: Wallet = {
+          id: data.id,
+          name: data.name,
+          type: data.type,
+          walletType: data.wallet_type,
+          balance: Number(data.balance),
+        };
+        setWallets(prev => [...prev, newWallet]);
+      }
+    } catch (e) {
+      console.error("Kesalahan saat menambah wallet:", e);
+    }
+  };
+
+  const editWallet = async (id: string, updates: Partial<Wallet>) => {
+    if (!supabase) {
+      setWallets(prev => prev.map(w => (w.id === id ? { ...w, ...updates } : w)));
+      return;
+    }
+
+    try {
+      const payload: any = {};
+      if (updates.name !== undefined) payload.name = updates.name;
+      if (updates.type !== undefined) payload.type = updates.type;
+      if (updates.walletType !== undefined) payload.wallet_type = updates.walletType;
+      if (updates.balance !== undefined) payload.balance = updates.balance;
+
+      const { error } = await supabase
+        .from("wallets")
+        .update(payload)
+        .eq("id", id);
+
+      if (error) {
+        console.error("Gagal mengubah wallet:", error);
+        return;
+      }
+
+      setWallets(prev => prev.map(w => (w.id === id ? { ...w, ...updates } : w)));
+    } catch (e) {
+      console.error("Kesalahan saat mengubah wallet:", e);
+    }
+  };
+
+  const deleteWallet = async (id: string) => {
+    if (!supabase) {
+      setWallets(prev => prev.filter(w => w.id !== id));
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from("wallets")
+        .delete()
+        .eq("id", id);
+
+      if (error) {
+        console.error("Gagal menghapus wallet:", error);
+        return;
+      }
+
+      setWallets(prev => prev.filter(w => w.id !== id));
+    } catch (e) {
+      console.error("Kesalahan saat menghapus wallet:", e);
+    }
+  };
   const value = {
     wallets,
     setWallets,
+    addWallet,
+    editWallet,
+    deleteWallet,
     transactions,
     setTransactions,
     products,
