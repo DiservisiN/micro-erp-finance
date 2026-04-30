@@ -242,7 +242,7 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
         type: transaction.type,
         category: transaction.category,
         amount: transaction.amount,
-        admin_fee: transaction.adminFee,
+        admin_fee: transaction.adminFee || 0, // PERBAIKAN: Beri nilai default 0 jika kosong
         date: transaction.date,
         notes: transaction.notes,
         product_id: transaction.productId,
@@ -645,7 +645,7 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
         type: transaction.type,
         category: transaction.category,
         amount: transaction.amount,
-        admin_fee: transaction.adminFee,
+        admin_fee: transaction.adminFee || 0, // PERBAIKAN: Beri nilai default 0 jika kosong
         date: transaction.date,
         notes: transaction.notes,
         product_id: transaction.productId,
