@@ -1467,14 +1467,12 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
 
   const addWallet = async (wallet: Omit<Wallet, "id">) => {
     if (!supabase) {
-      // Jika Supabase tidak ada, simpan di state lokal saja
       const newWallet: Wallet = { ...wallet, id: Date.now().toString() };
       setWallets(prev => [...prev, newWallet]);
       return;
     }
 
     try {
-      // Menyiapkan format data yang sesuai dengan kolom di Supabase (snake_case)
       const payload = {
         name: wallet.name,
         type: wallet.type,
@@ -1486,15 +1484,17 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
         .from("wallets")
         .insert(payload)
         .select()
-        .single(); // Mengambil kembali data yang baru dibuat beserta UUID aslinya
+        .single();
 
+      // Jika terjadi error dari database, tampilkan pesan di layar
       if (error) {
-        console.error("Gagal menambah wallet:", error);
+        console.error("Gagal menambah wallet:", error.message);
+        alert("Gagal menyimpan wallet ke database: " + error.message);
         return;
       }
 
+      // Jika berhasil, perbarui tampilan di website
       if (data) {
-        // Sinkronisasi data asli dari database ke tampilan UI
         const newWallet: Wallet = {
           id: data.id,
           name: data.name,
@@ -1506,9 +1506,9 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
       }
     } catch (e) {
       console.error("Kesalahan saat menambah wallet:", e);
+      alert("Terjadi kesalahan sistem saat mencoba menambah wallet.");
     }
   };
-
   const editWallet = async (id: string, updates: Partial<Wallet>) => {
     if (!supabase) {
       setWallets(prev => prev.map(w => (w.id === id ? { ...w, ...updates } : w)));
