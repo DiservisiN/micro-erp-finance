@@ -1352,37 +1352,50 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
 
 // ... (rest of the code remains the same)
   const addCategory = async (category: Omit<Category, "id">) => {
-    const newCategory: Category = {
-      ...category,
-      id: Date.now().toString(),
-    };
-
     if (!supabase) {
-      // Fallback to local state only
+      // Fallback jika Supabase gagal dimuat (hanya menggunakan state lokal)
+      const newCategory: Category = {
+        ...category,
+        id: Date.now().toString(),
+      };
       setCategories(prev => [...prev, newCategory]);
       return;
     }
 
     try {
-      // Build snake_case payload for Supabase
+      // 1. Siapkan data yang akan dikirim ke Supabase (tanpa ID, biarkan Supabase yang buat UUID-nya)
       const payload = {
-        name: newCategory.name,
-        type: newCategory.type,
-        description: newCategory.description,
+        name: category.name,
+        type: category.type,
+        description: category.description,
       };
-      const { error } = await supabase
+      
+      // 2. Insert data, tambahkan .select() agar Supabase mengembalikan data yang berhasil dibuat
+      const { data, error } = await supabase
         .from("categories")
-        .insert(payload);
+        .insert(payload)
+        .select()
+        .single(); // Kita ambil satu baris data saja
 
       if (error) {
-        console.error("Failed to add category:", error);
+        console.error("Gagal menambah kategori:", error.message);
+        alert("Gagal menambah kategori: " + error.message);
         return;
       }
 
-      // Update local state after successful Supabase operation
-      setCategories(prev => [...prev, newCategory]);
+      // 3. Jika berhasil, kita ambil data asli dari database (termasuk UUID)
+      // dan masukkan ke dalam state agar langsung muncul di tabel UI
+      if (data) {
+        const newCategory: Category = {
+          id: data.id, // Ini sekarang menggunakan UUID asli dari Supabase
+          name: data.name,
+          type: data.type,
+          description: data.description,
+        };
+        setCategories(prev => [...prev, newCategory]);
+      }
     } catch (e) {
-      console.error("Failed to add category:", e);
+      console.error("Terjadi kesalahan saat menambah kategori:", e);
     }
   };
 
