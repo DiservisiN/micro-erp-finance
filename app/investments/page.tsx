@@ -26,9 +26,9 @@ type Investment = {
   id: string;
   name: string;
   type: InvestmentType;
-  quantity: number | string;
-  averageBuyPrice: number | string;
-  currentPrice: number | string;
+  quantity: number;         // Hapus ' | string'
+  averageBuyPrice: number;  // Hapus ' | string'
+  currentPrice: number;     // Hapus ' | string'
 };
 
 export default function InvestmentsPage() {

@@ -69,7 +69,6 @@ type ProductFormState = {
 type SortField = "name" | "category" | "costPrice" | "sellingPrice" | "stock" | "expiredDate";
 type SortDirection = "asc" | "desc";
 
-
 const initialFormState: ProductFormState = {
   barcode: "",
   name: "",
@@ -83,7 +82,10 @@ const initialFormState: ProductFormState = {
 };
 
 export default function InventoryPage() {
-  const { products, addProduct, editProduct, deleteProduct, wallets, handleRestock, categories } = useFinanceContext();
+  // DOKUMENTASI: Kita menghapus 'handleRestock' dari import context ini, 
+  // dan menggantinya dengan 'addTransaction' untuk menangani biaya secara langsung.
+  const { products, addProduct, editProduct, deleteProduct, wallets, categories, addTransaction } = useFinanceContext();
+  
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isImportOpen, setIsImportOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -93,10 +95,8 @@ export default function InventoryPage() {
   const [sortField, setSortField] = useState<SortField>("name");
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
 
-  // Filter categories for inventory type only
   const inventoryCategories = categories.filter(c => c.type === "inventory");
 
-  // Edit product state
   const [editTarget, setEditTarget] = useState<Product | null>(null);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isSavingEdit, setIsSavingEdit] = useState(false);
@@ -120,7 +120,7 @@ export default function InventoryPage() {
     const totalCost = costPrice * stock;
     const selectedWallet = wallets.find((w) => w.id === formState.walletId);
 
-    // Validate wallet balance if a wallet is selected
+    // Validasi saldo wallet sebelum memproses apa pun
     if (selectedWallet && totalCost > 0) {
       if (selectedWallet.balance < totalCost) {
         toast.error("Insufficient wallet balance", {
@@ -131,7 +131,7 @@ export default function InventoryPage() {
       }
     }
 
-    // Add product to context
+    // 1. Tambahkan produk ke sistem
     await addProduct({
       barcode: formState.barcode.trim() || null,
       name: formState.name.trim(),
@@ -143,9 +143,19 @@ export default function InventoryPage() {
       status: formState.status || "in_stock",
     });
 
-    // Handle wallet deduction if wallet selected
+    // 2. DOKUMENTASI: Jika dompet dipilih, buat transaksi 'expense' (pengeluaran)
+    // Ini secara otomatis akan memotong saldo dompet di FinanceContext 
+    // tanpa menimbulkan bug 'product ID kosong' seperti fungsi sebelumnya.
     if (selectedWallet && totalCost > 0) {
-      handleRestock("", stock, costPrice, selectedWallet.id);
+      await addTransaction({
+        id: Date.now().toString(),
+        type: "expense",
+        category: "Initial Inventory",
+        amount: totalCost,
+        date: new Date().toISOString().split('T')[0],
+        notes: `Purchased initial stock for ${formState.name.trim()}`,
+        fromWalletId: selectedWallet.id,
+      });
     }
 
     setFormState(initialFormState);
@@ -277,7 +287,6 @@ export default function InventoryPage() {
           </TabsTrigger>
         </TabsList>
 
-        {/* ====== Tab 1: In Stock ====== */}
         <TabsContent value="in-stock" className="space-y-4">
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between bg-slate-900/30 backdrop-blur-sm border border-slate-800/30 rounded-xl p-4">
             <Input
@@ -382,13 +391,11 @@ export default function InventoryPage() {
           </div>
         </TabsContent>
 
-        {/* ====== Tab 2: In Transit ====== */}
         <TabsContent value="in-transit">
           <InTransitPanel products={inTransitProducts} onEdit={openEditProduct} />
         </TabsContent>
       </Tabs>
 
-      {/* ====== Edit Product Dialog ====== */}
       <Dialog open={isEditOpen} onOpenChange={(v) => { setIsEditOpen(v); if (!v) setEditTarget(null); }}>
         <DialogContent className="max-w-lg bg-slate-900 border-slate-800 text-white">
           <DialogHeader>
@@ -642,7 +649,6 @@ function AddProductDialog({
   );
 }
 
-/* ---------- In Transit Panel ---------- */
 function InTransitPanel({
   products,
   onEdit,
@@ -671,12 +677,10 @@ function InTransitPanel({
     const selectedWallet = wallets.find((w) => w.id === refundWalletId);
 
     try {
-      // Refund to wallet if selected
       if (selectedWallet && refundAmount > 0) {
         await handleTransfer("system", selectedWallet.id, refundAmount);
       }
 
-      // Delete the product
       await deleteProduct(cancelTarget.id);
 
       toast.success(
@@ -775,7 +779,6 @@ function InTransitPanel({
         </>
       )}
 
-      {/* Cancel Order & Refund Dialog */}
       <Dialog open={isCancelOpen} onOpenChange={(v) => { setIsCancelOpen(v); if (!v) { setCancelTarget(null); setRefundWalletId(""); } }}>
         <DialogContent className="max-w-md">
           <DialogHeader>
@@ -922,8 +925,6 @@ function BarcodeScanner({ onDetected, disabled }: { onDetected: (barcode: string
   );
 }
 
-
-
 function sortValue(product: Product, field: SortField): number | string {
   if (field === "stock") {
     return product.stock;
@@ -962,7 +963,6 @@ function SortButton({
   );
 }
 
-/* ---------- CSV Import Dialog ---------- */
 const CSV_TEMPLATE_HEADERS = ["name", "category", "costPrice", "sellingPrice", "stock", "status", "expiredDate"];
 const CSV_TEMPLATE_SAMPLE = [
   ["Sample Product", "Electronics", "50000", "75000", "10", "in_stock", "2027-01-01"],
@@ -1016,7 +1016,7 @@ function ImportCsvDialog({
         const errors: string[] = [];
 
         rows.forEach((row, idx) => {
-          const lineNum = idx + 2; // 1-indexed + header
+          const lineNum = idx + 2; 
           if (!row.name?.trim()) errors.push(`Row ${lineNum}: "name" is required.`);
           if (row.costPrice && isNaN(Number(row.costPrice))) errors.push(`Row ${lineNum}: "costPrice" must be a number.`);
           if (row.sellingPrice && isNaN(Number(row.sellingPrice))) errors.push(`Row ${lineNum}: "sellingPrice" must be a number.`);
@@ -1077,7 +1077,6 @@ function ImportCsvDialog({
         </DialogHeader>
 
         <div className="space-y-4">
-          {/* Download template */}
           <button
             type="button"
             onClick={downloadCsvTemplate}
@@ -1087,7 +1086,6 @@ function ImportCsvDialog({
             Download CSV Template
           </button>
 
-          {/* File input */}
           <div className="grid gap-2">
             <Label htmlFor="csv-file">CSV File</Label>
             <Input
@@ -1100,7 +1098,6 @@ function ImportCsvDialog({
             />
           </div>
 
-          {/* Validation errors */}
           {validationErrors.length > 0 && (
             <div className="max-h-32 overflow-y-auto space-y-1 rounded-md border border-destructive/50 bg-destructive/10 p-3">
               {validationErrors.map((err, i) => (
@@ -1109,7 +1106,6 @@ function ImportCsvDialog({
             </div>
           )}
 
-          {/* Preview */}
           {previewRows.length > 0 && validationErrors.length === 0 && (
             <div className="rounded-md border border-slate-800 bg-slate-900/50 p-3 space-y-2">
               <p className="text-sm font-medium text-foreground">
