@@ -230,14 +230,15 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
   };
 
   // Fungsi khusus menyimpan transaksi ke DB tanpa mengubah isi wallet ganda
+  // Fungsi khusus menyimpan transaksi ke DB tanpa mengubah isi wallet ganda
   const recordTransactionToDB = async (transaction: Transaction) => {
     if (!supabase) {
       setTransactions(prev => [...prev, transaction]);
       return;
     }
     try {
+      // PERBAIKAN: Kita hapus "id" dari payload agar Supabase yang membuatnya (UUID)
       const payload = {
-        id: transaction.id,
         type: transaction.type,
         category: transaction.category,
         amount: transaction.amount,
@@ -249,13 +250,19 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
         to_wallet_id: transaction.toWalletId,
         debt_id: transaction.debtId,
       };
-      const { error } = await supabase.from("transactions").insert(payload);
+      
+      // Tambahkan .select().single() untuk mengambil UUID aslinya
+      const { data, error } = await supabase.from("transactions").insert(payload).select().single();
+      
       if (error) {
         console.error("Gagal simpan transaksi:", error.message);
         alert("Peringatan: Gagal menyimpan transaksi ke database! " + error.message);
         return;
       }
-      setTransactions(prev => [...prev, transaction]);
+      
+      // Simpan transaksi ke state dengan mengganti ID sementaranya dengan UUID asli dari database
+      const finalTransaction = { ...transaction, id: data.id };
+      setTransactions(prev => [...prev, finalTransaction]);
     } catch (e) {
       console.error("Kesalahan sistem:", e);
     }
@@ -605,15 +612,25 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
   // TRANSACTION CRUD OPERATIONS
   // ==========================================
   
-  const addTransaction = async (transaction: Transaction) => {
+ const addTransaction = async (transaction: Transaction) => {
     if (!supabase) {
+      console.warn("Supabase not available, using local state only");
+      // Apply wallet balance changes based on transaction type
       setWallets(prevWallets => {
         return prevWallets.map(w => {
-          if (transaction.type === "income" && transaction.toWalletId === w.id) return { ...w, balance: w.balance + transaction.amount };
-          if (transaction.type === "expense" && transaction.fromWalletId === w.id) return { ...w, balance: w.balance - transaction.amount };
+          if (transaction.type === "income" && transaction.toWalletId === w.id) {
+            return { ...w, balance: w.balance + transaction.amount };
+          }
+          if (transaction.type === "expense" && transaction.fromWalletId === w.id) {
+            return { ...w, balance: w.balance - transaction.amount };
+          }
           if (transaction.type === "transfer") {
-            if (transaction.fromWalletId === w.id) return { ...w, balance: w.balance - transaction.amount };
-            if (transaction.toWalletId === w.id) return { ...w, balance: w.balance + transaction.amount };
+            if (transaction.fromWalletId === w.id) {
+              return { ...w, balance: w.balance - transaction.amount };
+            }
+            if (transaction.toWalletId === w.id) {
+              return { ...w, balance: w.balance + transaction.amount };
+            }
           }
           return w;
         });
@@ -623,8 +640,8 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
     }
 
     try {
-      const payload = {
-        id: transaction.id,
+      // PERBAIKAN: Hapus "id" dari payload
+      const snakeCasePayload = {
         type: transaction.type,
         category: transaction.category,
         amount: transaction.amount,
@@ -637,44 +654,53 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
         debt_id: transaction.debtId,
       };
       
-      const { error } = await supabase.from("transactions").insert(payload);
+      // Gunakan .select().single()
+      const { data, error } = await supabase
+        .from("transactions")
+        .insert(snakeCasePayload)
+        .select()
+        .single();
+
       if (error) {
         console.error("Failed to insert transaction:", error.message);
         alert("Gagal mencatat transaksi: " + error.message);
         return;
       }
 
+      // Apply wallet balance changes based on transaction type
       setWallets(prevWallets => {
         return prevWallets.map(w => {
           if (transaction.type === "income" && transaction.toWalletId === w.id) {
-            const newBal = w.balance + transaction.amount;
-            syncWalletBalance(w.id, newBal);
-            return { ...w, balance: newBal };
+            const newBalance = w.balance + transaction.amount;
+            syncWalletBalance(w.id, newBalance);
+            return { ...w, balance: newBalance };
           }
           if (transaction.type === "expense" && transaction.fromWalletId === w.id) {
-            const newBal = w.balance - transaction.amount;
-            syncWalletBalance(w.id, newBal);
-            return { ...w, balance: newBal };
+            const newBalance = w.balance - transaction.amount;
+            syncWalletBalance(w.id, newBalance);
+            return { ...w, balance: newBalance };
           }
           if (transaction.type === "transfer") {
             if (transaction.fromWalletId === w.id) {
-              const newBal = w.balance - transaction.amount;
-              syncWalletBalance(w.id, newBal);
-              return { ...w, balance: newBal };
+              const newBalance = w.balance - transaction.amount;
+              syncWalletBalance(w.id, newBalance);
+              return { ...w, balance: newBalance };
             }
             if (transaction.toWalletId === w.id) {
-              const newBal = w.balance + transaction.amount;
-              syncWalletBalance(w.id, newBal);
-              return { ...w, balance: newBal };
+              const newBalance = w.balance + transaction.amount;
+              syncWalletBalance(w.id, newBalance);
+              return { ...w, balance: newBalance };
             }
           }
           return w;
         });
       });
 
-      setTransactions(prev => [...prev, transaction]);
+      // Gunakan UUID asli untuk disimpan di state
+      const finalTransaction = { ...transaction, id: data.id };
+      setTransactions(prev => [...prev, finalTransaction]);
     } catch (e) {
-      console.error(e);
+      console.error("Failed to add transaction:", e);
     }
   };
 
