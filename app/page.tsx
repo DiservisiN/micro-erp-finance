@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { TrendingUp, TrendingDown, CalendarDays, Users, Calendar } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAppContext } from "@/context/AppContext";
@@ -15,7 +15,6 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 const CHART_COLORS = ["#f97316", "#3b82f6", "#10b981", "#8b5cf6", "#ec4899"];
 const MONTHS = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
 
-/* ---------- types ---------- */
 type Debt = {
   id: string;
   personName: string;
@@ -26,6 +25,13 @@ type Debt = {
 };
 
 export default function Home() {
+  // DOKUMENTASI: State isMounted digunakan untuk mencegah Hydration Error saat refresh di Vercel
+  const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
   const { mode } = useAppContext();
   const { 
     wallets, transactions, products, investments, debts,
@@ -35,24 +41,28 @@ export default function Home() {
   // 1. FILTER DATA BERDASARKAN BULAN & TAHUN YANG DIPILIH
   const filteredTransactions = useMemo(() => {
     return transactions.filter(tx => {
-      // Pastikan tx.date valid sebelum diproses
       if (!tx.date) return false;
-      const d = new Date(tx.date);
-      return d.getMonth() === selectedMonth && d.getFullYear() === selectedYear;
+      // DOKUMENTASI: Menggunakan split manual agar terhindar dari Timezone Bug
+      const parts = tx.date.split('-'); 
+      if (parts.length < 3) return false;
+      const txYear = parseInt(parts[0], 10);
+      const txMonth = parseInt(parts[1], 10) - 1; // -1 karena array dimulai dari 0
+      
+      return txMonth === selectedMonth && txYear === selectedYear;
     });
   }, [transactions, selectedMonth, selectedYear]);
 
-  // Pisahkan transaksi netral (transfer) untuk kalkulasi laba/rugi (Hanya data bulan terpilih)
+  // Pisahkan transaksi netral (transfer) untuk kalkulasi laba/rugi
   const pureMonthlyTransactions = useMemo(() => {
     return filteredTransactions.filter(tx => tx.type === "income" || tx.type === "expense");
   }, [filteredTransactions]);
 
-  // Semua transaksi murni (tanpa filter bulan) untuk grafik 6 bulan terakhir
+  // Semua transaksi murni untuk grafik 6 bulan terakhir
   const pureAllTransactions = useMemo(() => {
     return transactions.filter(tx => tx.type === "income" || tx.type === "expense");
   }, [transactions]);
 
-  // 2. STATISTIK BULANAN (Berdasarkan Bulan Terpilih)
+  // 2. STATISTIK BULANAN
   const financeStats = useMemo(() => {
     let monthlyIncome = 0;
     let monthlyExpenses = 0;
@@ -69,11 +79,10 @@ export default function Home() {
     }
 
     const monthlyNetProfit = monthlyIncome - monthlyExpenses;
-
     return { monthlyIncome, monthlyExpenses, monthlyNetProfit };
   }, [pureMonthlyTransactions]);
 
-  // 3. KALKULASI ASET (Snapshot saat ini, tidak terpengaruh filter bulan)
+  // 3. KALKULASI ASET SAAT INI
   const totalWalletBalance = wallets.reduce((sum, w) => sum + (w.balance || 0), 0);
   const totalInvestmentValue = investments.reduce((sum, inv) => sum + ((inv.quantity || 1) * (inv.currentPrice || 0)), 0);
   const totalInventoryValue = products
@@ -82,17 +91,14 @@ export default function Home() {
   const totalReceivables = debts
     .filter(d => d.type === 'receivable' && d.status === 'unpaid')
     .reduce((sum, d) => sum + (d.amount || 0), 0);
-  const totalLiabilities = debts
-    .filter(d => d.type === 'payable' && d.status === 'unpaid')
-    .reduce((sum, d) => sum + (d.amount || 0), 0);
-
+  
   const totalAssets = totalWalletBalance + totalInvestmentValue + totalInventoryValue + totalReceivables;
 
   // 4. HUTANG & PIUTANG AKTIF
   const activeReceivables = useMemo(() => debts.filter(d => d.type === "receivable" && d.status === "unpaid"), [debts]);
   const activePayables = useMemo(() => debts.filter(d => d.type === "payable" && d.status === "unpaid"), [debts]);
 
-  // 5. DATA GRAFIK PIE (ASET SAAT INI)
+  // 5. DATA GRAFIK PIE
   const pieData = useMemo(() => {
     const slices = [
       { name: "Liquid Cash & Bank", value: totalWalletBalance },
@@ -106,20 +112,28 @@ export default function Home() {
   // 6. TRANSAKSI TERBARU (Hanya bulan terpilih)
   const recentTransactions = useMemo(() => {
     return [...filteredTransactions]
-      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+      .sort((a, b) => (b.date || "").localeCompare(a.date || "")) // Sort string manual (Aman & Cepat)
       .slice(0, 5);
   }, [filteredTransactions]);
 
   const formatTransactionType = (type: string) => type.split("_").map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join(" ");
-  const formatDate = (date: string) => new Date(date).toLocaleDateString("id-ID", { month: "short", day: "numeric", year: "numeric" });
+  
+  // Format tanggal manual aman zona waktu
+  const formatDate = (dateStr: string) => {
+    if (!dateStr) return "-";
+    const parts = dateStr.split('-');
+    if (parts.length < 3) return dateStr;
+    const y = parts[0];
+    const m = parseInt(parts[1], 10) - 1;
+    const d = parseInt(parts[2], 10);
+    return `${d} ${MONTHS[m].substring(0, 3)} ${y}`;
+  };
 
-  // 7. DATA GRAFIK HARIAN (Menampilkan HARI 1 sampai AKHIR di Bulan Terpilih)
+  // 7. DATA GRAFIK HARIAN
   const barDataDaily = useMemo(() => {
-    // Mendapatkan jumlah hari dalam bulan yang dipilih (misal: Mei = 31 hari)
     const daysInMonth = new Date(selectedYear, selectedMonth + 1, 0).getDate();
     const dailyMap = new Map<string, { income: number; expenses: number }>();
     
-    // PERBAIKAN: Format string YYYY-MM-DD secara manual agar kebal terhadap Bug Timezone
     for (let i = 1; i <= daysInMonth; i++) {
       const dateStr = `${selectedYear}-${String(selectedMonth + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
       dailyMap.set(dateStr, { income: 0, expenses: 0 });
@@ -137,10 +151,11 @@ export default function Home() {
     }
 
     return Array.from(dailyMap.entries()).map(([dateStr, stats]) => {
-      const d = new Date(dateStr);
+      const parts = dateStr.split('-');
+      const d = parseInt(parts[2], 10);
       return {
         dateFull: dateStr,
-        day: `${d.getDate()}`, // Hanya menampilkan angka tanggal (1, 2, 3...)
+        day: `${d}`, // Menampilkan "1", "2", dst
         Income: stats.income,
         Expenses: stats.expenses,
         Profit: stats.income - stats.expenses,
@@ -148,17 +163,17 @@ export default function Home() {
     });
   }, [pureMonthlyTransactions, selectedMonth, selectedYear]);
 
-  // 8. DATA GRAFIK BULANAN (6 Bulan Terakhir dari Semua Transaksi)
+  // 8. DATA GRAFIK BULANAN (6 Bulan Terakhir)
   const barDataMonthly = useMemo(() => {
     const monthMap = new Map<string, { income: number; expenses: number }>();
 
     for (const tx of pureAllTransactions) {
       if (!tx.date) continue;
-      const d = new Date(tx.date);
-      if (isNaN(d.getTime())) continue;
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-      const entry = monthMap.get(key) ?? { income: 0, expenses: 0 };
+      const parts = tx.date.split('-');
+      if (parts.length < 2) continue;
+      const key = `${parts[0]}-${parts[1]}`; // Contoh: "2026-05"
 
+      const entry = monthMap.get(key) ?? { income: 0, expenses: 0 };
       const amount = safeNumber(tx.amount);
       const adminFee = safeNumber(tx.adminFee ?? 0);
 
@@ -171,13 +186,13 @@ export default function Home() {
     const sortedKeys = Array.from(monthMap.keys()).sort();
     const last6 = sortedKeys.slice(-6);
 
-    if (last6.length === 0) return [{ month: MONTHS[selectedMonth], Income: 0, Expenses: 0, Profit: 0 }];
+    if (last6.length === 0) return [{ month: MONTHS[selectedMonth].substring(0, 3), Income: 0, Expenses: 0, Profit: 0 }];
 
     return last6.map((key) => {
       const entry = monthMap.get(key)!;
       const monthIdx = parseInt(key.split("-")[1], 10) - 1;
       return {
-        month: MONTHS[monthIdx].substring(0, 3), // Ambil 3 huruf awal (Jan, Feb, dst)
+        month: MONTHS[monthIdx].substring(0, 3),
         Income: Math.round(entry.income),
         Expenses: Math.round(entry.expenses),
         Profit: Math.round(entry.income - entry.expenses),
@@ -185,7 +200,7 @@ export default function Home() {
     });
   }, [pureAllTransactions, selectedMonth]);
 
-  /* ---------- Custom Tooltips ---------- */
+  /* ---------- Tooltips ---------- */
   const PieTooltip = ({ active, payload }: any) => {
     if (!active || !payload?.length) return null;
     return (
@@ -218,9 +233,17 @@ export default function Home() {
     );
   };
 
-  // Generate opsi tahun (2 tahun ke belakang, 2 tahun ke depan dari tahun ini)
   const currentYear = new Date().getFullYear();
   const years = Array.from({ length: 5 }, (_, i) => currentYear - 2 + i);
+
+  // Jika halaman sedang dirakit di server Vercel, jangan render grafiknya dulu
+  if (!isMounted) {
+    return (
+      <div className="min-h-screen bg-[#020617] flex items-center justify-center">
+        <p className="text-orange-500 font-medium animate-pulse">Menyiapkan Dashboard...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#020617] p-4 md:p-6 lg:p-8">

@@ -243,7 +243,7 @@ export default function InventoryPage() {
 
   return (
     <section className="space-y-6 bg-[#020617] min-h-screen p-4 md:p-6">
-      {/* HEADER */}
+      {/* 1. Header Responsif: flex-col di mobile, flex-row di desktop */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-900/50 backdrop-blur-sm border border-slate-800/50 rounded-xl p-4 md:p-6">
         <div>
           <h2 className="text-xl md:text-2xl font-semibold text-white">Inventory</h2>
@@ -268,31 +268,19 @@ export default function InventoryPage() {
         </div>
       </div>
 
-      {/* DOKUMENTASI: Pembungkus Tabs dengan spasi 6 dan TabsList dengan blok besar merentang */}
-      <Tabs defaultValue="in-stock" className="space-y-6 w-full">
-        <div className="w-full overflow-x-auto bg-slate-900/40 backdrop-blur-sm border border-slate-800/50 rounded-xl p-2 shadow-sm">
-          <TabsList className="flex w-full min-w-max h-auto p-0 bg-transparent gap-2">
-            <TabsTrigger 
-              value="in-stock" 
-              className="flex-1 whitespace-nowrap px-8 py-3.5 text-sm font-medium text-slate-400 data-[state=active]:bg-slate-800 data-[state=active]:text-white data-[state=active]:shadow-md rounded-lg transition-all hover:text-slate-200"
-            >
-              In Stock
-            </TabsTrigger>
-            <TabsTrigger 
-              value="in-transit" 
-              className="flex-1 whitespace-nowrap px-8 py-3.5 text-sm font-medium text-slate-400 data-[state=active]:bg-slate-800 data-[state=active]:text-white data-[state=active]:shadow-md rounded-lg transition-all hover:text-slate-200"
-            >
-              In Transit
-              {inTransitProducts.length > 0 && (
-                <span className="ml-3 inline-flex items-center rounded-full bg-orange-500/15 px-2 py-0.5 text-[10px] font-semibold text-orange-500 animate-pulse shadow-[0_0_8px_rgba(249,115,22,0.4)]">
-                  {inTransitProducts.length}
-                </span>
-              )}
-            </TabsTrigger>
-          </TabsList>
-        </div>
+      <Tabs defaultValue="in-stock" className="space-y-4">
+        <TabsList className="bg-slate-900/50 backdrop-blur-sm border border-slate-800/50 w-full justify-start overflow-x-auto rounded-lg">
+          <TabsTrigger value="in-stock" className="data-[state=active]:bg-slate-800 data-[state=active]:text-white">In Stock</TabsTrigger>
+          <TabsTrigger value="in-transit" className="data-[state=active]:bg-slate-800 data-[state=active]:text-white">
+            In Transit
+            {inTransitProducts.length > 0 && (
+              <span className="ml-2 inline-flex items-center rounded-full bg-orange-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-orange-500 animate-pulse shadow-[0_0_8px_rgba(249,115,22,0.4)]">
+                {inTransitProducts.length}
+              </span>
+            )}
+          </TabsTrigger>
+        </TabsList>
 
-        {/* KONTEN: IN STOCK */}
         <TabsContent value="in-stock" className="space-y-4">
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between bg-slate-900/30 backdrop-blur-sm border border-slate-800/30 rounded-xl p-4">
             <Input
@@ -317,6 +305,7 @@ export default function InventoryPage() {
           </div>
 
           <div className="bg-slate-900/30 backdrop-blur-sm border border-slate-800/30 rounded-xl overflow-hidden">
+            {/* 2. Pembungkus Tabel: overflow-x-auto mencegah tabel meluber di mobile */}
             <div className="overflow-x-auto">
               <Table className="min-w-[800px]">
                 <TableHeader>
@@ -399,13 +388,11 @@ export default function InventoryPage() {
           </div>
         </TabsContent>
 
-        {/* KONTEN: IN TRANSIT */}
         <TabsContent value="in-transit">
           <InTransitPanel products={inTransitProducts} onEdit={openEditProduct} />
         </TabsContent>
       </Tabs>
 
-      {/* DIALOG: EDIT PRODUCT */}
       <Dialog open={isEditOpen} onOpenChange={(v) => { setIsEditOpen(v); if (!v) setEditTarget(null); }}>
         <DialogContent className="max-w-lg w-[95vw] md:w-full bg-slate-900 border-slate-800 text-white overflow-y-auto max-h-[90vh]">
           <DialogHeader>
@@ -434,6 +421,7 @@ export default function InventoryPage() {
                 </select>
               </div>
 
+              {/* 3. Input harga & stok responsif (1 kolom di HP, 3 kolom di desktop) */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="grid gap-2">
                   <Label htmlFor="edit-prod-cost" className="text-slate-300">Cost Price</Label>
@@ -481,8 +469,6 @@ export default function InventoryPage() {
   );
 }
 
-/* ---------- SUB-COMPONENTS ---------- */
-
 function AddProductDialog({
   open,
   onOpenChange,
@@ -504,10 +490,12 @@ function AddProductDialog({
 }) {
   const totalCost = (Number(formState.costPrice) || 0) * (Number(formState.stock) || 0);
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+   <Dialog open={open} onOpenChange={onOpenChange}>
+      {/* DOKUMENTASI: Menggunakan properti 'render' untuk menyesuaikan dengan definisi TypeScript komponen bawaan proyek */}
       <DialogTrigger render={<Button className="bg-orange-500 text-white hover:bg-orange-600 shadow-[0_0_10px_rgba(249,115,22,0.3)]" />}>
         Add Product
       </DialogTrigger>
+      {/* Batasi lebar dialog di HP */}
       <DialogContent className="max-w-lg w-[95vw] md:w-full bg-slate-900 border-slate-800 text-white overflow-y-auto max-h-[90vh]">
         <DialogHeader>
           <DialogTitle className="text-white">Add Product</DialogTitle>
@@ -1078,7 +1066,8 @@ function ImportCsvDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={(v) => { onOpenChange(v); if (!v) resetState(); }}>
+   <Dialog open={open} onOpenChange={(v) => { onOpenChange(v); if (!v) resetState(); }}>
+      {/* DOKUMENTASI: Memisahkan properti render dan children (teks/icon) agar TypeScript dapat membaca strukturnya dengan benar */}
       <DialogTrigger
         render={
           <Button variant="outline" className="border-orange-500/50 text-orange-500 hover:bg-orange-500/10 hover:text-orange-400" />
@@ -1087,6 +1076,7 @@ function ImportCsvDialog({
         <Upload className="mr-2 h-4 w-4" />
         Import CSV
       </DialogTrigger>
+      {/* Mengatur batas lebar pop-up agar pas di layar kecil */}
       <DialogContent className="max-w-lg w-[95vw] md:w-full bg-slate-900 border-slate-800 text-white max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-white">Import Products from CSV</DialogTitle>
