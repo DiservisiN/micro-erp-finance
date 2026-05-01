@@ -106,6 +106,12 @@ type FinanceContextValue = {
   addWallet: (wallet: Omit<Wallet, "id">) => Promise<void>;
   editWallet: (id: string, updates: Partial<Wallet>) => Promise<void>;
   deleteWallet: (id: string) => Promise<void>;
+  
+  // State for Month/Year filtering
+  selectedMonth: number;
+  setSelectedMonth: (month: number) => void;
+  selectedYear: number;
+  setSelectedYear: (year: number) => void;
 };
 
 const FinanceContext = createContext<FinanceContextValue | undefined>(undefined);
@@ -132,6 +138,10 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
   const [debts, setDebts] = useState<Debt[]>(defaultState.debts);
   const [categories, setCategories] = useState<Category[]>(defaultState.categories);
   const [goldPrice, setGoldPrice] = useState<number>(defaultState.goldPrice);
+
+  // Initialize selected month and year to the current date
+  const [selectedMonth, setSelectedMonth] = useState<number>(new Date().getMonth());
+  const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -229,20 +239,17 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // Fungsi khusus menyimpan transaksi ke DB tanpa mengubah isi wallet ganda
-  // Fungsi khusus menyimpan transaksi ke DB tanpa mengubah isi wallet ganda
   const recordTransactionToDB = async (transaction: Transaction) => {
     if (!supabase) {
       setTransactions(prev => [...prev, transaction]);
       return;
     }
     try {
-      // PERBAIKAN: Kita hapus "id" dari payload agar Supabase yang membuatnya (UUID)
       const payload = {
         type: transaction.type,
         category: transaction.category,
         amount: transaction.amount,
-        admin_fee: transaction.adminFee || 0, // PERBAIKAN: Beri nilai default 0 jika kosong
+        admin_fee: transaction.adminFee || 0,
         date: transaction.date,
         notes: transaction.notes,
         product_id: transaction.productId,
@@ -251,7 +258,6 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
         debt_id: transaction.debtId,
       };
       
-      // Tambahkan .select().single() untuk mengambil UUID aslinya
       const { data, error } = await supabase.from("transactions").insert(payload).select().single();
       
       if (error) {
@@ -260,14 +266,12 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
         return;
       }
       
-      // Simpan transaksi ke state dengan mengganti ID sementaranya dengan UUID asli dari database
       const finalTransaction = { ...transaction, id: data.id };
       setTransactions(prev => [...prev, finalTransaction]);
     } catch (e) {
       console.error("Kesalahan sistem:", e);
     }
   };
-
 
   // ==========================================
   // SMART ACTION HANDLERS
@@ -496,7 +500,12 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
   };
 
   const handleProductSale = async (productId: string, quantity: number, sellingPrice: number, walletId: string) => {
-    const totalAmount = quantity * sellingPrice;
+    const product = products.find(p => p.id === productId);
+    if (!product) return;
+
+    const totalRevenue = quantity * sellingPrice; 
+    const totalCost = quantity * product.costPrice; 
+    const profit = totalRevenue - totalCost; 
 
     setProducts(prevProducts => {
       return prevProducts.map(p => {
@@ -509,23 +518,51 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
       });
     });
 
-    const newTransaction: Transaction = {
+    const returnOfCapitalTx: Transaction = {
       id: Date.now().toString(),
-      type: "income",
-      category: "Sales",
-      amount: totalAmount,
+      type: "transfer",
+      category: "Return of Capital",
+      amount: totalCost,
       adminFee: null,
       date: new Date().toISOString().split('T')[0],
-      notes: `Sold ${quantity} units`,
+      notes: `Modal kembali: ${quantity}x ${product.name}`,
       productId: productId,
       toWalletId: walletId
     };
-    await recordTransactionToDB(newTransaction);
+    await recordTransactionToDB(returnOfCapitalTx);
+
+    if (profit > 0) {
+      const profitTx: Transaction = {
+        id: (Date.now() + 1).toString(),
+        type: "income",
+        category: "Sales Profit",
+        amount: profit,
+        adminFee: null,
+        date: new Date().toISOString().split('T')[0],
+        notes: `Laba penjualan: ${quantity}x ${product.name}`,
+        productId: productId,
+        toWalletId: walletId
+      };
+      await recordTransactionToDB(profitTx);
+    } else if (profit < 0) {
+      const lossTx: Transaction = {
+        id: (Date.now() + 1).toString(),
+        type: "expense",
+        category: "Sales Loss",
+        amount: Math.abs(profit),
+        adminFee: null,
+        date: new Date().toISOString().split('T')[0],
+        notes: `Rugi penjualan: ${quantity}x ${product.name}`,
+        productId: productId,
+        fromWalletId: walletId
+      };
+      await recordTransactionToDB(lossTx);
+    }
 
     setWallets(prevWallets => {
       return prevWallets.map(w => {
         if (w.id === walletId) {
-          const newBal = w.balance + totalAmount;
+          const newBal = w.balance + totalRevenue;
           syncWalletBalance(walletId, newBal);
           return { ...w, balance: newBal };
         }
@@ -581,7 +618,6 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
       const newAmount = debt.amount - amount;
       const isPaid = newAmount === 0;
       
-      // PERBAIKAN: Mengganti d.status menjadi debt.status
       const newStatus = isPaid ? "paid" : debt.status; 
       
       if(supabase) supabase.from("debts").update({ amount: newAmount, status: newStatus }).eq("id", debtId).then();
@@ -607,7 +643,6 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
     });
   };
 
-
   // ==========================================
   // TRANSACTION CRUD OPERATIONS
   // ==========================================
@@ -615,7 +650,6 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
  const addTransaction = async (transaction: Transaction) => {
     if (!supabase) {
       console.warn("Supabase not available, using local state only");
-      // Apply wallet balance changes based on transaction type
       setWallets(prevWallets => {
         return prevWallets.map(w => {
           if (transaction.type === "income" && transaction.toWalletId === w.id) {
@@ -640,12 +674,11 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
     }
 
     try {
-      // PERBAIKAN: Hapus "id" dari payload
       const snakeCasePayload = {
         type: transaction.type,
         category: transaction.category,
         amount: transaction.amount,
-        admin_fee: transaction.adminFee || 0, // PERBAIKAN: Beri nilai default 0 jika kosong
+        admin_fee: transaction.adminFee || 0, 
         date: transaction.date,
         notes: transaction.notes,
         product_id: transaction.productId,
@@ -654,7 +687,6 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
         debt_id: transaction.debtId,
       };
       
-      // Gunakan .select().single()
       const { data, error } = await supabase
         .from("transactions")
         .insert(snakeCasePayload)
@@ -667,7 +699,6 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      // Apply wallet balance changes based on transaction type
       setWallets(prevWallets => {
         return prevWallets.map(w => {
           if (transaction.type === "income" && transaction.toWalletId === w.id) {
@@ -696,7 +727,6 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
         });
       });
 
-      // Gunakan UUID asli untuk disimpan di state
       const finalTransaction = { ...transaction, id: data.id };
       setTransactions(prev => [...prev, finalTransaction]);
     } catch (e) {
@@ -760,7 +790,7 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
       if (updatedData.notes !== undefined) payload.notes = updatedData.notes;
       if (updatedData.productId !== undefined) payload.product_id = updatedData.productId;
       if (updatedData.fromWalletId !== undefined) payload.from_wallet_id = updatedData.fromWalletId;
-      if (updatedData.toWalletId !== undefined) payload.to_wallet_id = updatedData.toWalletId;
+      if (updatedData.toWalletId !== undefined) payload.toWallet_id = updatedData.toWalletId;
       if (updatedData.debtId !== undefined) payload.debt_id = updatedData.debtId;
       
       const { error } = await supabase.from("transactions").update(payload).eq("id", id);
@@ -801,18 +831,50 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
     setTransactions(prev => prev.map(t => t.id === id ? { ...oldTx, ...updatedData } : t));
   };
 
-  const addProduct = async (product: Omit<Product, "id">) => {
-    const newProduct: Product = { ...product, id: Date.now().toString() };
-    if (supabase) {
-      const payload = {
-        barcode: newProduct.barcode, name: newProduct.name, category: newProduct.category,
-        cost_price: newProduct.costPrice, selling_price: newProduct.sellingPrice,
-        stock: newProduct.stock, status: newProduct.status, expired_date: newProduct.expiredDate,
-      };
-      const { error } = await supabase.from("products").insert(payload);
-      if(error) return console.error(error);
+ const addProduct = async (product: Omit<Product, "id">) => {
+    if (!supabase) {
+      const newProduct: Product = { ...product, id: Date.now().toString() };
+      setProducts(prev => [...prev, newProduct]);
+      return;
     }
-    setProducts(prev => [...prev, newProduct]);
+
+    try {
+      const payload = {
+        barcode: product.barcode, 
+        name: product.name, 
+        category: product.category,
+        cost_price: product.costPrice, 
+        selling_price: product.sellingPrice,
+        stock: product.stock, 
+        status: product.status, 
+        expired_date: product.expiredDate,
+      };
+      
+      // PERBAIKAN: Gunakan .select().single() untuk mendapatkan UUID asli
+      const { data, error } = await supabase.from("products").insert(payload).select().single();
+      
+      if (error) {
+        console.error("Gagal menambah produk:", error.message);
+        return;
+      }
+      
+      if (data) {
+        const newProduct: Product = {
+          id: data.id, // Menggunakan UUID dari Supabase
+          barcode: data.barcode,
+          name: data.name,
+          category: data.category,
+          costPrice: Number(data.cost_price),
+          sellingPrice: Number(data.selling_price),
+          stock: Number(data.stock),
+          status: data.status,
+          expiredDate: data.expired_date,
+        };
+        setProducts(prev => [...prev, newProduct]);
+      }
+    } catch (e) {
+      console.error("Kesalahan saat menambah produk:", e);
+    }
   };
 
   const editProduct = async (productId: string, updates: Partial<Product>) => {
@@ -849,16 +911,45 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
     setInvestments(prev => prev.map(inv => (inv.id === id ? { ...inv, ...updatedData } : inv)));
   };
 
-  const addDebt = async (debt: Omit<Debt, "id" | "status">) => {
-    const newDebt: Debt = { ...debt, id: Date.now().toString(), status: "unpaid" };
-    if (supabase) {
-      const payload = {
-        person_name: newDebt.personName, type: newDebt.type,
-        amount: newDebt.amount, status: newDebt.status, notes: newDebt.notes,
-      };
-      await supabase.from("debts").insert(payload);
+ const addDebt = async (debt: Omit<Debt, "id" | "status">) => {
+    if (!supabase) {
+      const newDebt: Debt = { ...debt, id: Date.now().toString(), status: "unpaid" };
+      setDebts(prev => [...prev, newDebt]);
+      return;
     }
-    setDebts(prev => [...prev, newDebt]);
+
+    try {
+      const payload = {
+        person_name: debt.personName, 
+        type: debt.type,
+        amount: debt.amount, 
+        status: "unpaid", 
+        notes: debt.notes,
+      };
+      
+      // PERBAIKAN: Gunakan .select().single() untuk mendapatkan UUID asli
+      const { data, error } = await supabase.from("debts").insert(payload).select().single();
+
+      if (error) {
+        console.error("Gagal menambah hutang/piutang:", error.message);
+        alert("Gagal mencatat hutang: " + error.message);
+        return;
+      }
+
+      if (data) {
+        const newDebt: Debt = {
+          id: data.id, // Menggunakan UUID dari Supabase
+          personName: data.person_name,
+          type: data.type,
+          status: data.status,
+          amount: Number(data.amount),
+          notes: data.notes,
+        };
+        setDebts(prev => [...prev, newDebt]);
+      }
+    } catch (e) {
+      console.error("Kesalahan saat menambah hutang:", e);
+    }
   };
 
   const deleteDebt = async (debtId: string) => {
@@ -866,38 +957,81 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
     setDebts(prev => prev.filter(d => d.id !== debtId));
   };
 
+// ==========================================
+  // FUNGSI PELUNASAN HUTANG/PIUTANG
+  // ==========================================
   const settleDebt = async (debtId: string, walletId: string) => {
     const debt = debts.find(d => d.id === debtId);
     if (!debt) return;
 
-    if (supabase) await supabase.from("debts").update({ status: "paid" }).eq("id", debtId);
+    try {
+      if (supabase) {
+        // 1. Siapkan data transaksi pelunasan untuk dikirim ke DB
+        const snakeCasePayload = {
+          type: "transfer",
+          category: debt.type === "receivable" ? "Debt Settlement / Bayar Piutang" : "Debt Payment / Bayar Hutang",
+          amount: debt.amount,
+          admin_fee: 0,
+          date: new Date().toISOString().split('T')[0],
+          notes: `${debt.type === "receivable" ? "Piutang settled" : "Hutang paid"}: ${debt.personName}${debt.notes ? ` - ${debt.notes}` : ""}`,
+          to_wallet_id: debt.type === "receivable" ? walletId : null,
+          from_wallet_id: debt.type === "payable" ? walletId : null,
+          debt_id: debtId, 
+          // Catatan: Jika debtId adalah UUID palsu, Supabase akan menolak prosesnya persis di langkah ini.
+        };
 
-    setDebts(prev => prev.map(d => (d.id === debtId ? { ...d, status: "paid" } : d)));
+        // 2. Simpan transaksi ke Supabase terlebih dahulu
+        const { data: txData, error: txError } = await supabase.from("transactions").insert(snakeCasePayload).select().single();
+        if (txError) throw txError; // Lempar error untuk menghentikan proses
 
-    setWallets(prevWallets => {
-      return prevWallets.map(w => {
-        if (w.id === walletId) {
-          const newBal = debt.type === "payable" ? w.balance - debt.amount : w.balance + debt.amount;
-          syncWalletBalance(w.id, newBal);
-          return { ...w, balance: newBal };
+        // 3. Update status hutang menjadi "paid" di Supabase
+        const { error: debtError } = await supabase.from("debts").update({ status: "paid" }).eq("id", debtId);
+        if (debtError) throw debtError;
+
+        // 4. Update saldo dompet di Supabase
+        const wallet = wallets.find(w => w.id === walletId);
+        if (wallet) {
+          const newBal = debt.type === "payable" ? wallet.balance - debt.amount : wallet.balance + debt.amount;
+          await supabase.from("wallets").update({ balance: newBal }).eq("id", walletId);
         }
-        return w;
-      });
-    });
 
-    const settleTx: Transaction = {
-      id: Date.now().toString(),
-      type: debt.type === "receivable" ? "income" : "expense",
-      category: debt.type === "receivable" ? "Debt Settlement / Bayar Piutang" : "Debt Payment / Bayar Hutang",
-      amount: debt.amount,
-      adminFee: null,
-      date: new Date().toISOString().split('T')[0],
-      notes: `${debt.type === "receivable" ? "Piutang settled" : "Hutang paid"}: ${debt.personName}${debt.notes ? ` - ${debt.notes}` : ""}`,
-      toWalletId: debt.type === "receivable" ? walletId : null,
-      fromWalletId: debt.type === "payable" ? walletId : null,
-      debtId: debtId,
-    };
-    await recordTransactionToDB(settleTx);
+        // --- JIKA SEMUA LANGKAH DATABASE SUKSES, BARU UBAH TAMPILAN LAYAR ---
+        
+        // Menambahkan transaksi baru ke layar
+        setTransactions(prev => [...prev, {
+          id: txData.id,
+          type: "transfer",
+          category: snakeCasePayload.category,
+          amount: snakeCasePayload.amount,
+          adminFee: 0,
+          date: snakeCasePayload.date,
+          notes: snakeCasePayload.notes,
+          toWalletId: snakeCasePayload.to_wallet_id,
+          fromWalletId: snakeCasePayload.from_wallet_id,
+          debtId: snakeCasePayload.debt_id,
+        }]);
+      }
+
+      // Mengubah status hutang di layar menjadi lunas
+      setDebts(prev => prev.map(d => (d.id === debtId ? { ...d, status: "paid" } : d)));
+      
+      // Mengubah saldo dompet di layar
+      setWallets(prevWallets => {
+        return prevWallets.map(w => {
+          if (w.id === walletId) {
+            const newBal = debt.type === "payable" ? w.balance - debt.amount : w.balance + debt.amount;
+            return { ...w, balance: newBal };
+          }
+          return w;
+        });
+      });
+
+    } catch (error: any) {
+      // JIKA GAGAL: Pesan error akan muncul, dan kode untuk mengubah layar (di atas) TIDAK akan dieksekusi.
+      // Sehingga saldo tidak akan bertambah secara palsu.
+      console.error("Gagal memproses pembayaran:", error);
+      alert("Gagal memproses pembayaran: " + error.message);
+    }
   };
 
   const addCategory = async (category: Omit<Category, "id">) => {
@@ -974,6 +1108,8 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
     addProduct, editProduct, deleteProduct,
     updateInvestment,
     addDebt, deleteDebt, settleDebt,
+    selectedMonth, setSelectedMonth,
+    selectedYear, setSelectedYear
   };
 
   return <FinanceContext.Provider value={value}>{children}</FinanceContext.Provider>;

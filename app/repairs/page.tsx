@@ -104,7 +104,12 @@ export default function RepairsPage() {
     if (error) {
       setDataError(error.message);
     } else {
-      setRepairs((data ?? []) as Repair[]);
+      // PERBAIKAN: Memetakan kolom "is_paid" dari database ke tampilan UI
+      const mappedData = data.map((item: any) => ({
+        ...item,
+        isPaid: item.is_paid || false,
+      }));
+      setRepairs(mappedData as Repair[]);
     }
     setIsLoading(false);
   }
@@ -132,6 +137,7 @@ export default function RepairsPage() {
       problem_description: problem.trim(),
       estimated_cost: cost,
       status: "pending",
+      is_paid: false // Pastikan defaultnya false saat dibuat
     });
 
     if (error) {
@@ -208,7 +214,6 @@ export default function RepairsPage() {
       setIsProcessingPayment(true);
 
       try {
-        // Call the context handler (creates income transaction + updates wallet)
         await handleRepairPayment({
           repairId: paymentTarget.id,
           finalFee: fee,
@@ -217,10 +222,10 @@ export default function RepairsPage() {
           note: paymentNote,
         });
 
-        // Update repair status to 'picked_up' (paid)
+        // PERBAIKAN: Set is_paid menjadi true di database
         const { error } = await supabase
           .from("repairs")
-          .update({ status: "picked_up" as RepairStatus })
+          .update({ status: "picked_up" as RepairStatus, is_paid: true }) 
           .eq("id", paymentTarget.id);
 
         if (error) {
@@ -247,7 +252,6 @@ export default function RepairsPage() {
       setIsProcessingPayment(true);
 
       try {
-        // Create a receivable (piutang) debt record
         addDebt({
           personName: paymentTarget.customer_name,
           type: "receivable",
@@ -255,10 +259,11 @@ export default function RepairsPage() {
           notes: `Unpaid repair - ${paymentTarget.device_name}: ${paymentTarget.problem_description}`,
         });
 
-        // Update repair status to 'picked_up' (service done, moved to receivables)
+        // PERBAIKAN: Meskipun Kasbon, kita set is_paid menjadi true agar tombol prosesnya hilang,
+        // karena tagihannya sudah sukses dipindahkan ke halaman Debts (Piutang).
         const { error } = await supabase
           .from("repairs")
-          .update({ status: "picked_up" as RepairStatus })
+          .update({ status: "picked_up" as RepairStatus, is_paid: true })
           .eq("id", paymentTarget.id);
 
         if (error) {
@@ -470,9 +475,11 @@ export default function RepairsPage() {
                     <Trash className="h-3.5 w-3.5" />
                     Delete
                   </button>
+                  
+                  {/* PERBAIKAN: Mengubah label teks badge agar mencakup pembayaran lunas dan kasbon */}
                   {paidRepairIds.has(repair.id) || repair.isPaid ? (
                     <span className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium text-green-400 border border-green-500/50 bg-green-500/10 shadow-[0_0_10px_rgba(34,197,94,0.3)]">
-                      ✅ Lunas (Paid)
+                      ✅ Selesai (Billed)
                     </span>
                   ) : repair.status === "picked_up" ? (
                     <Button
@@ -482,6 +489,7 @@ export default function RepairsPage() {
                       Process Payment
                     </Button>
                   ) : null}
+
                   {(repair.status === "pending" || repair.status === "processing") && (
                     <button
                       type="button"

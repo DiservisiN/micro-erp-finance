@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo } from "react";
-import { TrendingUp, TrendingDown, ArrowUpRight, ArrowDownRight } from "lucide-react";
+import { useMemo, useState } from "react";
+import { TrendingUp, TrendingDown, CalendarDays, Users } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -21,6 +21,8 @@ import {
   Bar,
   XAxis,
   YAxis,
+  CartesianGrid,
+  Legend
 } from "recharts";
 import {
   Table,
@@ -31,54 +33,32 @@ import {
   TableRow,
 } from "@/components/ui/table";
 
-/* ---------- types ---------- */
-type WalletRow = {
-  id: string;
-  name: string;
-  balance: number | string;
-  type: "business" | "personal";
-};
-
-type ProductRow = {
-  id: string;
-  name: string;
-  cost_price: number | string;
-  stock: number;
-  status: string;
-};
-
-type InvestmentRow = {
-  id: string;
-  quantity: number | string;
-  current_price: number | string;
-};
-
-type DebtRow = {
-  id: string;
-  type: "receivable" | "payable";
-  status: "unpaid" | "paid";
-  amount: number | string;
-};
-
-type TransactionRow = {
-  id: string;
-  type: string;
-  amount: number | string;
-  adminFee?: number | string | null;
-  date: string;
-  notes?: string | null;
-  product_id?: string | null;
-};
-
 /* ---------- chart colors ---------- */
 const CHART_COLORS = ["#f97316", "#3b82f6", "#10b981", "#8b5cf6", "#ec4899"];
+
+/* ---------- types ---------- */
+type Debt = {
+  id: string;
+  personName: string;
+  type: "receivable" | "payable";
+  status: "unpaid" | "paid";
+  amount: number;
+  notes: string | null;
+};
 
 /* ---------- page ---------- */
 export default function Home() {
   const { mode } = useAppContext();
   const { wallets, transactions, products, investments, debts } = useFinanceContext();
 
-  // Calculate income, expenses, and profit
+  const [dateRange, setDateRange] = useState<"7days" | "14days" | "30days">("14days");
+
+  // Filter out neutral transactions (like "transfer" or "Return of Capital")
+  const pureTransactions = useMemo(() => {
+    return transactions.filter(tx => tx.type === "income" || tx.type === "expense");
+  }, [transactions]);
+
+  // 1. STATISTIK UTAMA
   const financeStats = useMemo(() => {
     const now = new Date();
     const currentMonth = now.getMonth();
@@ -89,7 +69,7 @@ export default function Home() {
     let allTimeIncome = 0;
     let allTimeExpenses = 0;
 
-    for (const tx of transactions) {
+    for (const tx of pureTransactions) {
       const d = new Date(tx.date);
       const txMonth = d.getMonth();
       const txYear = d.getFullYear();
@@ -117,9 +97,9 @@ export default function Home() {
       allTimeExpenses,
       allTimeNetProfit,
     };
-  }, [transactions]);
+  }, [pureTransactions]);
 
-  /* ---------- computed values ---------- */
+  // 2. KALKULASI ASET
   const totalWalletBalance = wallets.reduce((sum, w) => sum + (w.balance || 0), 0);
 
   const totalInvestmentValue = investments.reduce((sum, inv) => {
@@ -145,9 +125,12 @@ export default function Home() {
     .reduce((sum, d) => sum + (d.amount || 0), 0);
 
   const totalAssets = totalWalletBalance + totalInvestmentValue + totalInventoryValue + totalReceivables;
-  const netWorth = totalAssets - totalLiabilities;
 
-  /* ---------- pie chart data (Asset Distribution) ---------- */
+  // 3. HUTANG & PIUTANG AKTIF
+  const activeReceivables = useMemo(() => debts.filter(d => d.type === "receivable" && d.status === "unpaid"), [debts]);
+  const activePayables = useMemo(() => debts.filter(d => d.type === "payable" && d.status === "unpaid"), [debts]);
+
+  // 4. DATA GRAFIK PIE
   const pieData = useMemo(() => {
     const slices = [
       { name: "Liquid Cash & Bank", value: totalWalletBalance },
@@ -159,7 +142,7 @@ export default function Home() {
     return slices.length > 0 ? slices : [{ name: "No Data", value: 1 }];
   }, [totalWalletBalance, totalInvestmentValue, totalInventoryValue, totalReceivables]);
 
-  /* ---------- recent transactions ---------- */
+  // 5. TRANSAKSI TERBARU
   const recentTransactions = useMemo(() => {
     return [...transactions]
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
@@ -167,23 +150,19 @@ export default function Home() {
   }, [transactions]);
 
   const formatTransactionType = (type: string) => {
-    return type
-      .split("_")
-      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-      .join(" ");
+    return type.split("_").map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join(" ");
   };
 
   const formatDate = (date: string) => {
     const d = new Date(date);
-    return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+    return d.toLocaleDateString("id-ID", { month: "short", day: "numeric", year: "numeric" });
   };
 
-  /* ---------- bar chart data (Income vs Expenses vs Profit) ---------- */
-  const barData = useMemo(() => {
-    // Aggregate last 6 months from transaction data
+  // 6. DATA GRAFIK BAR BULANAN
+  const barDataMonthly = useMemo(() => {
     const monthMap = new Map<string, { income: number; expenses: number }>();
 
-    for (const tx of transactions) {
+    for (const tx of pureTransactions) {
       const d = new Date(tx.date);
       if (isNaN(d.getTime())) continue;
       const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
@@ -192,118 +171,146 @@ export default function Home() {
       const amount = safeNumber(tx.amount);
       const adminFee = safeNumber(tx.adminFee ?? 0);
 
-      if (tx.type === "income") {
-        entry.income += amount;
-      } else if (tx.type === "expense") {
-        entry.expenses += amount + adminFee;
-      }
+      if (tx.type === "income") entry.income += amount;
+      else if (tx.type === "expense") entry.expenses += amount + adminFee;
 
       monthMap.set(key, entry);
     }
 
-    // Sort by month and take last 6
     const sortedKeys = Array.from(monthMap.keys()).sort();
     const last6 = sortedKeys.slice(-6);
 
     if (last6.length === 0) {
-      // Show placeholder with current month
       const now = new Date();
-      const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-      return [
-        {
-          month: monthNames[now.getMonth()],
-          Income: 0,
-          Expenses: 0,
-          Profit: 0,
-        },
-      ];
+      const monthNames = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agt", "Sep", "Okt", "Nov", "Des"];
+      return [{ month: monthNames[now.getMonth()], Income: 0, Expenses: 0, Profit: 0 }];
     }
 
-    const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const monthNames = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agt", "Sep", "Okt", "Nov", "Des"];
     return last6.map((key) => {
       const entry = monthMap.get(key)!;
       const monthIdx = parseInt(key.split("-")[1], 10) - 1;
       const netProfit = entry.income - entry.expenses;
       return {
         month: monthNames[monthIdx],
-        Income: Math.round(entry.income * 100) / 100,
-        Expenses: Math.round(entry.expenses * 100) / 100,
-        Profit: Math.round(netProfit * 100) / 100,
+        Income: Math.round(entry.income),
+        Expenses: Math.round(entry.expenses),
+        Profit: Math.round(netProfit),
       };
     });
-  }, [transactions]);
+  }, [pureTransactions]);
 
-  /* ---------- custom tooltip for pie ---------- */
-  const PieTooltip = ({ active, payload }: { active?: boolean; payload?: Array<{ name: string; value: number }> }) => {
+  // 7. DATA GRAFIK HARIAN
+  const barDataDaily = useMemo(() => {
+    const daysCount = dateRange === "7days" ? 7 : dateRange === "14days" ? 14 : 30;
+    const dailyMap = new Map<string, { income: number; expenses: number }>();
+    
+    const today = new Date();
+    for (let i = daysCount - 1; i >= 0; i--) {
+      const d = new Date(today);
+      d.setDate(d.getDate() - i);
+      const key = d.toISOString().split('T')[0];
+      dailyMap.set(key, { income: 0, expenses: 0 });
+    }
+
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - daysCount);
+    const cutoffStr = cutoffDate.toISOString().split('T')[0];
+
+    for (const tx of pureTransactions) {
+      if (tx.date >= cutoffStr && dailyMap.has(tx.date)) {
+        const entry = dailyMap.get(tx.date)!;
+        const amount = safeNumber(tx.amount);
+        const adminFee = safeNumber(tx.adminFee ?? 0);
+
+        if (tx.type === "income") entry.income += amount;
+        else if (tx.type === "expense") entry.expenses += amount + adminFee;
+        
+        dailyMap.set(tx.date, entry);
+      }
+    }
+
+    return Array.from(dailyMap.entries()).map(([dateStr, stats]) => {
+      const d = new Date(dateStr);
+      const dayName = d.toLocaleDateString("id-ID", { weekday: "short" });
+      const dayDate = d.getDate();
+      const netProfit = stats.income - stats.expenses;
+      return {
+        dateFull: dateStr,
+        day: `${dayDate} ${dayName}`,
+        Income: stats.income,
+        Expenses: stats.expenses,
+        Profit: netProfit,
+      };
+    });
+  }, [pureTransactions, dateRange]);
+
+  /* ---------- custom tooltips ---------- */
+  const PieTooltip = ({ active, payload }: { active?: boolean; payload?: Array<any> }) => {
     if (!active || !payload?.length) return null;
     return (
       <div className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm shadow-lg">
         <p className="font-medium text-white">{payload[0].name}</p>
-        <p className="text-slate-400">{formatRupiah(payload[0].value)}</p>
+        <p className="text-slate-300 font-bold">{formatRupiah(payload[0].value)}</p>
       </div>
     );
   };
 
-  /* ---------- custom tooltip for bar ---------- */
-  const BarTooltip = ({
-    active,
-    payload,
-    label,
-  }: {
-    active?: boolean;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    payload?: Array<{ name: string; value: number; color: string }>;
-    label?: string;
-  }) => {
+  const BarTooltip = ({ active, payload, label }: { active?: boolean; payload?: Array<any>; label?: string; }) => {
     if (!active || !payload?.length) return null;
     return (
-      <div className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm shadow-lg">
-        <p className="mb-1 font-medium text-white">{label}</p>
-        {payload.map((entry) => (
-          <p key={entry.name} style={{ color: entry.color }}>
-            {entry.name}: {formatRupiah(entry.value)}
-          </p>
-        ))}
+      <div className="rounded-lg border border-slate-700 bg-slate-900/95 backdrop-blur-sm px-4 py-3 text-sm shadow-xl min-w-[180px]">
+        <p className="mb-2 font-semibold text-white border-b border-slate-700 pb-1">{label}</p>
+        <div className="space-y-1.5">
+          {payload.map((entry) => (
+            <div key={entry.name} className="flex justify-between items-center gap-4">
+              <span className="text-slate-300 flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.color }}></span>
+                {entry.name}
+              </span>
+              <span className="font-mono font-medium" style={{ color: entry.color }}>
+                {formatRupiah(entry.value)}
+              </span>
+            </div>
+          ))}
+        </div>
       </div>
     );
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 p-4 md:p-6 lg:p-8">
+    <div className="min-h-screen bg-[#020617] p-4 md:p-6 lg:p-8">
       <div className="max-w-7xl mx-auto space-y-6">
-        {/* Header */}
-        <div className="flex items-center justify-between">
+        
+        {/* HEADER */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-white">Dashboard</h1>
+            <h1 className="text-3xl font-bold text-white tracking-tight">Dashboard Overview</h1>
             <p className="text-slate-400 text-sm mt-1">
-              {mode === "business" ? "Business Mode" : "Personal Mode"}
+              Financial summary for {mode === "business" ? "Business Operations" : "Personal Finance"}.
             </p>
           </div>
         </div>
 
-
-        {/* Top Row - 4 Stat Cards */}
+        {/* ROW 1: KARTU STATISTIK */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <StatCard
-            title="Total Assets"
+            title="Total Liquid Assets"
             value={formatRupiah(totalAssets)}
-            trend="+5.2%"
-            trendUp={true}
+            subtitle="Cash, Stock, & Receivables"
             accent="orange"
           />
           <StatCard
-            title="Monthly Income"
+            title="Monthly Revenue"
             value={formatRupiah(financeStats.monthlyIncome)}
-            trend={financeStats.monthlyIncome > 0 ? "+" + Math.round((financeStats.monthlyIncome / Math.max(financeStats.allTimeIncome, 1)) * 100) + "%" : "0%"}
-            trendUp={financeStats.monthlyIncome > 0}
+            subtitle="Pure income this month"
             accent="green"
           />
           <StatCard
-            title="Total Expenses"
+            title="Monthly Expenses"
             value={formatRupiah(financeStats.monthlyExpenses)}
-            trend={financeStats.monthlyExpenses > 0 ? "-" + Math.round((financeStats.monthlyExpenses / Math.max(financeStats.allTimeExpenses, 1)) * 100) + "%" : "0%"}
-            trendUp={false}
-            accent="purple"
+            subtitle="Total spending this month"
+            accent="red"
           />
           <NetProfitCard
             netProfit={financeStats.monthlyNetProfit}
@@ -311,135 +318,170 @@ export default function Home() {
           />
         </div>
 
-        {/* Middle Row - Charts */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          {/* Bar Chart - Income vs Expenses vs Profit (2/3 width) */}
-          <Card className="lg:col-span-2 bg-slate-900 border-slate-800">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-white text-lg">Income vs Expenses vs Profit</CardTitle>
+        {/* ROW 2: GRAFIK HARIAN & GRAFIK PIE */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <Card className="lg:col-span-2 bg-slate-900/50 backdrop-blur-sm border-slate-800/50 shadow-xl">
+            <CardHeader className="pb-2 border-b border-slate-800/50 flex flex-row items-center justify-between">
+              <div>
+                <CardTitle className="text-white text-lg flex items-center gap-2">
+                  <CalendarDays className="h-5 w-5 text-orange-500" />
+                  Daily Profit & Loss
+                </CardTitle>
+                <p className="text-xs text-slate-400 mt-1">Monitoring trend keuntungan setiap hari.</p>
+              </div>
+              <select
+                value={dateRange}
+                onChange={(e) => setDateRange(e.target.value as any)}
+                className="bg-slate-800 border border-slate-700 text-slate-300 text-xs rounded-md px-2 py-1 focus:ring-orange-500"
+              >
+                <option value="7days">Last 7 Days</option>
+                <option value="14days">Last 14 Days</option>
+                <option value="30days">Last 30 Days</option>
+              </select>
             </CardHeader>
-            <CardContent>
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={barData} barGap={4}>
-                  <XAxis
-                    dataKey="month"
-                    tick={{ fill: "#64748b", fontSize: 12 }}
-                    axisLine={{ stroke: "#334155" }}
-                    tickLine={false}
-                  />
-                  <YAxis
-                    tick={{ fill: "#64748b", fontSize: 12 }}
-                    axisLine={false}
-                    tickLine={false}
-                    tickFormatter={(v: number) => shortCurrency(v)}
-                  />
-                  <Tooltip content={<BarTooltip />} cursor={{ fill: "#334155", opacity: 0.3 }} />
-                  <Bar
-                    dataKey="Income"
-                    fill="#f97316"
-                    radius={[4, 4, 0, 0]}
-                    animationDuration={800}
-                    maxBarSize={40}
-                  />
-                  <Bar
-                    dataKey="Expenses"
-                    fill="#8b5cf6"
-                    radius={[4, 4, 0, 0]}
-                    animationDuration={800}
-                    maxBarSize={40}
-                  />
-                  <Bar
-                    dataKey="Profit"
-                    fill="#10b981"
-                    radius={[4, 4, 0, 0]}
-                    animationDuration={800}
-                    maxBarSize={40}
-                  />
+            <CardContent className="pt-6">
+              <ResponsiveContainer width="100%" height={320}>
+                <BarChart data={barDataDaily} margin={{ top: 5, right: 10, left: 20, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
+                  <XAxis dataKey="day" tick={{ fill: "#64748b", fontSize: 11 }} axisLine={{ stroke: "#334155" }} tickLine={false} />
+                  <YAxis tick={{ fill: "#64748b", fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v: number) => shortCurrency(v)} />
+                  <Tooltip content={<BarTooltip />} cursor={{ fill: "#1e293b", opacity: 0.5 }} />
+                  <Legend wrapperStyle={{ paddingTop: "20px", fontSize: "12px", color: "#cbd5e1" }} />
+                  <Bar dataKey="Expenses" name="Pengeluaran" fill="#ef4444" radius={[4, 4, 0, 0]} maxBarSize={30} />
+                  <Bar dataKey="Income" name="Pendapatan (Kotor)" fill="#3b82f6" radius={[4, 4, 0, 0]} maxBarSize={30} />
+                  <Bar dataKey="Profit" name="Laba Bersih" fill="#10b981" radius={[4, 4, 0, 0]} maxBarSize={30} />
                 </BarChart>
               </ResponsiveContainer>
             </CardContent>
           </Card>
 
-          {/* Pie Chart - Asset Distribution (1/3 width) */}
-          <Card className="bg-slate-900 border-slate-800">
-            <CardHeader className="pb-3">
+          <Card className="bg-slate-900/50 backdrop-blur-sm border-slate-800/50 shadow-xl flex flex-col">
+            <CardHeader className="pb-2 border-b border-slate-800/50">
               <CardTitle className="text-white text-lg">Asset Distribution</CardTitle>
+              <p className="text-xs text-slate-400 mt-1">Pembagian nilai kekayaan saat ini.</p>
             </CardHeader>
-            <CardContent>
-              <ResponsiveContainer width="100%" height={300}>
-                <PieChart>
-                  <Pie
-                    data={pieData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={50}
-                    outerRadius={80}
-                    paddingAngle={2}
-                    dataKey="value"
-                    strokeWidth={0}
-                    animationBegin={0}
-                    animationDuration={800}
-                  >
-                    {pieData.map((_, index) => (
-                      <Cell
-                        key={`cell-${index}`}
-                        fill={CHART_COLORS[index % CHART_COLORS.length]}
-                      />
-                    ))}
-                  </Pie>
-                  <Tooltip content={<PieTooltip />} />
-                </PieChart>
-              </ResponsiveContainer>
+            <CardContent className="pt-6 flex-1 flex flex-col items-center justify-center">
+              <div className="w-full h-[220px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={pieData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={60}
+                      outerRadius={90}
+                      paddingAngle={5}
+                      dataKey="value"
+                      stroke="none"
+                    >
+                      {pieData.map((_, index) => (
+                        <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip content={<PieTooltip />} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="w-full grid grid-cols-2 gap-x-2 gap-y-3 mt-4">
+                {pieData.map((entry, index) => (
+                  <div key={index} className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: CHART_COLORS[index % CHART_COLORS.length] }}></div>
+                    <span className="text-xs text-slate-300 truncate" title={entry.name}>{entry.name}</span>
+                  </div>
+                ))}
+              </div>
             </CardContent>
           </Card>
         </div>
 
-        {/* Bottom Row - Recent Activity Table */}
-        <Card className="bg-slate-900 border-slate-800">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-white text-lg">Recent Activity</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {recentTransactions.length === 0 ? (
-              <div className="text-center py-8 text-slate-500 text-sm">No recent transactions</div>
-            ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow className="border-slate-800 hover:bg-slate-800/50">
-                    <TableHead className="text-slate-400 font-medium">Date</TableHead>
-                    <TableHead className="text-slate-400 font-medium">Type</TableHead>
-                    <TableHead className="text-slate-400 font-medium">Amount</TableHead>
-                    <TableHead className="text-slate-400 font-medium text-right">Notes</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {recentTransactions.map((tx) => {
-                    const isIncome = tx.type === "income";
-                    const isExpense = tx.type === "expense";
-                    return (
-                      <TableRow key={tx.id} className="border-slate-800 hover:bg-slate-800/50">
-                        <TableCell className="text-slate-300 text-sm">{formatDate(tx.date)}</TableCell>
-                        <TableCell className="text-slate-300 text-sm">
-                          <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 text-xs font-medium">
-                            {tx.category || formatTransactionType(tx.type)}
-                          </span>
-                        </TableCell>
-                        <TableCell className={`text-sm font-medium ${
-                          isIncome ? "text-emerald-500" : isExpense ? "text-rose-500" : "text-slate-300"
-                        }`}>
-                          {isIncome ? "+" : isExpense ? "-" : ""}{formatRupiah(tx.amount)}
-                        </TableCell>
-                        <TableCell className="text-slate-500 text-sm text-right truncate max-w-[200px]">
-                          {tx.notes || "-"}
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            )}
-          </CardContent>
-        </Card>
+        {/* ROW 3: GRAFIK BULANAN & AKTIVITAS TERBARU */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <Card className="bg-slate-900/50 backdrop-blur-sm border-slate-800/50 shadow-xl">
+            <CardHeader className="pb-2 border-b border-slate-800/50">
+              <CardTitle className="text-white text-lg">Monthly Performance (6 Months)</CardTitle>
+            </CardHeader>
+            <CardContent className="pt-6">
+              <ResponsiveContainer width="100%" height={280}>
+                <BarChart data={barDataMonthly} margin={{ top: 5, right: 5, left: 10, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
+                  <XAxis dataKey="month" tick={{ fill: "#64748b", fontSize: 12 }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fill: "#64748b", fontSize: 12 }} axisLine={false} tickLine={false} tickFormatter={(v) => shortCurrency(v)} />
+                  <Tooltip content={<BarTooltip />} cursor={{ fill: "#1e293b", opacity: 0.5 }} />
+                  <Bar dataKey="Income" name="Pendapatan" fill="#3b82f6" radius={[4, 4, 0, 0]} maxBarSize={20} />
+                  <Bar dataKey="Expenses" name="Pengeluaran" fill="#ef4444" radius={[4, 4, 0, 0]} maxBarSize={20} />
+                  <Bar dataKey="Profit" name="Laba Bersih" fill="#10b981" radius={[4, 4, 0, 0]} maxBarSize={20} />
+                </BarChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-slate-900/50 backdrop-blur-sm border-slate-800/50 shadow-xl overflow-hidden flex flex-col">
+            <CardHeader className="pb-2 border-b border-slate-800/50">
+              <CardTitle className="text-white text-lg">Recent Activities</CardTitle>
+            </CardHeader>
+            <CardContent className="p-0 flex-1 flex flex-col justify-between">
+              {recentTransactions.length === 0 ? (
+                <div className="flex-1 flex items-center justify-center py-12">
+                  <p className="text-slate-500 text-sm">Belum ada transaksi tercatat.</p>
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader className="bg-slate-950/50">
+                    <TableRow className="border-slate-800/50">
+                      <TableHead className="text-slate-400 font-medium h-10">Date</TableHead>
+                      <TableHead className="text-slate-400 font-medium h-10">Type / Category</TableHead>
+                      <TableHead className="text-slate-400 font-medium text-right h-10">Amount</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {recentTransactions.map((tx) => {
+                      const isIncome = tx.type === "income";
+                      const isExpense = tx.type === "expense";
+                      
+                      return (
+                        <TableRow key={tx.id} className="border-slate-800/50 hover:bg-slate-800/40">
+                          <TableCell className="text-slate-300 text-sm py-3">{formatDate(tx.date)}</TableCell>
+                          <TableCell className="py-3">
+                            <div className="flex flex-col gap-0.5">
+                              <span className="text-slate-200 text-sm font-medium">
+                                {tx.category || formatTransactionType(tx.type)}
+                              </span>
+                              <span className="text-xs text-slate-500 truncate max-w-[180px]">
+                                {tx.notes || "-"}
+                              </span>
+                            </div>
+                          </TableCell>
+                          <TableCell className={`text-right font-mono font-medium text-sm py-3 ${
+                            isIncome ? "text-emerald-400" : isExpense ? "text-red-400" : "text-slate-400"
+                          }`}>
+                            {isIncome ? "+" : isExpense ? "-" : ""}{formatRupiah(tx.amount)}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* ROW 4: HUTANG & PIUTANG AKTIF */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <DebtTableCard 
+            title="Piutang Belum Dibayar (Receivables)" 
+            items={activeReceivables} 
+            accent="green" 
+            emptyMsg="Hore! Tidak ada piutang aktif di luar sana." 
+          />
+          <DebtTableCard 
+            title="Hutang Belum Dibayar (Payables)" 
+            items={activePayables} 
+            accent="red" 
+            emptyMsg="Kerja bagus! Kamu tidak memiliki tanggungan hutang." 
+          />
+        </div>
+
       </div>
     </div>
   );
@@ -449,34 +491,29 @@ export default function Home() {
 function StatCard({
   title,
   value,
-  trend,
-  trendUp,
+  subtitle,
   accent,
 }: {
   title: string;
   value: string;
-  trend: string;
-  trendUp: boolean;
-  accent: "orange" | "blue" | "green" | "purple";
+  subtitle: string;
+  accent: "orange" | "blue" | "green" | "red";
 }) {
   const accentColors = {
     orange: "text-orange-500",
     blue: "text-blue-500",
-    green: "text-green-500",
-    purple: "text-purple-500",
+    green: "text-emerald-500",
+    red: "text-red-500",
   };
 
   return (
-    <Card className="bg-slate-900 border-slate-800 hover:border-slate-700 transition-colors">
-      <CardContent className="p-4">
-        <div className="flex items-center justify-between mb-2">
-          <p className="text-slate-400 text-sm font-medium">{title}</p>
-          <div className={`flex items-center gap-1 text-xs ${trendUp ? "text-green-500" : "text-red-500"}`}>
-            {trendUp ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
-            <span>{trend}</span>
-          </div>
-        </div>
-        <p className={`text-2xl font-bold ${accentColors[accent]}`}>{value}</p>
+    <Card className="bg-slate-900/50 backdrop-blur-sm border-slate-800/50 hover:border-slate-700/80 transition-colors shadow-lg relative overflow-hidden group">
+      <div className={`absolute top-0 right-0 w-32 h-32 opacity-0 group-hover:opacity-10 blur-3xl rounded-full transition-opacity duration-500 bg-current ${accentColors[accent]}`}></div>
+      
+      <CardContent className="p-5 relative z-10">
+        <p className="text-slate-400 text-sm font-medium mb-1">{title}</p>
+        <p className={`text-3xl font-bold tracking-tight mb-2 ${accentColors[accent]}`}>{value}</p>
+        <p className="text-xs text-slate-500">{subtitle}</p>
       </CardContent>
     </Card>
   );
@@ -490,26 +527,85 @@ function NetProfitCard({
   isLoading: boolean;
 }) {
   const isPositive = netProfit >= 0;
-  const accentColor = isPositive ? "text-green-500" : "text-red-500";
-  const bgColor = isPositive ? "bg-green-500/10" : "bg-red-500/10";
-  const borderColor = isPositive ? "border-green-500/30" : "border-red-500/30";
+  const accentColor = isPositive ? "text-emerald-500" : "text-red-500";
 
   return (
-    <Card className={`bg-slate-900 border-slate-800 hover:border-slate-700 transition-colors`}>
-      <CardContent className="p-4">
-        <div className="flex items-center justify-between mb-2">
-          <p className="text-slate-400 text-sm font-medium">Estimated Net Profit</p>
-          <div className={`flex items-center gap-1 text-xs ${accentColor}`}>
+    <Card className="bg-slate-900/50 backdrop-blur-sm border-slate-800/50 hover:border-slate-700/80 transition-colors shadow-lg relative overflow-hidden group">
+      <div className={`absolute top-0 right-0 w-32 h-32 opacity-0 group-hover:opacity-10 blur-3xl rounded-full transition-opacity duration-500 bg-current ${accentColor}`}></div>
+
+      <CardContent className="p-5 relative z-10">
+        <div className="flex items-center justify-between mb-1">
+          <p className="text-slate-400 text-sm font-medium">Monthly Net Profit</p>
+          <div className={`flex items-center gap-1 text-xs px-2 py-0.5 rounded-full ${isPositive ? "bg-emerald-500/10 text-emerald-400" : "bg-red-500/10 text-red-400"}`}>
             {isPositive ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
             <span>{isPositive ? "Profit" : "Loss"}</span>
           </div>
         </div>
-        <p className={`text-2xl font-bold ${accentColor}`}>
-          {isLoading ? "Loading..." : formatRupiah(netProfit)}
+        <p className={`text-3xl font-bold tracking-tight mb-2 ${accentColor}`}>
+          {isLoading ? "..." : formatRupiah(netProfit)}
         </p>
-        <p className="text-xs text-slate-500 mt-1">
-          (Revenue - Expenses)
-        </p>
+        <p className="text-xs text-slate-500">Pure Income - Expenses</p>
+      </CardContent>
+    </Card>
+  );
+}
+
+function DebtTableCard({
+  title,
+  items,
+  accent,
+  emptyMsg,
+}: {
+  title: string;
+  items: Debt[];
+  accent: "green" | "red";
+  emptyMsg: string;
+}) {
+  const accentColor = accent === "green" ? "text-emerald-400" : "text-red-400";
+  const badgeColor = accent === "green" ? "bg-emerald-500/10 border-emerald-500/20" : "bg-red-500/10 border-red-500/20";
+  const totalAmount = items.reduce((sum, item) => sum + item.amount, 0);
+
+  return (
+    <Card className="bg-slate-900/50 backdrop-blur-sm border-slate-800/50 shadow-xl overflow-hidden flex flex-col">
+      <CardHeader className="pb-2 border-b border-slate-800/50 flex flex-row items-center justify-between">
+        <CardTitle className="text-white text-lg flex items-center gap-2">
+          <Users className="h-5 w-5 text-slate-400" />
+          {title}
+        </CardTitle>
+        <span className={`font-mono font-bold text-sm ${accentColor}`}>
+          {formatRupiah(totalAmount)}
+        </span>
+      </CardHeader>
+      <CardContent className="p-0 flex-1">
+        {items.length === 0 ? (
+          <div className="flex items-center justify-center py-8">
+            <p className="text-slate-500 text-sm">{emptyMsg}</p>
+          </div>
+        ) : (
+          <div className="max-h-[250px] overflow-y-auto">
+            <Table>
+              <TableBody>
+                {items.map((item) => (
+                  <TableRow key={item.id} className="border-slate-800/50 hover:bg-slate-800/40">
+                    <TableCell className="py-3">
+                      <div className="flex flex-col gap-0.5">
+                        <span className="text-slate-200 text-sm font-medium">{item.personName}</span>
+                        <span className="text-xs text-slate-500 truncate max-w-[200px]">
+                          {item.notes || "-"}
+                        </span>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-right py-3">
+                      <span className={`inline-flex px-2.5 py-1 rounded-md text-xs font-mono font-medium border ${badgeColor} ${accentColor}`}>
+                        {formatRupiah(item.amount)}
+                      </span>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        )}
       </CardContent>
     </Card>
   );
@@ -523,8 +619,12 @@ function safeNumber(value: number | string | null | undefined) {
 }
 
 function shortCurrency(value: number) {
-  if (Math.abs(value) >= 1_000_000_000) return `Rp ${(value / 1_000_000_000).toFixed(1)}M`;
-  if (Math.abs(value) >= 1_000_000) return `Rp ${(value / 1_000_000).toFixed(1)}jt`;
-  if (Math.abs(value) >= 1_000) return `Rp ${(value / 1_000).toFixed(1)}rb`;
-  return `Rp ${value}`;
+  const isNegative = value < 0;
+  const absValue = Math.abs(value);
+  const sign = isNegative ? "-" : "";
+
+  if (absValue >= 1_000_000_000) return `${sign}Rp ${(absValue / 1_000_000_000).toFixed(1)}M`;
+  if (absValue >= 1_000_000) return `${sign}Rp ${(absValue / 1_000_000).toFixed(1)}jt`;
+  if (absValue >= 1_000) return `${sign}Rp ${(absValue / 1_000).toFixed(1)}rb`;
+  return `${sign}Rp ${absValue}`;
 }
