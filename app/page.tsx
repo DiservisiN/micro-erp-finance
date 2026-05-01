@@ -130,23 +130,35 @@ export default function Home() {
   };
 
   // 7. DATA GRAFIK HARIAN
+  // 7. DATA GRAFIK HARIAN
   const barDataDaily = useMemo(() => {
     const daysInMonth = new Date(selectedYear, selectedMonth + 1, 0).getDate();
     const dailyMap = new Map<string, { income: number; expenses: number }>();
     
+    // Menyiapkan slot kosong untuk tanggal 1 sampai 31
     for (let i = 1; i <= daysInMonth; i++) {
       const dateStr = `${selectedYear}-${String(selectedMonth + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
       dailyMap.set(dateStr, { income: 0, expenses: 0 });
     }
 
+    // Memasukkan nilai transaksi ke tanggal yang cocok
     for (const tx of pureMonthlyTransactions) {
-      if (tx.date && dailyMap.has(tx.date)) {
-        const entry = dailyMap.get(tx.date)!;
-        const amount = safeNumber(tx.amount);
-        const adminFee = safeNumber(tx.adminFee ?? 0);
-        if (tx.type === "income") entry.income += amount;
-        else if (tx.type === "expense") entry.expenses += amount + adminFee;
-        dailyMap.set(tx.date, entry);
+      if (tx.date) {
+        // DOKUMENTASI & PERBAIKAN:
+        // Kita memotong teks dari Supabase dan hanya mengambil 10 karakter pertama.
+        // Jadi "2026-05-01T07:00:00Z" akan otomatis berubah menjadi "2026-05-01" saja.
+        const dateOnly = tx.date.substring(0, 10);
+        
+        if (dailyMap.has(dateOnly)) {
+          const entry = dailyMap.get(dateOnly)!;
+          const amount = safeNumber(tx.amount);
+          const adminFee = safeNumber(tx.adminFee ?? 0);
+          
+          if (tx.type === "income") entry.income += amount;
+          else if (tx.type === "expense") entry.expenses += amount + adminFee;
+          
+          dailyMap.set(dateOnly, entry);
+        }
       }
     }
 
@@ -155,7 +167,7 @@ export default function Home() {
       const d = parseInt(parts[2], 10);
       return {
         dateFull: dateStr,
-        day: `${d}`, // Menampilkan "1", "2", dst
+        day: `${d}`, // Menampilkan angka "1", "2", dst di bawah grafik
         Income: stats.income,
         Expenses: stats.expenses,
         Profit: stats.income - stats.expenses,
