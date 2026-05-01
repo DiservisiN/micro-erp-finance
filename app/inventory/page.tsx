@@ -82,8 +82,6 @@ const initialFormState: ProductFormState = {
 };
 
 export default function InventoryPage() {
-  // DOKUMENTASI: Kita menghapus 'handleRestock' dari import context ini, 
-  // dan menggantinya dengan 'addTransaction' untuk menangani biaya secara langsung.
   const { products, addProduct, editProduct, deleteProduct, wallets, categories, addTransaction } = useFinanceContext();
   
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -120,7 +118,6 @@ export default function InventoryPage() {
     const totalCost = costPrice * stock;
     const selectedWallet = wallets.find((w) => w.id === formState.walletId);
 
-    // Validasi saldo wallet sebelum memproses apa pun
     if (selectedWallet && totalCost > 0) {
       if (selectedWallet.balance < totalCost) {
         toast.error("Insufficient wallet balance", {
@@ -131,7 +128,6 @@ export default function InventoryPage() {
       }
     }
 
-    // 1. Tambahkan produk ke sistem
     await addProduct({
       barcode: formState.barcode.trim() || null,
       name: formState.name.trim(),
@@ -143,9 +139,6 @@ export default function InventoryPage() {
       status: formState.status || "in_stock",
     });
 
-    // 2. DOKUMENTASI: Jika dompet dipilih, buat transaksi 'expense' (pengeluaran)
-    // Ini secara otomatis akan memotong saldo dompet di FinanceContext 
-    // tanpa menimbulkan bug 'product ID kosong' seperti fungsi sebelumnya.
     if (selectedWallet && totalCost > 0) {
       await addTransaction({
         id: Date.now().toString(),
@@ -249,13 +242,14 @@ export default function InventoryPage() {
   }
 
   return (
-    <section className="space-y-6 bg-[#020617] min-h-screen p-6">
-      <div className="flex items-center justify-between bg-slate-900/50 backdrop-blur-sm border border-slate-800/50 rounded-xl p-6">
+    <section className="space-y-6 bg-[#020617] min-h-screen p-4 md:p-6">
+      {/* HEADER */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-900/50 backdrop-blur-sm border border-slate-800/50 rounded-xl p-4 md:p-6">
         <div>
-          <h2 className="text-2xl font-semibold text-white">Inventory</h2>
-          <p className="text-slate-400 text-sm">Manage and monitor products from FinanceContext.</p>
+          <h2 className="text-xl md:text-2xl font-semibold text-white">Inventory</h2>
+          <p className="text-slate-400 text-xs md:text-sm">Manage and monitor products from FinanceContext.</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <ImportCsvDialog
             open={isImportOpen}
             onOpenChange={setIsImportOpen}
@@ -274,19 +268,31 @@ export default function InventoryPage() {
         </div>
       </div>
 
-      <Tabs defaultValue="in-stock" className="space-y-4">
-        <TabsList className="bg-slate-900/50 backdrop-blur-sm border border-slate-800/50">
-          <TabsTrigger value="in-stock" className="data-[state=active]:bg-slate-800 data-[state=active]:text-white">In Stock</TabsTrigger>
-          <TabsTrigger value="in-transit" className="data-[state=active]:bg-slate-800 data-[state=active]:text-white">
-            In Transit
-            {inTransitProducts.length > 0 && (
-              <span className="ml-2 inline-flex items-center rounded-full bg-orange-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-orange-500 animate-pulse shadow-[0_0_8px_rgba(249,115,22,0.4)]">
-                {inTransitProducts.length}
-              </span>
-            )}
-          </TabsTrigger>
-        </TabsList>
+      {/* DOKUMENTASI: Pembungkus Tabs dengan spasi 6 dan TabsList dengan blok besar merentang */}
+      <Tabs defaultValue="in-stock" className="space-y-6 w-full">
+        <div className="w-full overflow-x-auto bg-slate-900/40 backdrop-blur-sm border border-slate-800/50 rounded-xl p-2 shadow-sm">
+          <TabsList className="flex w-full min-w-max h-auto p-0 bg-transparent gap-2">
+            <TabsTrigger 
+              value="in-stock" 
+              className="flex-1 whitespace-nowrap px-8 py-3.5 text-sm font-medium text-slate-400 data-[state=active]:bg-slate-800 data-[state=active]:text-white data-[state=active]:shadow-md rounded-lg transition-all hover:text-slate-200"
+            >
+              In Stock
+            </TabsTrigger>
+            <TabsTrigger 
+              value="in-transit" 
+              className="flex-1 whitespace-nowrap px-8 py-3.5 text-sm font-medium text-slate-400 data-[state=active]:bg-slate-800 data-[state=active]:text-white data-[state=active]:shadow-md rounded-lg transition-all hover:text-slate-200"
+            >
+              In Transit
+              {inTransitProducts.length > 0 && (
+                <span className="ml-3 inline-flex items-center rounded-full bg-orange-500/15 px-2 py-0.5 text-[10px] font-semibold text-orange-500 animate-pulse shadow-[0_0_8px_rgba(249,115,22,0.4)]">
+                  {inTransitProducts.length}
+                </span>
+              )}
+            </TabsTrigger>
+          </TabsList>
+        </div>
 
+        {/* KONTEN: IN STOCK */}
         <TabsContent value="in-stock" className="space-y-4">
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between bg-slate-900/30 backdrop-blur-sm border border-slate-800/30 rounded-xl p-4">
             <Input
@@ -311,93 +317,97 @@ export default function InventoryPage() {
           </div>
 
           <div className="bg-slate-900/30 backdrop-blur-sm border border-slate-800/30 rounded-xl overflow-hidden">
-            <Table>
-              <TableHeader>
-                <TableRow className="border-slate-800/50 hover:bg-slate-800/30">
-                  <TableHead className="text-slate-400 font-medium">Barcode</TableHead>
-                  <TableHead className="text-slate-400 font-medium">
-                    <SortButton label="Name" isActive={sortField === "name"} direction={sortDirection} onClick={() => toggleSort("name")} />
-                  </TableHead>
-                  <TableHead className="text-slate-400 font-medium">
-                    <SortButton label="Category" isActive={sortField === "category"} direction={sortDirection} onClick={() => toggleSort("category")} />
-                  </TableHead>
-                  <TableHead className="text-slate-400 font-medium text-right">
-                    <SortButton label="Cost Price" isActive={sortField === "costPrice"} direction={sortDirection} onClick={() => toggleSort("costPrice")} />
-                  </TableHead>
-                  <TableHead className="text-slate-400 font-medium text-right">
-                    <SortButton label="Selling Price" isActive={sortField === "sellingPrice"} direction={sortDirection} onClick={() => toggleSort("sellingPrice")} />
-                  </TableHead>
-                  <TableHead className="text-slate-400 font-medium text-right">
-                    <SortButton label="Stock" isActive={sortField === "stock"} direction={sortDirection} onClick={() => toggleSort("stock")} />
-                  </TableHead>
-                  <TableHead className="text-slate-400 font-medium">Status</TableHead>
-                  <TableHead className="text-slate-400 font-medium">
-                    <SortButton label="Expired Date" isActive={sortField === "expiredDate"} direction={sortDirection} onClick={() => toggleSort("expiredDate")} />
-                  </TableHead>
-                  <TableHead className="text-slate-400 font-medium w-[80px]">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredProducts.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={9} className="text-center text-slate-500">
-                      No products found for current filters.
-                    </TableCell>
+            <div className="overflow-x-auto">
+              <Table className="min-w-[800px]">
+                <TableHeader>
+                  <TableRow className="border-slate-800/50 hover:bg-slate-800/30">
+                    <TableHead className="text-slate-400 font-medium">Barcode</TableHead>
+                    <TableHead className="text-slate-400 font-medium">
+                      <SortButton label="Name" isActive={sortField === "name"} direction={sortDirection} onClick={() => toggleSort("name")} />
+                    </TableHead>
+                    <TableHead className="text-slate-400 font-medium">
+                      <SortButton label="Category" isActive={sortField === "category"} direction={sortDirection} onClick={() => toggleSort("category")} />
+                    </TableHead>
+                    <TableHead className="text-slate-400 font-medium text-right">
+                      <SortButton label="Cost Price" isActive={sortField === "costPrice"} direction={sortDirection} onClick={() => toggleSort("costPrice")} />
+                    </TableHead>
+                    <TableHead className="text-slate-400 font-medium text-right">
+                      <SortButton label="Selling Price" isActive={sortField === "sellingPrice"} direction={sortDirection} onClick={() => toggleSort("sellingPrice")} />
+                    </TableHead>
+                    <TableHead className="text-slate-400 font-medium text-right">
+                      <SortButton label="Stock" isActive={sortField === "stock"} direction={sortDirection} onClick={() => toggleSort("stock")} />
+                    </TableHead>
+                    <TableHead className="text-slate-400 font-medium">Status</TableHead>
+                    <TableHead className="text-slate-400 font-medium">
+                      <SortButton label="Expired Date" isActive={sortField === "expiredDate"} direction={sortDirection} onClick={() => toggleSort("expiredDate")} />
+                    </TableHead>
+                    <TableHead className="text-slate-400 font-medium w-[80px]">Actions</TableHead>
                   </TableRow>
-              ) : (
-                filteredProducts.map((product) => (
-                  <TableRow key={product.id} className="border-slate-800/30 hover:bg-slate-800/50 transition-colors">
-                    <TableCell className="text-slate-300">{product.barcode ?? "-"}</TableCell>
-                    <TableCell className="text-white font-medium">{product.name}</TableCell>
-                    <TableCell className="text-slate-400">{product.category ?? "-"}</TableCell>
-                    <TableCell className="text-slate-300 text-right font-mono">{formatRupiah(product.costPrice)}</TableCell>
-                    <TableCell className="text-slate-300 text-right font-mono">{formatRupiah(product.sellingPrice)}</TableCell>
-                    <TableCell className="text-slate-300 text-right font-mono">{product.stock}</TableCell>
-                    <TableCell>
-                      {product.status === "in_stock" ? (
-                        <span className="inline-flex items-center rounded-full bg-green-500/10 px-2.5 py-0.5 text-xs font-medium text-green-400 border border-green-500/20">
-                          In Stock
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center rounded-full bg-orange-500/10 px-2.5 py-0.5 text-xs font-medium text-orange-400 border border-orange-500/20">
-                          On the Way
-                        </span>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-slate-400">{product.expiredDate ?? "-"}</TableCell>
-                    <TableCell>
-                      <button
-                        type="button"
-                        title="Edit Product"
-                        onClick={() => openEditProduct(product)}
-                        className="inline-flex items-center justify-center rounded-md p-1.5 text-slate-400 transition-all duration-200 hover:text-orange-400 hover:bg-orange-500/10"
-                      >
-                        <Pencil className="h-3.5 w-3.5" />
-                      </button>
-                      <button
-                        type="button"
-                        title="Delete Product"
-                        onClick={() => handleDeleteProduct(product.id)}
-                        className="inline-flex items-center justify-center rounded-md p-1.5 text-slate-400 transition-all duration-200 hover:text-red-400 hover:bg-red-500/10"
-                      >
-                        <Trash className="h-3.5 w-3.5" />
-                      </button>
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
+                </TableHeader>
+                <TableBody>
+                  {filteredProducts.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={9} className="text-center text-slate-500 py-6">
+                        No products found for current filters.
+                      </TableCell>
+                    </TableRow>
+                ) : (
+                  filteredProducts.map((product) => (
+                    <TableRow key={product.id} className="border-slate-800/30 hover:bg-slate-800/50 transition-colors">
+                      <TableCell className="text-slate-300 whitespace-nowrap">{product.barcode ?? "-"}</TableCell>
+                      <TableCell className="text-white font-medium whitespace-nowrap">{product.name}</TableCell>
+                      <TableCell className="text-slate-400 whitespace-nowrap">{product.category ?? "-"}</TableCell>
+                      <TableCell className="text-slate-300 text-right font-mono whitespace-nowrap">{formatRupiah(product.costPrice)}</TableCell>
+                      <TableCell className="text-slate-300 text-right font-mono whitespace-nowrap">{formatRupiah(product.sellingPrice)}</TableCell>
+                      <TableCell className="text-slate-300 text-right font-mono">{product.stock}</TableCell>
+                      <TableCell className="whitespace-nowrap">
+                        {product.status === "in_stock" ? (
+                          <span className="inline-flex items-center rounded-full bg-green-500/10 px-2.5 py-0.5 text-xs font-medium text-green-400 border border-green-500/20">
+                            In Stock
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center rounded-full bg-orange-500/10 px-2.5 py-0.5 text-xs font-medium text-orange-400 border border-orange-500/20">
+                            On the Way
+                          </span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-slate-400 whitespace-nowrap">{product.expiredDate ?? "-"}</TableCell>
+                      <TableCell className="whitespace-nowrap">
+                        <button
+                          type="button"
+                          title="Edit Product"
+                          onClick={() => openEditProduct(product)}
+                          className="inline-flex items-center justify-center rounded-md p-1.5 text-slate-400 transition-all duration-200 hover:text-orange-400 hover:bg-orange-500/10 mr-1"
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          title="Delete Product"
+                          onClick={() => handleDeleteProduct(product.id)}
+                          className="inline-flex items-center justify-center rounded-md p-1.5 text-slate-400 transition-all duration-200 hover:text-red-400 hover:bg-red-500/10"
+                        >
+                          <Trash className="h-3.5 w-3.5" />
+                        </button>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+            </div>
           </div>
         </TabsContent>
 
+        {/* KONTEN: IN TRANSIT */}
         <TabsContent value="in-transit">
           <InTransitPanel products={inTransitProducts} onEdit={openEditProduct} />
         </TabsContent>
       </Tabs>
 
+      {/* DIALOG: EDIT PRODUCT */}
       <Dialog open={isEditOpen} onOpenChange={(v) => { setIsEditOpen(v); if (!v) setEditTarget(null); }}>
-        <DialogContent className="max-w-lg bg-slate-900 border-slate-800 text-white">
+        <DialogContent className="max-w-lg w-[95vw] md:w-full bg-slate-900 border-slate-800 text-white overflow-y-auto max-h-[90vh]">
           <DialogHeader>
             <DialogTitle className="text-white">Edit Product</DialogTitle>
             <DialogDescription className="text-slate-400">Update the product details below.</DialogDescription>
@@ -424,7 +434,7 @@ export default function InventoryPage() {
                 </select>
               </div>
 
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="grid gap-2">
                   <Label htmlFor="edit-prod-cost" className="text-slate-300">Cost Price</Label>
                   <Input id="edit-prod-cost" type="number" min="0" step="0.01" value={editForm.costPrice} onChange={(e) => setEditForm({ ...editForm, costPrice: e.target.value })} className="bg-slate-800 border-slate-700 text-white" />
@@ -471,6 +481,8 @@ export default function InventoryPage() {
   );
 }
 
+/* ---------- SUB-COMPONENTS ---------- */
+
 function AddProductDialog({
   open,
   onOpenChange,
@@ -493,8 +505,10 @@ function AddProductDialog({
   const totalCost = (Number(formState.costPrice) || 0) * (Number(formState.stock) || 0);
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogTrigger render={<Button />}>Add Product</DialogTrigger>
-      <DialogContent className="max-w-lg bg-slate-900 border-slate-800 text-white">
+      <DialogTrigger render={<Button className="bg-orange-500 text-white hover:bg-orange-600 shadow-[0_0_10px_rgba(249,115,22,0.3)]" />}>
+        Add Product
+      </DialogTrigger>
+      <DialogContent className="max-w-lg w-[95vw] md:w-full bg-slate-900 border-slate-800 text-white overflow-y-auto max-h-[90vh]">
         <DialogHeader>
           <DialogTitle className="text-white">Add Product</DialogTitle>
           <DialogDescription className="text-slate-400">Create a new product record and scan barcode from camera.</DialogDescription>
@@ -542,7 +556,7 @@ function AddProductDialog({
             </select>
           </div>
 
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className="grid gap-2">
               <Label htmlFor="costPrice" className="text-slate-300">Cost Price</Label>
               <Input
@@ -629,17 +643,17 @@ function AddProductDialog({
           </div>
 
           {totalCost > 0 && (
-            <div className="rounded-md border border-orange-500/30 bg-orange-500/5 p-3 text-sm">
+            <div className="rounded-md border border-orange-500/30 bg-orange-500/5 p-3 text-sm break-words">
               <span className="text-slate-400">Total Cost: </span>
               <span className="font-semibold text-orange-400">{formatRupiah(totalCost)}</span>
               {formState.walletId && (
-                <span className="text-xs text-slate-400 ml-2">→ will be deducted from wallet</span>
+                <span className="text-xs text-slate-400 ml-1">→ will be deducted from wallet</span>
               )}
             </div>
           )}
 
           <DialogFooter>
-            <Button type="submit" disabled={isSaving} className="bg-orange-500 text-white hover:bg-orange-600 shadow-[0_0_10px_rgba(249,115,22,0.3)] transition-all">
+            <Button type="submit" disabled={isSaving} className="bg-orange-500 text-white hover:bg-orange-600 shadow-[0_0_10px_rgba(249,115,22,0.3)] transition-all w-full md:w-auto">
               {isSaving ? "Saving..." : "Save Product"}
             </Button>
           </DialogFooter>
@@ -723,7 +737,7 @@ function InTransitPanel({
                 className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between rounded-xl border border-slate-800 bg-slate-900/60 p-4 backdrop-blur-sm transition-all duration-300 hover:shadow-[0_0_15px_rgba(249,115,22,0.3)] hover:border-orange-500/50 group"
               >
                 <div className="flex-1 space-y-1">
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <span className="text-sm font-semibold text-white group-hover:text-orange-400 transition-colors">
                       {product.name}
                     </span>
@@ -735,37 +749,39 @@ function InTransitPanel({
                     Category: {product.category ?? "-"} · Qty: {product.stock}
                   </p>
                 </div>
-                <div className="flex items-center gap-2">
-                  <div className="text-right mr-1">
+                <div className="flex items-center justify-between sm:justify-end gap-2 w-full sm:w-auto mt-2 sm:mt-0 pt-2 sm:pt-0 border-t border-slate-800 sm:border-none">
+                  <div className="text-left sm:text-right mr-auto sm:mr-2">
                     <p className="text-sm font-semibold tracking-tight">{formatRupiah(value)}</p>
                     <p className="text-[11px] text-slate-500">@ {formatRupiah(product.costPrice)}/unit</p>
                   </div>
-                  <button
-                    type="button"
-                    title="Edit Product"
-                    onClick={() => onEdit(product)}
-                    className="p-1.5 rounded-lg border border-slate-700 bg-slate-800/50 text-slate-400 transition-all duration-200 hover:text-orange-500 hover:border-orange-500/50 hover:bg-orange-500/10 hover:shadow-[0_0_10px_rgba(249,115,22,0.3)] disabled:opacity-50 disabled:pointer-events-none"
-                  >
-                    <Pencil className="h-4 w-4" />
-                  </button>
-                  <button
-                    type="button"
-                    title="Mark as Received"
-                    disabled={updatingId === product.id}
-                    onClick={() => markAsReceived(product.id)}
-                    className="p-1.5 rounded-lg border border-slate-700 bg-slate-800/50 text-slate-400 transition-all duration-200 hover:text-green-400 hover:border-green-500/50 hover:bg-green-500/10 hover:shadow-[0_0_10px_rgba(74,222,128,0.3)] disabled:opacity-50 disabled:pointer-events-none"
-                  >
-                    <CheckCircle2 className="h-4 w-4" />
-                  </button>
-                  <button
-                    type="button"
-                    title="Cancel Order"
-                    disabled={updatingId === product.id}
-                    onClick={() => { setCancelTarget(product); setIsCancelOpen(true); }}
-                    className="p-1.5 rounded-lg border border-slate-700 bg-slate-800/50 text-slate-400 transition-all duration-200 hover:text-red-500 hover:border-red-500/50 hover:bg-red-500/10 hover:shadow-[0_0_10px_rgba(239,68,68,0.5)] disabled:opacity-50 disabled:pointer-events-none"
-                  >
-                    <XCircle className="h-4 w-4" />
-                  </button>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <button
+                      type="button"
+                      title="Edit Product"
+                      onClick={() => onEdit(product)}
+                      className="p-1.5 md:p-2 rounded-lg border border-slate-700 bg-slate-800/50 text-slate-400 transition-all duration-200 hover:text-orange-500 hover:border-orange-500/50 hover:bg-orange-500/10 hover:shadow-[0_0_10px_rgba(249,115,22,0.3)] disabled:opacity-50 disabled:pointer-events-none"
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </button>
+                    <button
+                      type="button"
+                      title="Mark as Received"
+                      disabled={updatingId === product.id}
+                      onClick={() => markAsReceived(product.id)}
+                      className="p-1.5 md:p-2 rounded-lg border border-slate-700 bg-slate-800/50 text-slate-400 transition-all duration-200 hover:text-green-400 hover:border-green-500/50 hover:bg-green-500/10 hover:shadow-[0_0_10px_rgba(74,222,128,0.3)] disabled:opacity-50 disabled:pointer-events-none"
+                    >
+                      <CheckCircle2 className="h-4 w-4" />
+                    </button>
+                    <button
+                      type="button"
+                      title="Cancel Order"
+                      disabled={updatingId === product.id}
+                      onClick={() => { setCancelTarget(product); setIsCancelOpen(true); }}
+                      className="p-1.5 md:p-2 rounded-lg border border-slate-700 bg-slate-800/50 text-slate-400 transition-all duration-200 hover:text-red-500 hover:border-red-500/50 hover:bg-red-500/10 hover:shadow-[0_0_10px_rgba(239,68,68,0.5)] disabled:opacity-50 disabled:pointer-events-none"
+                    >
+                      <XCircle className="h-4 w-4" />
+                    </button>
+                  </div>
                 </div>
               </div>
             );
@@ -780,10 +796,10 @@ function InTransitPanel({
       )}
 
       <Dialog open={isCancelOpen} onOpenChange={(v) => { setIsCancelOpen(v); if (!v) { setCancelTarget(null); setRefundWalletId(""); } }}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md w-[95vw] md:w-full bg-slate-900 border-slate-800 text-white">
           <DialogHeader>
             <DialogTitle>Cancel Order & Refund</DialogTitle>
-            <DialogDescription>
+            <DialogDescription className="text-slate-400">
               This will permanently delete the product and optionally refund to a wallet.
             </DialogDescription>
           </DialogHeader>
@@ -791,10 +807,10 @@ function InTransitPanel({
           {cancelTarget && (
             <div className="space-y-4">
               <div className="rounded-md border border-slate-800 bg-slate-900/50 p-3 space-y-1 text-sm">
-                <p><span className="text-muted-foreground">Product:</span> {cancelTarget.name}</p>
-                <p><span className="text-muted-foreground">Qty:</span> {cancelTarget.stock}</p>
+                <p><span className="text-slate-400">Product:</span> {cancelTarget.name}</p>
+                <p><span className="text-slate-400">Qty:</span> {cancelTarget.stock}</p>
                 <p>
-                  <span className="text-muted-foreground">Refund Amount:</span>{" "}
+                  <span className="text-slate-400">Refund Amount:</span>{" "}
                   <span className="font-semibold text-red-400">
                     {formatRupiah(Number(cancelTarget.costPrice) * cancelTarget.stock)}
                   </span>
@@ -802,12 +818,12 @@ function InTransitPanel({
               </div>
 
               <div className="grid gap-2">
-                <Label htmlFor="refund-wallet">Refund Destination Wallet</Label>
+                <Label htmlFor="refund-wallet" className="text-slate-300">Refund Destination Wallet</Label>
                 <select
                   id="refund-wallet"
                   value={refundWalletId}
                   onChange={(e) => setRefundWalletId(e.target.value)}
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                  className="flex h-10 w-full rounded-md border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-slate-600"
                 >
                   <option value="">No refund (delete only)</option>
                   {wallets.map((w) => (
@@ -821,13 +837,13 @@ function InTransitPanel({
           )}
 
           <div className="flex justify-end gap-3 mt-2">
-            <Button variant="outline" onClick={() => { setIsCancelOpen(false); setCancelTarget(null); setRefundWalletId(""); }} disabled={isCancelling}>
+            <Button variant="outline" onClick={() => { setIsCancelOpen(false); setCancelTarget(null); setRefundWalletId(""); }} disabled={isCancelling} className="border-slate-700 text-slate-300 hover:bg-slate-800">
               Go Back
             </Button>
             <Button
               onClick={handleCancelOrder}
               disabled={isCancelling}
-              className="bg-red-600 text-white hover:bg-red-700 shadow-[0_0_10px_rgba(239,68,68,0.3)] transition-all"
+              className="bg-red-600 text-white hover:bg-red-700 shadow-[0_0_10px_rgba(239,68,68,0.3)] transition-all w-full sm:w-auto"
             >
               {isCancelling ? "Processing..." : "Confirm Cancellation"}
             </Button>
@@ -906,21 +922,22 @@ function BarcodeScanner({ onDetected, disabled }: { onDetected: (barcode: string
   }, [disabled, isScannerOpen, onDetected, scannerContainerId]);
 
   return (
-    <div className="space-y-2 rounded-lg border p-3">
+    <div className="space-y-2 rounded-lg border border-slate-700 p-3">
       <div className="flex items-center justify-between gap-2">
-        <p className="text-sm font-medium">Barcode Scanner</p>
+        <p className="text-sm font-medium text-slate-300">Barcode Scanner</p>
         <Button
           type="button"
           variant="outline"
           size="sm"
           onClick={() => setIsScannerOpen((current) => !current)}
           disabled={disabled}
+          className="border-slate-700 text-slate-300 hover:bg-slate-800"
         >
           {isScannerOpen ? "Stop Camera" : "Scan Barcode"}
         </Button>
       </div>
-      {isScannerOpen ? <div id={scannerContainerId} className="min-h-28 overflow-hidden rounded-md border" /> : null}
-      {scannerError ? <p className="text-xs text-destructive">{scannerError}</p> : null}
+      {isScannerOpen ? <div id={scannerContainerId} className="min-h-28 overflow-hidden rounded-md border border-slate-700" /> : null}
+      {scannerError ? <p className="text-xs text-red-400">{scannerError}</p> : null}
     </div>
   );
 }
@@ -956,9 +973,9 @@ function SortButton({
   onClick: () => void;
 }) {
   return (
-    <button type="button" className="flex items-center gap-1 text-left hover:text-foreground" onClick={onClick}>
+    <button type="button" className="flex items-center gap-1 text-left hover:text-white transition-colors" onClick={onClick}>
       {label}
-      <span className="text-xs text-muted-foreground">{isActive ? (direction === "asc" ? "↑" : "↓") : ""}</span>
+      <span className="text-xs text-slate-500">{isActive ? (direction === "asc" ? "↑" : "↓") : ""}</span>
     </button>
   );
 }
@@ -1070,10 +1087,10 @@ function ImportCsvDialog({
         <Upload className="mr-2 h-4 w-4" />
         Import CSV
       </DialogTrigger>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-lg w-[95vw] md:w-full bg-slate-900 border-slate-800 text-white max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Import Products from CSV</DialogTitle>
-          <DialogDescription>Upload a CSV file to bulk-add products to your inventory.</DialogDescription>
+          <DialogTitle className="text-white">Import Products from CSV</DialogTitle>
+          <DialogDescription className="text-slate-400">Upload a CSV file to bulk-add products to your inventory.</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
@@ -1087,34 +1104,34 @@ function ImportCsvDialog({
           </button>
 
           <div className="grid gap-2">
-            <Label htmlFor="csv-file">CSV File</Label>
+            <Label htmlFor="csv-file" className="text-slate-300">CSV File</Label>
             <Input
               id="csv-file"
               ref={fileInputRef}
               type="file"
               accept=".csv"
               onChange={handleFileChange}
-              className="file:mr-3 file:rounded-md file:border-0 file:bg-orange-500/15 file:px-3 file:py-1 file:text-sm file:font-medium file:text-orange-500 hover:file:bg-orange-500/25"
+              className="bg-slate-800 border-slate-700 text-white file:mr-3 file:rounded-md file:border-0 file:bg-orange-500/15 file:px-3 file:py-1 file:text-sm file:font-medium file:text-orange-500 hover:file:bg-orange-500/25"
             />
           </div>
 
           {validationErrors.length > 0 && (
-            <div className="max-h-32 overflow-y-auto space-y-1 rounded-md border border-destructive/50 bg-destructive/10 p-3">
+            <div className="max-h-32 overflow-y-auto space-y-1 rounded-md border border-red-500/50 bg-red-500/10 p-3">
               {validationErrors.map((err, i) => (
-                <p key={i} className="text-xs text-destructive">{err}</p>
+                <p key={i} className="text-xs text-red-400">{err}</p>
               ))}
             </div>
           )}
 
           {previewRows.length > 0 && validationErrors.length === 0 && (
-            <div className="rounded-md border border-slate-800 bg-slate-900/50 p-3 space-y-2">
-              <p className="text-sm font-medium text-foreground">
+            <div className="rounded-md border border-slate-800 bg-slate-800/50 p-3 space-y-2">
+              <p className="text-sm font-medium text-white">
                 Preview: <span className="text-orange-500">{previewRows.length}</span> row(s) ready to import
               </p>
               <div className="max-h-40 overflow-y-auto space-y-1">
                 {previewRows.slice(0, 5).map((row, i) => (
-                  <div key={i} className="flex items-center justify-between text-xs text-muted-foreground border-b border-slate-800/50 pb-1">
-                    <span className="font-medium text-foreground">{row.name}</span>
+                  <div key={i} className="flex items-center justify-between text-xs text-slate-400 border-b border-slate-700 pb-1">
+                    <span className="font-medium text-slate-200">{row.name}</span>
                     <span>{row.status === "in_transit" ? "🚚 In Transit" : "📦 In Stock"}</span>
                   </div>
                 ))}
@@ -1130,7 +1147,7 @@ function ImportCsvDialog({
           <Button
             disabled={isImporting || previewRows.length === 0 || validationErrors.length > 0}
             onClick={handleImport}
-            className="bg-orange-500 text-white hover:bg-orange-600 shadow-[0_0_10px_rgba(249,115,22,0.3)] transition-all"
+            className="bg-orange-500 text-white hover:bg-orange-600 shadow-[0_0_10px_rgba(249,115,22,0.3)] transition-all w-full md:w-auto"
           >
             {isImporting ? "Importing..." : `Import ${previewRows.length} Product(s)`}
           </Button>
