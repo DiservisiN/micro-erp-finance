@@ -647,7 +647,7 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
   // TRANSACTION CRUD OPERATIONS
   // ==========================================
   
- const addTransaction = async (transaction: Transaction) => {
+const addTransaction = async (transaction: Transaction) => {
     if (!supabase) {
       console.warn("Supabase not available, using local state only");
       setWallets(prevWallets => {
@@ -655,7 +655,8 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
           if (transaction.type === "income" && transaction.toWalletId === w.id) {
             return { ...w, balance: w.balance + transaction.amount };
           }
-          if (transaction.type === "expense" && transaction.fromWalletId === w.id) {
+          // PERBAIKAN: asset_purchase juga akan memotong saldo seperti expense
+          if ((transaction.type === "expense" || transaction.type === "asset_purchase") && transaction.fromWalletId === w.id) {
             return { ...w, balance: w.balance - transaction.amount };
           }
           if (transaction.type === "transfer") {
@@ -706,7 +707,8 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
             syncWalletBalance(w.id, newBalance);
             return { ...w, balance: newBalance };
           }
-          if (transaction.type === "expense" && transaction.fromWalletId === w.id) {
+          // PERBAIKAN: asset_purchase juga akan memotong saldo seperti expense
+          if ((transaction.type === "expense" || transaction.type === "asset_purchase") && transaction.fromWalletId === w.id) {
             const newBalance = w.balance - transaction.amount;
             syncWalletBalance(w.id, newBalance);
             return { ...w, balance: newBalance };

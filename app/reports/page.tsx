@@ -81,15 +81,17 @@ function TransactionTable({
                 <span className={`px-2 py-1 rounded-full text-xs font-medium border ${
                   tx.type === 'income' 
                     ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
-                    : tx.type === 'expense'
+                    // PERBAIKAN: Menambahkan asset_purchase agar mendapat label (badge) warna merah
+                    : (tx.type === 'expense' || tx.type === 'asset_purchase')
                       ? 'bg-red-500/10 text-red-400 border-red-500/30'
                       : 'bg-slate-700/30 text-slate-300 border-slate-700/50'
                 }`}>
                   {formatType(tx.type, tx.category)}
                 </span>
               </TableCell>
-              <TableCell className={`font-mono font-semibold ${tx.type === 'expense' ? 'text-red-400' : tx.type === 'income' ? 'text-emerald-400' : 'text-blue-400'}`}>
-                {tx.type === 'expense' ? '- ' : tx.type === 'income' ? '+ ' : ''}{formatRupiah(tx.amount)}
+              {/* PERBAIKAN: Menambahkan asset_purchase agar teks nominalnya berwarna merah dan memiliki tanda minus (-) */}
+              <TableCell className={`font-mono font-semibold ${(tx.type === 'expense' || tx.type === 'asset_purchase') ? 'text-red-400' : tx.type === 'income' ? 'text-emerald-400' : 'text-blue-400'}`}>
+                {(tx.type === 'expense' || tx.type === 'asset_purchase') ? '- ' : tx.type === 'income' ? '+ ' : ''}{formatRupiah(tx.amount)}
               </TableCell>
               <TableCell className="text-slate-300">{tx.adminFee ? formatRupiah(tx.adminFee) : "-"}</TableCell>
               <TableCell className="max-w-xs truncate text-slate-300" title={tx.notes || ""}>
@@ -165,7 +167,8 @@ export default function ReportsPage() {
   // ─── Filter Types ──────────────────────────────────────────────────────
   const incomeTypes = ["income"];
   const expenseTypes = ["expense"];
-  const transferTypes = ["transfer", "kasbon"];
+  // PERBAIKAN: Menambahkan "asset_purchase" ke dalam kategori filter tab Assets & Transfers
+  const transferTypes = ["transfer", "kasbon", "asset_purchase"];
 
   // Sort newest-first by date for display
   const sortedTransactions = useMemo(() =>

@@ -1392,8 +1392,11 @@ function TransactionsDashboard() {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
 
-  const incomeTransactions = useMemo(() => transactions.filter(t => t.type !== "expense" && t.type !== "transfer"), [transactions]);
-  const expenses = useMemo(() => transactions.filter(t => t.type === "expense").map(t => ({
+  // PERBAIKAN: Pastikan asset_purchase tidak masuk ke tabel Income
+  const incomeTransactions = useMemo(() => transactions.filter(t => t.type !== "expense" && t.type !== "transfer" && t.type !== "asset_purchase"), [transactions]);
+  
+  // PERBAIKAN: Masukkan expense dan asset_purchase ke dalam tabel Expense
+  const expenses = useMemo(() => transactions.filter(t => t.type === "expense" || t.type === "asset_purchase").map(t => ({
     id: t.id,
     date: t.date,
     amount: t.amount,
@@ -1401,6 +1404,7 @@ function TransactionsDashboard() {
     expense_category: t.category,
     from_wallet_id: t.fromWalletId,
     wallet_name: wallets.find(w => w.id === t.fromWalletId)?.name || "Unknown",
+    type: t.type // Tambahan untuk membedakan di tabel jika diperlukan
   })), [transactions, wallets]);
 
   const totalIncome = incomeTransactions.reduce((sum, t) => sum + (t.amount || 0), 0);
@@ -1550,11 +1554,13 @@ function TransactionsDashboard() {
 
       <div className="w-full grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="bg-slate-900/40 backdrop-blur-sm border border-slate-800/50 rounded-xl p-6">
-          <p className="text-slate-400 text-sm">Total Income</p>
+          {/* UBAH TEKS INI: Agar lebih mencerminkan Arus Kas */}
+          <p className="text-slate-400 text-sm">Total Cash In (Uang Masuk)</p>
           <p className="text-3xl font-bold text-emerald-400 font-jetbrains">{formatRupiah(totalIncome)}</p>
         </div>
         <div className="bg-slate-900/40 backdrop-blur-sm border border-slate-800/50 rounded-xl p-6">
-          <p className="text-slate-400 text-sm">Total Expense</p>
+          {/* UBAH TEKS INI: Agar tidak membingungkan dengan Biaya/Rugi */}
+          <p className="text-slate-400 text-sm">Total Cash Out (Uang Keluar)</p>
           <p className="text-3xl font-bold text-red-400 font-jetbrains">{formatRupiah(totalExpense)}</p>
         </div>
         <div className="bg-slate-900/40 backdrop-blur-sm border border-slate-800/50 rounded-xl p-6">
@@ -1566,7 +1572,7 @@ function TransactionsDashboard() {
       <div className="w-full flex flex-col gap-6">
         <div className="bg-slate-900/40 backdrop-blur-sm border border-slate-800/50 rounded-xl p-6">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold text-white">Income Transactions</h3>
+          <h3 className="text-lg font-semibold text-white">Cash In (Pemasukan Uang)</h3>
         </div>
         <Table>
           <TableHeader>
@@ -1641,7 +1647,7 @@ function TransactionsDashboard() {
 
         <div className="bg-slate-900/40 backdrop-blur-sm border border-slate-800/50 rounded-xl p-6">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold text-white">Expense Transactions</h3>
+          <h3 className="text-lg font-semibold text-white">Cash Out (Pengeluaran Uang)</h3>
         </div>
         <Table>
           <TableHeader>

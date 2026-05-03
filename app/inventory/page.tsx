@@ -139,14 +139,18 @@ export default function InventoryPage() {
       status: formState.status || "in_stock",
     });
 
+    // DOKUMENTASI & PERBAIKAN ACCRUAL BASIS:
+    // Kita mengubah tipe transaksi dari "expense" menjadi "asset_purchase".
+    // Dengan begini, saldo dompet (wallet) akan tetap berkurang untuk membayar supplier,
+    // TETAPI Dashboard tidak akan menganggapnya sebagai biaya yang memotong Laba Bersih.
     if (selectedWallet && totalCost > 0) {
       await addTransaction({
         id: Date.now().toString(),
-        type: "expense",
-        category: "Initial Inventory",
+        type: "asset_purchase", // <-- UBAH DI SINI (Sebelumnya "expense")
+        category: "Pembelian Inventaris",
         amount: totalCost,
         date: new Date().toISOString().split('T')[0],
-        notes: `Purchased initial stock for ${formState.name.trim()}`,
+        notes: `Membeli stok awal: ${formState.name.trim()}`,
         fromWalletId: selectedWallet.id,
       });
     }
@@ -242,9 +246,9 @@ export default function InventoryPage() {
   }
 
   return (
-    <section className="space-y-6 bg-[#020617] min-h-screen p-4 md:p-6">
-      {/* 1. Header Responsif: flex-col di mobile, flex-row di desktop */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-900/50 backdrop-blur-sm border border-slate-800/50 rounded-xl p-4 md:p-6">
+    <section className="space-y-6 bg-[#020617] min-h-screen p-4 md:p-6 w-full flex flex-col">
+      {/* HEADER ATAS */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-900/50 backdrop-blur-sm border border-slate-800/50 rounded-xl p-4 md:p-6 w-full">
         <div>
           <h2 className="text-xl md:text-2xl font-semibold text-white">Inventory</h2>
           <p className="text-slate-400 text-xs md:text-sm">Manage and monitor products from FinanceContext.</p>
@@ -268,21 +272,35 @@ export default function InventoryPage() {
         </div>
       </div>
 
-      <Tabs defaultValue="in-stock" className="space-y-4">
-        <TabsList className="bg-slate-900/50 backdrop-blur-sm border border-slate-800/50 w-full justify-start overflow-x-auto rounded-lg">
-          <TabsTrigger value="in-stock" className="data-[state=active]:bg-slate-800 data-[state=active]:text-white">In Stock</TabsTrigger>
-          <TabsTrigger value="in-transit" className="data-[state=active]:bg-slate-800 data-[state=active]:text-white">
-            In Transit
-            {inTransitProducts.length > 0 && (
-              <span className="ml-2 inline-flex items-center rounded-full bg-orange-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-orange-500 animate-pulse shadow-[0_0_8px_rgba(249,115,22,0.4)]">
-                {inTransitProducts.length}
-              </span>
-            )}
-          </TabsTrigger>
-        </TabsList>
+      {/* DOKUMENTASI: Penambahan flex dan flex-col agar kotak 1 dan 2 bersusun ke bawah */}
+      <Tabs defaultValue="in-stock" className="flex flex-col w-full space-y-6">
+        
+        {/* KOTAK NOMOR 1: TAB MENU (Berada di Atas) */}
+        <div className="w-full overflow-x-auto bg-slate-900/40 backdrop-blur-sm border border-slate-800/50 rounded-xl p-2 shadow-sm">
+          <TabsList className="flex w-full min-w-max h-auto p-0 bg-transparent gap-2">
+            <TabsTrigger 
+              value="in-stock" 
+              className="flex-1 whitespace-nowrap px-8 py-3.5 text-sm font-medium text-slate-400 data-[state=active]:bg-slate-800 data-[state=active]:text-white data-[state=active]:shadow-md rounded-lg transition-all hover:text-slate-200"
+            >
+              In Stock
+            </TabsTrigger>
+            <TabsTrigger 
+              value="in-transit" 
+              className="flex-1 whitespace-nowrap px-8 py-3.5 text-sm font-medium text-slate-400 data-[state=active]:bg-slate-800 data-[state=active]:text-white data-[state=active]:shadow-md rounded-lg transition-all hover:text-slate-200"
+            >
+              In Transit
+              {inTransitProducts.length > 0 && (
+                <span className="ml-3 inline-flex items-center rounded-full bg-orange-500/15 px-2 py-0.5 text-[10px] font-semibold text-orange-500 animate-pulse shadow-[0_0_8px_rgba(249,115,22,0.4)]">
+                  {inTransitProducts.length}
+                </span>
+              )}
+            </TabsTrigger>
+          </TabsList>
+        </div>
 
-        <TabsContent value="in-stock" className="space-y-4">
-          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between bg-slate-900/30 backdrop-blur-sm border border-slate-800/30 rounded-xl p-4">
+        {/* KOTAK NOMOR 2: KONTEN TAB "IN STOCK" (Berada di Bawah Kotak 1) */}
+        <TabsContent value="in-stock" className="flex flex-col space-y-4 w-full outline-none mt-0">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between bg-slate-900/30 backdrop-blur-sm border border-slate-800/30 rounded-xl p-4 w-full">
             <Input
               value={searchTerm}
               onChange={(event) => setSearchTerm(event.target.value)}
@@ -304,10 +322,9 @@ export default function InventoryPage() {
             </Select>
           </div>
 
-          <div className="bg-slate-900/30 backdrop-blur-sm border border-slate-800/30 rounded-xl overflow-hidden">
-            {/* 2. Pembungkus Tabel: overflow-x-auto mencegah tabel meluber di mobile */}
-            <div className="overflow-x-auto">
-              <Table className="min-w-[800px]">
+          <div className="bg-slate-900/30 backdrop-blur-sm border border-slate-800/30 rounded-xl overflow-hidden w-full">
+            <div className="overflow-x-auto w-full">
+              <Table className="min-w-[800px] w-full">
                 <TableHeader>
                   <TableRow className="border-slate-800/50 hover:bg-slate-800/30">
                     <TableHead className="text-slate-400 font-medium">Barcode</TableHead>
@@ -388,11 +405,13 @@ export default function InventoryPage() {
           </div>
         </TabsContent>
 
-        <TabsContent value="in-transit">
+        {/* KOTAK NOMOR 2: KONTEN TAB "IN TRANSIT" */}
+        <TabsContent value="in-transit" className="flex flex-col w-full outline-none mt-0">
           <InTransitPanel products={inTransitProducts} onEdit={openEditProduct} />
         </TabsContent>
       </Tabs>
 
+      {/* DIALOG: EDIT PRODUCT */}
       <Dialog open={isEditOpen} onOpenChange={(v) => { setIsEditOpen(v); if (!v) setEditTarget(null); }}>
         <DialogContent className="max-w-lg w-[95vw] md:w-full bg-slate-900 border-slate-800 text-white overflow-y-auto max-h-[90vh]">
           <DialogHeader>
@@ -421,7 +440,6 @@ export default function InventoryPage() {
                 </select>
               </div>
 
-              {/* 3. Input harga & stok responsif (1 kolom di HP, 3 kolom di desktop) */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="grid gap-2">
                   <Label htmlFor="edit-prod-cost" className="text-slate-300">Cost Price</Label>
@@ -469,6 +487,8 @@ export default function InventoryPage() {
   );
 }
 
+/* ---------- SUB-COMPONENTS ---------- */
+
 function AddProductDialog({
   open,
   onOpenChange,
@@ -490,12 +510,10 @@ function AddProductDialog({
 }) {
   const totalCost = (Number(formState.costPrice) || 0) * (Number(formState.stock) || 0);
   return (
-   <Dialog open={open} onOpenChange={onOpenChange}>
-      {/* DOKUMENTASI: Menggunakan properti 'render' untuk menyesuaikan dengan definisi TypeScript komponen bawaan proyek */}
-      <DialogTrigger render={<Button className="bg-orange-500 text-white hover:bg-orange-600 shadow-[0_0_10px_rgba(249,115,22,0.3)]" />}>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogTrigger render={<Button className="bg-orange-500 text-white hover:bg-orange-600 shadow-[0_0_10px_rgba(249,115,22,0.3)] transition-all" />}>
         Add Product
       </DialogTrigger>
-      {/* Batasi lebar dialog di HP */}
       <DialogContent className="max-w-lg w-[95vw] md:w-full bg-slate-900 border-slate-800 text-white overflow-y-auto max-h-[90vh]">
         <DialogHeader>
           <DialogTitle className="text-white">Add Product</DialogTitle>
@@ -568,9 +586,9 @@ function AddProductDialog({
                 min="0"
                 step="0.01"
                 value={formState.sellingPrice}
+                className="bg-slate-800 border-slate-700 text-white"
                 onChange={(event) => onFormStateChange({ ...formState, sellingPrice: event.target.value })}
                 placeholder="0.00"
-                className="bg-slate-800 border-slate-700 text-white"
               />
             </div>
             <div className="grid gap-2">
@@ -706,27 +724,27 @@ function InTransitPanel({
   );
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4 w-full">
       <p className="text-sm text-slate-400">
         Goods that have been paid for but haven&apos;t arrived yet. This value is included in your Total Assets.
       </p>
 
       {products.length === 0 ? (
-        <div className="text-center py-8 text-sm text-slate-500 border border-dashed border-slate-800 rounded-xl">
+        <div className="text-center py-8 text-sm text-slate-500 border border-dashed border-slate-800 rounded-xl w-full">
           No products currently in transit.
         </div>
       ) : (
-        <>
+        <div className="flex flex-col gap-3 w-full">
           {products.map((product) => {
             const value = Number(product.costPrice) * product.stock;
             return (
               <div
                 key={product.id}
-                className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between rounded-xl border border-slate-800 bg-slate-900/60 p-4 backdrop-blur-sm transition-all duration-300 hover:shadow-[0_0_15px_rgba(249,115,22,0.3)] hover:border-orange-500/50 group"
+                className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between rounded-xl border border-slate-800 bg-slate-900/60 p-4 backdrop-blur-sm transition-all duration-300 hover:shadow-[0_0_15px_rgba(249,115,22,0.3)] hover:border-orange-500/50 w-full"
               >
                 <div className="flex-1 space-y-1">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-sm font-semibold text-white group-hover:text-orange-400 transition-colors">
+                    <span className="text-sm font-semibold text-white transition-colors">
                       {product.name}
                     </span>
                     <span className="inline-flex items-center rounded-full bg-orange-500/15 px-2 py-0.5 text-[10px] font-bold text-orange-500 uppercase tracking-wider animate-pulse shadow-[0_0_8px_rgba(249,115,22,0.4)]">
@@ -739,7 +757,7 @@ function InTransitPanel({
                 </div>
                 <div className="flex items-center justify-between sm:justify-end gap-2 w-full sm:w-auto mt-2 sm:mt-0 pt-2 sm:pt-0 border-t border-slate-800 sm:border-none">
                   <div className="text-left sm:text-right mr-auto sm:mr-2">
-                    <p className="text-sm font-semibold tracking-tight">{formatRupiah(value)}</p>
+                    <p className="text-sm font-semibold tracking-tight text-white">{formatRupiah(value)}</p>
                     <p className="text-[11px] text-slate-500">@ {formatRupiah(product.costPrice)}/unit</p>
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0">
@@ -774,14 +792,14 @@ function InTransitPanel({
               </div>
             );
           })}
-
-          <div className="rounded-lg border border-dashed border-slate-800 bg-slate-950/50 p-4 text-center">
-            <p className="text-xs text-muted-foreground">
-              Total In Transit: <span className="font-semibold text-orange-500">{formatRupiah(totalInTransit)}</span>
-            </p>
-          </div>
-        </>
+        </div>
       )}
+
+      <div className="rounded-lg border border-dashed border-slate-800 bg-slate-950/50 p-4 text-center w-full mt-4">
+        <p className="text-xs text-slate-400">
+          Total In Transit: <span className="font-semibold text-orange-500">{formatRupiah(totalInTransit)}</span>
+        </p>
+      </div>
 
       <Dialog open={isCancelOpen} onOpenChange={(v) => { setIsCancelOpen(v); if (!v) { setCancelTarget(null); setRefundWalletId(""); } }}>
         <DialogContent className="max-w-md w-[95vw] md:w-full bg-slate-900 border-slate-800 text-white">
@@ -1066,8 +1084,7 @@ function ImportCsvDialog({
   }
 
   return (
-   <Dialog open={open} onOpenChange={(v) => { onOpenChange(v); if (!v) resetState(); }}>
-      {/* DOKUMENTASI: Memisahkan properti render dan children (teks/icon) agar TypeScript dapat membaca strukturnya dengan benar */}
+    <Dialog open={open} onOpenChange={(v) => { onOpenChange(v); if (!v) resetState(); }}>
       <DialogTrigger
         render={
           <Button variant="outline" className="border-orange-500/50 text-orange-500 hover:bg-orange-500/10 hover:text-orange-400" />
@@ -1076,7 +1093,6 @@ function ImportCsvDialog({
         <Upload className="mr-2 h-4 w-4" />
         Import CSV
       </DialogTrigger>
-      {/* Mengatur batas lebar pop-up agar pas di layar kecil */}
       <DialogContent className="max-w-lg w-[95vw] md:w-full bg-slate-900 border-slate-800 text-white max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-white">Import Products from CSV</DialogTitle>
