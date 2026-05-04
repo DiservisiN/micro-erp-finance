@@ -139,14 +139,10 @@ export default function InventoryPage() {
       status: formState.status || "in_stock",
     });
 
-    // DOKUMENTASI & PERBAIKAN ACCRUAL BASIS:
-    // Kita mengubah tipe transaksi dari "expense" menjadi "asset_purchase".
-    // Dengan begini, saldo dompet (wallet) akan tetap berkurang untuk membayar supplier,
-    // TETAPI Dashboard tidak akan menganggapnya sebagai biaya yang memotong Laba Bersih.
     if (selectedWallet && totalCost > 0) {
       await addTransaction({
         id: Date.now().toString(),
-        type: "asset_purchase", // <-- UBAH DI SINI (Sebelumnya "expense")
+        type: "asset_purchase", 
         category: "Pembelian Inventaris",
         amount: totalCost,
         date: new Date().toISOString().split('T')[0],
@@ -246,12 +242,12 @@ export default function InventoryPage() {
   }
 
   return (
-    <section className="space-y-6 bg-[#020617] min-h-screen p-4 md:p-6 w-full flex flex-col">
+    <section className="space-y-6 bg-slate-50 dark:bg-[#020617] transition-colors duration-300 min-h-screen p-4 md:p-6 w-full flex flex-col">
       {/* HEADER ATAS */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-900/50 backdrop-blur-sm border border-slate-800/50 rounded-xl p-4 md:p-6 w-full">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white dark:bg-slate-900/50 backdrop-blur-sm border border-slate-200 dark:border-slate-800/50 rounded-xl p-4 md:p-6 w-full shadow-sm dark:shadow-none">
         <div>
-          <h2 className="text-xl md:text-2xl font-semibold text-white">Inventory</h2>
-          <p className="text-slate-400 text-xs md:text-sm">Manage and monitor products from FinanceContext.</p>
+          <h2 className="text-xl md:text-2xl font-semibold text-slate-900 dark:text-white">Inventory</h2>
+          <p className="text-slate-500 dark:text-slate-400 text-xs md:text-sm">Manage and monitor products from FinanceContext.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <ImportCsvDialog
@@ -272,25 +268,24 @@ export default function InventoryPage() {
         </div>
       </div>
 
-      {/* DOKUMENTASI: Penambahan flex dan flex-col agar kotak 1 dan 2 bersusun ke bawah */}
       <Tabs defaultValue="in-stock" className="flex flex-col w-full space-y-6">
         
-        {/* KOTAK NOMOR 1: TAB MENU (Berada di Atas) */}
-        <div className="w-full overflow-x-auto bg-slate-900/40 backdrop-blur-sm border border-slate-800/50 rounded-xl p-2 shadow-sm">
+        {/* KOTAK NOMOR 1: TAB MENU */}
+        <div className="w-full overflow-x-auto bg-white dark:bg-slate-900/40 backdrop-blur-sm border border-slate-200 dark:border-slate-800/50 rounded-xl p-2 shadow-sm">
           <TabsList className="flex w-full min-w-max h-auto p-0 bg-transparent gap-2">
             <TabsTrigger 
               value="in-stock" 
-              className="flex-1 whitespace-nowrap px-8 py-3.5 text-sm font-medium text-slate-400 data-[state=active]:bg-slate-800 data-[state=active]:text-white data-[state=active]:shadow-md rounded-lg transition-all hover:text-slate-200"
+              className="flex-1 whitespace-nowrap px-8 py-3.5 text-sm font-medium text-slate-500 dark:text-slate-400 data-[state=active]:bg-slate-100 dark:data-[state=active]:bg-slate-800 data-[state=active]:text-slate-900 dark:data-[state=active]:text-white data-[state=active]:shadow-sm rounded-lg transition-all hover:text-slate-700 dark:hover:text-slate-200"
             >
               In Stock
             </TabsTrigger>
             <TabsTrigger 
               value="in-transit" 
-              className="flex-1 whitespace-nowrap px-8 py-3.5 text-sm font-medium text-slate-400 data-[state=active]:bg-slate-800 data-[state=active]:text-white data-[state=active]:shadow-md rounded-lg transition-all hover:text-slate-200"
+              className="flex-1 whitespace-nowrap px-8 py-3.5 text-sm font-medium text-slate-500 dark:text-slate-400 data-[state=active]:bg-slate-100 dark:data-[state=active]:bg-slate-800 data-[state=active]:text-slate-900 dark:data-[state=active]:text-white data-[state=active]:shadow-sm rounded-lg transition-all hover:text-slate-700 dark:hover:text-slate-200"
             >
               In Transit
               {inTransitProducts.length > 0 && (
-                <span className="ml-3 inline-flex items-center rounded-full bg-orange-500/15 px-2 py-0.5 text-[10px] font-semibold text-orange-500 animate-pulse shadow-[0_0_8px_rgba(249,115,22,0.4)]">
+                <span className="ml-3 inline-flex items-center rounded-full bg-orange-100 dark:bg-orange-500/15 px-2 py-0.5 text-[10px] font-semibold text-orange-600 dark:text-orange-500 animate-pulse shadow-sm dark:shadow-[0_0_8px_rgba(249,115,22,0.4)]">
                   {inTransitProducts.length}
                 </span>
               )}
@@ -298,56 +293,55 @@ export default function InventoryPage() {
           </TabsList>
         </div>
 
-        {/* KOTAK NOMOR 2: KONTEN TAB "IN STOCK" (Berada di Bawah Kotak 1) */}
+        {/* KOTAK NOMOR 2: KONTEN TAB "IN STOCK" */}
         <TabsContent value="in-stock" className="flex flex-col space-y-4 w-full outline-none mt-0">
-          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between bg-slate-900/30 backdrop-blur-sm border border-slate-800/30 rounded-xl p-4 w-full">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between bg-white dark:bg-slate-900/30 backdrop-blur-sm border border-slate-200 dark:border-slate-800/30 rounded-xl p-4 w-full shadow-sm dark:shadow-none">
             <Input
               value={searchTerm}
               onChange={(event) => setSearchTerm(event.target.value)}
               placeholder="Search by name, barcode, or category..."
-              className="w-full md:max-w-md bg-slate-800/50 border-slate-700/50 text-white placeholder:text-slate-500 focus:border-slate-600"
+              className="w-full md:max-w-md bg-slate-50 dark:bg-slate-800/50 border-slate-300 dark:border-slate-700/50 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-slate-400 dark:focus:border-slate-600"
             />
-            <Select value={categoryFilter} onValueChange={(value) => setCategoryFilter(value ?? "all")}>
-              <SelectTrigger className="w-full md:w-56 bg-slate-800/50 border-slate-700/50 text-white">
-                <SelectValue placeholder="Filter category" />
-              </SelectTrigger>
-              <SelectContent className="bg-slate-900 border-slate-800">
-                <SelectItem value="all">All Categories</SelectItem>
-                {inventoryCategories.map((category) => (
-                  <SelectItem key={category.id} value={category.name.toLowerCase()}>
-                    {category.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <select
+              value={categoryFilter}
+              onChange={(e) => setCategoryFilter(e.target.value)}
+              className="flex h-10 w-full md:w-56 rounded-md border border-slate-300 dark:border-slate-700/50 bg-slate-50 dark:bg-slate-800/50 px-3 py-2 text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-orange-500/50 cursor-pointer"
+            >
+              <option value="all">All Categories</option>
+              {inventoryCategories.map((category) => (
+                <option key={category.id} value={category.name.toLowerCase()}>
+                  {category.name}
+                </option>
+              ))}
+            </select>
           </div>
 
-          <div className="bg-slate-900/30 backdrop-blur-sm border border-slate-800/30 rounded-xl overflow-hidden w-full">
+          <div className="bg-white dark:bg-slate-900/30 backdrop-blur-sm border border-slate-200 dark:border-slate-800/30 rounded-xl overflow-hidden w-full shadow-sm dark:shadow-none">
             <div className="overflow-x-auto w-full">
               <Table className="min-w-[800px] w-full">
                 <TableHeader>
-                  <TableRow className="border-slate-800/50 hover:bg-slate-800/30">
-                    <TableHead className="text-slate-400 font-medium">Barcode</TableHead>
-                    <TableHead className="text-slate-400 font-medium">
+                  <TableRow className="border-slate-200 dark:border-slate-800/50 hover:bg-slate-50 dark:hover:bg-slate-800/30">
+                    <TableHead className="text-slate-500 dark:text-slate-400 font-medium">Barcode</TableHead>
+                    <TableHead className="text-slate-500 dark:text-slate-400 font-medium">
                       <SortButton label="Name" isActive={sortField === "name"} direction={sortDirection} onClick={() => toggleSort("name")} />
                     </TableHead>
-                    <TableHead className="text-slate-400 font-medium">
+                    <TableHead className="text-slate-500 dark:text-slate-400 font-medium">
                       <SortButton label="Category" isActive={sortField === "category"} direction={sortDirection} onClick={() => toggleSort("category")} />
                     </TableHead>
-                    <TableHead className="text-slate-400 font-medium text-right">
+                    <TableHead className="text-slate-500 dark:text-slate-400 font-medium text-right">
                       <SortButton label="Cost Price" isActive={sortField === "costPrice"} direction={sortDirection} onClick={() => toggleSort("costPrice")} />
                     </TableHead>
-                    <TableHead className="text-slate-400 font-medium text-right">
+                    <TableHead className="text-slate-500 dark:text-slate-400 font-medium text-right">
                       <SortButton label="Selling Price" isActive={sortField === "sellingPrice"} direction={sortDirection} onClick={() => toggleSort("sellingPrice")} />
                     </TableHead>
-                    <TableHead className="text-slate-400 font-medium text-right">
+                    <TableHead className="text-slate-500 dark:text-slate-400 font-medium text-right">
                       <SortButton label="Stock" isActive={sortField === "stock"} direction={sortDirection} onClick={() => toggleSort("stock")} />
                     </TableHead>
-                    <TableHead className="text-slate-400 font-medium">Status</TableHead>
-                    <TableHead className="text-slate-400 font-medium">
+                    <TableHead className="text-slate-500 dark:text-slate-400 font-medium">Status</TableHead>
+                    <TableHead className="text-slate-500 dark:text-slate-400 font-medium">
                       <SortButton label="Expired Date" isActive={sortField === "expiredDate"} direction={sortDirection} onClick={() => toggleSort("expiredDate")} />
                     </TableHead>
-                    <TableHead className="text-slate-400 font-medium w-[80px]">Actions</TableHead>
+                    <TableHead className="text-slate-500 dark:text-slate-400 font-medium w-[80px]">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -359,31 +353,31 @@ export default function InventoryPage() {
                     </TableRow>
                 ) : (
                   filteredProducts.map((product) => (
-                    <TableRow key={product.id} className="border-slate-800/30 hover:bg-slate-800/50 transition-colors">
-                      <TableCell className="text-slate-300 whitespace-nowrap">{product.barcode ?? "-"}</TableCell>
-                      <TableCell className="text-white font-medium whitespace-nowrap">{product.name}</TableCell>
-                      <TableCell className="text-slate-400 whitespace-nowrap">{product.category ?? "-"}</TableCell>
-                      <TableCell className="text-slate-300 text-right font-mono whitespace-nowrap">{formatRupiah(product.costPrice)}</TableCell>
-                      <TableCell className="text-slate-300 text-right font-mono whitespace-nowrap">{formatRupiah(product.sellingPrice)}</TableCell>
-                      <TableCell className="text-slate-300 text-right font-mono">{product.stock}</TableCell>
+                    <TableRow key={product.id} className="border-slate-200 dark:border-slate-800/30 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                      <TableCell className="text-slate-600 dark:text-slate-300 whitespace-nowrap">{product.barcode ?? "-"}</TableCell>
+                      <TableCell className="text-slate-900 dark:text-white font-medium whitespace-nowrap">{product.name}</TableCell>
+                      <TableCell className="text-slate-500 dark:text-slate-400 whitespace-nowrap">{product.category ?? "-"}</TableCell>
+                      <TableCell className="text-slate-700 dark:text-slate-300 text-right font-mono whitespace-nowrap">{formatRupiah(product.costPrice)}</TableCell>
+                      <TableCell className="text-slate-700 dark:text-slate-300 text-right font-mono whitespace-nowrap">{formatRupiah(product.sellingPrice)}</TableCell>
+                      <TableCell className="text-slate-700 dark:text-slate-300 text-right font-mono">{product.stock}</TableCell>
                       <TableCell className="whitespace-nowrap">
                         {product.status === "in_stock" ? (
-                          <span className="inline-flex items-center rounded-full bg-green-500/10 px-2.5 py-0.5 text-xs font-medium text-green-400 border border-green-500/20">
+                          <span className="inline-flex items-center rounded-full bg-green-100 dark:bg-green-500/10 px-2.5 py-0.5 text-xs font-medium text-green-700 dark:text-green-400 border border-green-200 dark:border-green-500/20">
                             In Stock
                           </span>
                         ) : (
-                          <span className="inline-flex items-center rounded-full bg-orange-500/10 px-2.5 py-0.5 text-xs font-medium text-orange-400 border border-orange-500/20">
+                          <span className="inline-flex items-center rounded-full bg-orange-100 dark:bg-orange-500/10 px-2.5 py-0.5 text-xs font-medium text-orange-700 dark:text-orange-400 border border-orange-200 dark:border-orange-500/20">
                             On the Way
                           </span>
                         )}
                       </TableCell>
-                      <TableCell className="text-slate-400 whitespace-nowrap">{product.expiredDate ?? "-"}</TableCell>
+                      <TableCell className="text-slate-500 dark:text-slate-400 whitespace-nowrap">{product.expiredDate ?? "-"}</TableCell>
                       <TableCell className="whitespace-nowrap">
                         <button
                           type="button"
                           title="Edit Product"
                           onClick={() => openEditProduct(product)}
-                          className="inline-flex items-center justify-center rounded-md p-1.5 text-slate-400 transition-all duration-200 hover:text-orange-400 hover:bg-orange-500/10 mr-1"
+                          className="inline-flex items-center justify-center rounded-md p-1.5 text-slate-400 dark:text-slate-500 transition-all duration-200 hover:text-orange-500 dark:hover:text-orange-400 hover:bg-orange-100 dark:hover:bg-orange-500/10 mr-1"
                         >
                           <Pencil className="h-3.5 w-3.5" />
                         </button>
@@ -391,7 +385,7 @@ export default function InventoryPage() {
                           type="button"
                           title="Delete Product"
                           onClick={() => handleDeleteProduct(product.id)}
-                          className="inline-flex items-center justify-center rounded-md p-1.5 text-slate-400 transition-all duration-200 hover:text-red-400 hover:bg-red-500/10"
+                          className="inline-flex items-center justify-center rounded-md p-1.5 text-slate-400 dark:text-slate-500 transition-all duration-200 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-100 dark:hover:bg-red-500/10"
                         >
                           <Trash className="h-3.5 w-3.5" />
                         </button>
@@ -413,25 +407,25 @@ export default function InventoryPage() {
 
       {/* DIALOG: EDIT PRODUCT */}
       <Dialog open={isEditOpen} onOpenChange={(v) => { setIsEditOpen(v); if (!v) setEditTarget(null); }}>
-        <DialogContent className="max-w-lg w-[95vw] md:w-full bg-slate-900 border-slate-800 text-white overflow-y-auto max-h-[90vh]">
+        <DialogContent className="max-w-lg w-[95vw] md:w-full bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white overflow-y-auto max-h-[90vh]">
           <DialogHeader>
-            <DialogTitle className="text-white">Edit Product</DialogTitle>
-            <DialogDescription className="text-slate-400">Update the product details below.</DialogDescription>
+            <DialogTitle className="text-slate-900 dark:text-white">Edit Product</DialogTitle>
+            <DialogDescription className="text-slate-500 dark:text-slate-400">Update the product details below.</DialogDescription>
           </DialogHeader>
           {editTarget && (
             <div className="space-y-4">
               <div className="grid gap-2">
-                <Label htmlFor="edit-prod-name" className="text-slate-300">Name</Label>
-                <Input id="edit-prod-name" value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} className="bg-slate-800 border-slate-700 text-white" />
+                <Label htmlFor="edit-prod-name" className="text-slate-700 dark:text-slate-300">Name</Label>
+                <Input id="edit-prod-name" value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} className="bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white" />
               </div>
 
               <div className="grid gap-2">
-                <Label htmlFor="edit-prod-category" className="text-slate-300">Category</Label>
+                <Label htmlFor="edit-prod-category" className="text-slate-700 dark:text-slate-300">Category</Label>
                 <select
                   id="edit-prod-category"
                   value={editForm.category}
                   onChange={(e) => setEditForm({ ...editForm, category: e.target.value })}
-                  className="flex h-10 w-full rounded-md border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-slate-600"
+                  className="flex h-10 w-full rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-slate-400 dark:focus:ring-slate-600"
                 >
                   <option value="none">No Category</option>
                   {inventoryCategories.map((cat) => (
@@ -442,31 +436,31 @@ export default function InventoryPage() {
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="grid gap-2">
-                  <Label htmlFor="edit-prod-cost" className="text-slate-300">Cost Price</Label>
-                  <Input id="edit-prod-cost" type="number" min="0" step="0.01" value={editForm.costPrice} onChange={(e) => setEditForm({ ...editForm, costPrice: e.target.value })} className="bg-slate-800 border-slate-700 text-white" />
+                  <Label htmlFor="edit-prod-cost" className="text-slate-700 dark:text-slate-300">Cost Price</Label>
+                  <Input id="edit-prod-cost" type="number" min="0" step="0.01" value={editForm.costPrice} onChange={(e) => setEditForm({ ...editForm, costPrice: e.target.value })} className="bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white" />
                 </div>
                 <div className="grid gap-2">
-                  <Label htmlFor="edit-prod-sell" className="text-slate-300">Selling Price</Label>
-                  <Input id="edit-prod-sell" type="number" min="0" step="0.01" value={editForm.sellingPrice} onChange={(e) => setEditForm({ ...editForm, sellingPrice: e.target.value })} className="bg-slate-800 border-slate-700 text-white" />
+                  <Label htmlFor="edit-prod-sell" className="text-slate-700 dark:text-slate-300">Selling Price</Label>
+                  <Input id="edit-prod-sell" type="number" min="0" step="0.01" value={editForm.sellingPrice} onChange={(e) => setEditForm({ ...editForm, sellingPrice: e.target.value })} className="bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white" />
                 </div>
                 <div className="grid gap-2">
-                  <Label htmlFor="edit-prod-stock" className="text-slate-300">Stock</Label>
-                  <Input id="edit-prod-stock" type="number" min="0" step="1" value={editForm.stock} onChange={(e) => setEditForm({ ...editForm, stock: e.target.value })} className="bg-slate-800 border-slate-700 text-white" />
+                  <Label htmlFor="edit-prod-stock" className="text-slate-700 dark:text-slate-300">Stock</Label>
+                  <Input id="edit-prod-stock" type="number" min="0" step="1" value={editForm.stock} onChange={(e) => setEditForm({ ...editForm, stock: e.target.value })} className="bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white" />
                 </div>
               </div>
 
               <div className="grid gap-2">
-                <Label htmlFor="edit-prod-expired" className="text-slate-300">Expired Date</Label>
-                <Input id="edit-prod-expired" type="date" value={editForm.expiredDate} onChange={(e) => setEditForm({ ...editForm, expiredDate: e.target.value })} className="bg-slate-800 border-slate-700 text-white" />
+                <Label htmlFor="edit-prod-expired" className="text-slate-700 dark:text-slate-300">Expired Date</Label>
+                <Input id="edit-prod-expired" type="date" value={editForm.expiredDate} onChange={(e) => setEditForm({ ...editForm, expiredDate: e.target.value })} className="bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white" />
               </div>
 
               <div className="grid gap-2">
-                <Label htmlFor="edit-prod-status" className="text-slate-300">Status</Label>
+                <Label htmlFor="edit-prod-status" className="text-slate-700 dark:text-slate-300">Status</Label>
                 <select
                   id="edit-prod-status"
                   value={editForm.status}
                   onChange={(e) => setEditForm({ ...editForm, status: e.target.value })}
-                  className="flex h-10 w-full rounded-md border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-slate-600"
+                  className="flex h-10 w-full rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-slate-400 dark:focus:ring-slate-600"
                 >
                   <option value="in_stock">In Stock</option>
                   <option value="in_transit">In Transit</option>
@@ -474,8 +468,8 @@ export default function InventoryPage() {
               </div>
 
               <div className="flex justify-end gap-3 pt-2">
-                <Button variant="outline" onClick={() => { setIsEditOpen(false); setEditTarget(null); }} disabled={isSavingEdit} className="border-slate-700 text-slate-300 hover:bg-slate-800">Cancel</Button>
-                <Button onClick={handleEditProduct} disabled={isSavingEdit} className="bg-orange-500 text-white hover:bg-orange-600 shadow-[0_0_10px_rgba(249,115,22,0.3)] transition-all">
+                <Button variant="outline" onClick={() => { setIsEditOpen(false); setEditTarget(null); }} disabled={isSavingEdit} className="border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800">Cancel</Button>
+                <Button onClick={handleEditProduct} disabled={isSavingEdit} className="bg-orange-500 text-white hover:bg-orange-600 shadow-[0_4px_14px_rgba(249,115,22,0.3)] transition-all">
                   {isSavingEdit ? "Saving..." : "Save Changes"}
                 </Button>
               </div>
@@ -511,13 +505,13 @@ function AddProductDialog({
   const totalCost = (Number(formState.costPrice) || 0) * (Number(formState.stock) || 0);
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogTrigger render={<Button className="bg-orange-500 text-white hover:bg-orange-600 shadow-[0_0_10px_rgba(249,115,22,0.3)] transition-all" />}>
+      <DialogTrigger render={<Button className="bg-orange-500 text-white hover:bg-orange-600 shadow-[0_4px_14px_rgba(249,115,22,0.3)] transition-all" />}>
         Add Product
       </DialogTrigger>
-      <DialogContent className="max-w-lg w-[95vw] md:w-full bg-slate-900 border-slate-800 text-white overflow-y-auto max-h-[90vh]">
+      <DialogContent className="max-w-lg w-[95vw] md:w-full bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white overflow-y-auto max-h-[90vh]">
         <DialogHeader>
-          <DialogTitle className="text-white">Add Product</DialogTitle>
-          <DialogDescription className="text-slate-400">Create a new product record and scan barcode from camera.</DialogDescription>
+          <DialogTitle className="text-slate-900 dark:text-white">Add Product</DialogTitle>
+          <DialogDescription className="text-slate-500 dark:text-slate-400">Create a new product record and scan barcode from camera.</DialogDescription>
         </DialogHeader>
         <form className="space-y-4" onSubmit={onSubmit}>
           <BarcodeScanner
@@ -526,34 +520,34 @@ function AddProductDialog({
           />
 
           <div className="grid gap-2">
-            <Label htmlFor="barcode" className="text-slate-300">Barcode</Label>
+            <Label htmlFor="barcode" className="text-slate-700 dark:text-slate-300">Barcode</Label>
             <Input
               id="barcode"
               value={formState.barcode}
               onChange={(event) => onFormStateChange({ ...formState, barcode: event.target.value })}
               placeholder="Scan or enter barcode"
-              className="bg-slate-800 border-slate-700 text-white"
+              className="bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500"
             />
           </div>
 
           <div className="grid gap-2">
-            <Label htmlFor="name" className="text-slate-300">Name</Label>
+            <Label htmlFor="name" className="text-slate-700 dark:text-slate-300">Name</Label>
             <Input
               id="name"
               required
               value={formState.name}
               onChange={(event) => onFormStateChange({ ...formState, name: event.target.value })}
               placeholder="Product name"
-              className="bg-slate-800 border-slate-700 text-white"
+              className="bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500"
             />
           </div>
 
           <div className="grid gap-2">
-            <Label htmlFor="category" className="text-slate-300">Category</Label>
+            <Label htmlFor="category" className="text-slate-700 dark:text-slate-300">Category</Label>
             <select
               value={formState.category || "none"}
               onChange={(e) => onFormStateChange({ ...formState, category: e.target.value })}
-              className="flex h-10 w-full rounded-md border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-slate-600"
+              className="flex h-10 w-full rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-slate-400 dark:focus:ring-slate-600"
             >
               <option value="none">No Category</option>
               {categories.map((cat) => (
@@ -564,7 +558,7 @@ function AddProductDialog({
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className="grid gap-2">
-              <Label htmlFor="costPrice" className="text-slate-300">Cost Price</Label>
+              <Label htmlFor="costPrice" className="text-slate-700 dark:text-slate-300">Cost Price</Label>
               <Input
                 id="costPrice"
                 required
@@ -572,13 +566,13 @@ function AddProductDialog({
                 min="0"
                 step="0.01"
                 value={formState.costPrice}
-                className="bg-slate-800 border-slate-700 text-white"
+                className="bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500"
                 onChange={(event) => onFormStateChange({ ...formState, costPrice: event.target.value })}
                 placeholder="0.00"
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="sellingPrice" className="text-slate-300">Selling Price</Label>
+              <Label htmlFor="sellingPrice" className="text-slate-700 dark:text-slate-300">Selling Price</Label>
               <Input
                 id="sellingPrice"
                 required
@@ -586,13 +580,13 @@ function AddProductDialog({
                 min="0"
                 step="0.01"
                 value={formState.sellingPrice}
-                className="bg-slate-800 border-slate-700 text-white"
+                className="bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500"
                 onChange={(event) => onFormStateChange({ ...formState, sellingPrice: event.target.value })}
                 placeholder="0.00"
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="stock" className="text-slate-300">Stock</Label>
+              <Label htmlFor="stock" className="text-slate-700 dark:text-slate-300">Stock</Label>
               <Input
                 id="stock"
                 required
@@ -602,29 +596,29 @@ function AddProductDialog({
                 value={formState.stock}
                 onChange={(event) => onFormStateChange({ ...formState, stock: event.target.value })}
                 placeholder="0"
-                className="bg-slate-800 border-slate-700 text-white"
+                className="bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500"
               />
             </div>
           </div>
 
           <div className="grid gap-2">
-            <Label htmlFor="expiredDate" className="text-slate-300">Expired Date</Label>
+            <Label htmlFor="expiredDate" className="text-slate-700 dark:text-slate-300">Expired Date</Label>
             <Input
               id="expiredDate"
               type="date"
               value={formState.expiredDate}
               onChange={(event) => onFormStateChange({ ...formState, expiredDate: event.target.value })}
-              className="bg-slate-800 border-slate-700 text-white"
+              className="bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white"
             />
           </div>
 
           <div className="grid gap-2">
-            <Label htmlFor="product-status" className="text-slate-300">Status</Label>
+            <Label htmlFor="product-status" className="text-slate-700 dark:text-slate-300">Status</Label>
             <select
               id="product-status"
               value={formState.status}
               onChange={(e) => onFormStateChange({ ...formState, status: e.target.value })}
-              className="flex h-10 w-full rounded-md border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-slate-600"
+              className="flex h-10 w-full rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-slate-400 dark:focus:ring-slate-600"
             >
               <option value="in_stock">In Stock</option>
               <option value="in_transit">In Transit</option>
@@ -632,12 +626,12 @@ function AddProductDialog({
           </div>
 
           <div className="grid gap-2">
-            <Label htmlFor="payment-wallet" className="text-slate-300">Payment Wallet</Label>
+            <Label htmlFor="payment-wallet" className="text-slate-700 dark:text-slate-300">Payment Wallet</Label>
             <select
               id="payment-wallet"
               value={formState.walletId}
               onChange={(e) => onFormStateChange({ ...formState, walletId: e.target.value })}
-              className="flex h-10 w-full rounded-md border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-slate-600"
+              className="flex h-10 w-full rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-slate-400 dark:focus:ring-slate-600"
             >
               <option value="">No wallet deduction</option>
               {wallets.map((w) => (
@@ -649,17 +643,17 @@ function AddProductDialog({
           </div>
 
           {totalCost > 0 && (
-            <div className="rounded-md border border-orange-500/30 bg-orange-500/5 p-3 text-sm break-words">
-              <span className="text-slate-400">Total Cost: </span>
-              <span className="font-semibold text-orange-400">{formatRupiah(totalCost)}</span>
+            <div className="rounded-md border border-orange-200 dark:border-orange-500/30 bg-orange-50 dark:bg-orange-500/5 p-3 text-sm break-words">
+              <span className="text-slate-600 dark:text-slate-400">Total Cost: </span>
+              <span className="font-semibold text-orange-600 dark:text-orange-400">{formatRupiah(totalCost)}</span>
               {formState.walletId && (
-                <span className="text-xs text-slate-400 ml-1">→ will be deducted from wallet</span>
+                <span className="text-xs text-slate-500 dark:text-slate-400 ml-1">→ will be deducted from wallet</span>
               )}
             </div>
           )}
 
           <DialogFooter>
-            <Button type="submit" disabled={isSaving} className="bg-orange-500 text-white hover:bg-orange-600 shadow-[0_0_10px_rgba(249,115,22,0.3)] transition-all w-full md:w-auto">
+            <Button type="submit" disabled={isSaving} className="bg-orange-500 text-white hover:bg-orange-600 shadow-[0_4px_14px_rgba(249,115,22,0.3)] transition-all w-full md:w-auto">
               {isSaving ? "Saving..." : "Save Product"}
             </Button>
           </DialogFooter>
@@ -725,12 +719,12 @@ function InTransitPanel({
 
   return (
     <div className="space-y-4 w-full">
-      <p className="text-sm text-slate-400">
+      <p className="text-sm text-slate-500 dark:text-slate-400">
         Goods that have been paid for but haven&apos;t arrived yet. This value is included in your Total Assets.
       </p>
 
       {products.length === 0 ? (
-        <div className="text-center py-8 text-sm text-slate-500 border border-dashed border-slate-800 rounded-xl w-full">
+        <div className="text-center py-8 text-sm text-slate-400 dark:text-slate-500 border border-dashed border-slate-300 dark:border-slate-800 rounded-xl w-full">
           No products currently in transit.
         </div>
       ) : (
@@ -740,32 +734,32 @@ function InTransitPanel({
             return (
               <div
                 key={product.id}
-                className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between rounded-xl border border-slate-800 bg-slate-900/60 p-4 backdrop-blur-sm transition-all duration-300 hover:shadow-[0_0_15px_rgba(249,115,22,0.3)] hover:border-orange-500/50 w-full"
+                className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 p-4 backdrop-blur-sm transition-all duration-300 hover:shadow-sm dark:hover:shadow-[0_0_15px_rgba(249,115,22,0.3)] hover:border-orange-300 dark:hover:border-orange-500/50 w-full"
               >
                 <div className="flex-1 space-y-1">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-sm font-semibold text-white transition-colors">
+                    <span className="text-sm font-semibold text-slate-900 dark:text-white transition-colors">
                       {product.name}
                     </span>
-                    <span className="inline-flex items-center rounded-full bg-orange-500/15 px-2 py-0.5 text-[10px] font-bold text-orange-500 uppercase tracking-wider animate-pulse shadow-[0_0_8px_rgba(249,115,22,0.4)]">
+                    <span className="inline-flex items-center rounded-full bg-orange-100 dark:bg-orange-500/15 px-2 py-0.5 text-[10px] font-bold text-orange-600 dark:text-orange-500 uppercase tracking-wider animate-pulse shadow-sm dark:shadow-[0_0_8px_rgba(249,115,22,0.4)]">
                       On The Way
                     </span>
                   </div>
-                  <p className="text-xs text-slate-400">
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
                     Category: {product.category ?? "-"} · Qty: {product.stock}
                   </p>
                 </div>
-                <div className="flex items-center justify-between sm:justify-end gap-2 w-full sm:w-auto mt-2 sm:mt-0 pt-2 sm:pt-0 border-t border-slate-800 sm:border-none">
+                <div className="flex items-center justify-between sm:justify-end gap-2 w-full sm:w-auto mt-2 sm:mt-0 pt-2 sm:pt-0 border-t border-slate-200 dark:border-slate-800 sm:border-none">
                   <div className="text-left sm:text-right mr-auto sm:mr-2">
-                    <p className="text-sm font-semibold tracking-tight text-white">{formatRupiah(value)}</p>
-                    <p className="text-[11px] text-slate-500">@ {formatRupiah(product.costPrice)}/unit</p>
+                    <p className="text-sm font-semibold tracking-tight text-slate-900 dark:text-white">{formatRupiah(value)}</p>
+                    <p className="text-[11px] text-slate-400 dark:text-slate-500">@ {formatRupiah(product.costPrice)}/unit</p>
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0">
                     <button
                       type="button"
                       title="Edit Product"
                       onClick={() => onEdit(product)}
-                      className="p-1.5 md:p-2 rounded-lg border border-slate-700 bg-slate-800/50 text-slate-400 transition-all duration-200 hover:text-orange-500 hover:border-orange-500/50 hover:bg-orange-500/10 hover:shadow-[0_0_10px_rgba(249,115,22,0.3)] disabled:opacity-50 disabled:pointer-events-none"
+                      className="p-1.5 md:p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 text-slate-500 dark:text-slate-400 transition-all duration-200 hover:text-orange-500 dark:hover:text-orange-500 hover:border-orange-300 dark:hover:border-orange-500/50 hover:bg-orange-50 dark:hover:bg-orange-500/10 hover:shadow-sm dark:hover:shadow-[0_0_10px_rgba(249,115,22,0.3)] disabled:opacity-50 disabled:pointer-events-none"
                     >
                       <Pencil className="h-4 w-4" />
                     </button>
@@ -774,7 +768,7 @@ function InTransitPanel({
                       title="Mark as Received"
                       disabled={updatingId === product.id}
                       onClick={() => markAsReceived(product.id)}
-                      className="p-1.5 md:p-2 rounded-lg border border-slate-700 bg-slate-800/50 text-slate-400 transition-all duration-200 hover:text-green-400 hover:border-green-500/50 hover:bg-green-500/10 hover:shadow-[0_0_10px_rgba(74,222,128,0.3)] disabled:opacity-50 disabled:pointer-events-none"
+                      className="p-1.5 md:p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 text-slate-500 dark:text-slate-400 transition-all duration-200 hover:text-green-600 dark:hover:text-green-400 hover:border-green-300 dark:hover:border-green-500/50 hover:bg-green-50 dark:hover:bg-green-500/10 hover:shadow-sm dark:hover:shadow-[0_0_10px_rgba(74,222,128,0.3)] disabled:opacity-50 disabled:pointer-events-none"
                     >
                       <CheckCircle2 className="h-4 w-4" />
                     </button>
@@ -783,7 +777,7 @@ function InTransitPanel({
                       title="Cancel Order"
                       disabled={updatingId === product.id}
                       onClick={() => { setCancelTarget(product); setIsCancelOpen(true); }}
-                      className="p-1.5 md:p-2 rounded-lg border border-slate-700 bg-slate-800/50 text-slate-400 transition-all duration-200 hover:text-red-500 hover:border-red-500/50 hover:bg-red-500/10 hover:shadow-[0_0_10px_rgba(239,68,68,0.5)] disabled:opacity-50 disabled:pointer-events-none"
+                      className="p-1.5 md:p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 text-slate-500 dark:text-slate-400 transition-all duration-200 hover:text-red-600 dark:hover:text-red-500 hover:border-red-300 dark:hover:border-red-500/50 hover:bg-red-50 dark:hover:bg-red-500/10 hover:shadow-sm dark:hover:shadow-[0_0_10px_rgba(239,68,68,0.5)] disabled:opacity-50 disabled:pointer-events-none"
                     >
                       <XCircle className="h-4 w-4" />
                     </button>
@@ -795,41 +789,41 @@ function InTransitPanel({
         </div>
       )}
 
-      <div className="rounded-lg border border-dashed border-slate-800 bg-slate-950/50 p-4 text-center w-full mt-4">
-        <p className="text-xs text-slate-400">
+      <div className="rounded-lg border border-dashed border-slate-300 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/50 p-4 text-center w-full mt-4">
+        <p className="text-xs text-slate-500 dark:text-slate-400">
           Total In Transit: <span className="font-semibold text-orange-500">{formatRupiah(totalInTransit)}</span>
         </p>
       </div>
 
       <Dialog open={isCancelOpen} onOpenChange={(v) => { setIsCancelOpen(v); if (!v) { setCancelTarget(null); setRefundWalletId(""); } }}>
-        <DialogContent className="max-w-md w-[95vw] md:w-full bg-slate-900 border-slate-800 text-white">
+        <DialogContent className="max-w-md w-[95vw] md:w-full bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white">
           <DialogHeader>
             <DialogTitle>Cancel Order & Refund</DialogTitle>
-            <DialogDescription className="text-slate-400">
+            <DialogDescription className="text-slate-500 dark:text-slate-400">
               This will permanently delete the product and optionally refund to a wallet.
             </DialogDescription>
           </DialogHeader>
 
           {cancelTarget && (
             <div className="space-y-4">
-              <div className="rounded-md border border-slate-800 bg-slate-900/50 p-3 space-y-1 text-sm">
-                <p><span className="text-slate-400">Product:</span> {cancelTarget.name}</p>
-                <p><span className="text-slate-400">Qty:</span> {cancelTarget.stock}</p>
+              <div className="rounded-md border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 p-3 space-y-1 text-sm">
+                <p><span className="text-slate-500 dark:text-slate-400">Product:</span> <span className="text-slate-800 dark:text-slate-200">{cancelTarget.name}</span></p>
+                <p><span className="text-slate-500 dark:text-slate-400">Qty:</span> <span className="text-slate-800 dark:text-slate-200">{cancelTarget.stock}</span></p>
                 <p>
-                  <span className="text-slate-400">Refund Amount:</span>{" "}
-                  <span className="font-semibold text-red-400">
+                  <span className="text-slate-500 dark:text-slate-400">Refund Amount:</span>{" "}
+                  <span className="font-semibold text-red-500 dark:text-red-400">
                     {formatRupiah(Number(cancelTarget.costPrice) * cancelTarget.stock)}
                   </span>
                 </p>
               </div>
 
               <div className="grid gap-2">
-                <Label htmlFor="refund-wallet" className="text-slate-300">Refund Destination Wallet</Label>
+                <Label htmlFor="refund-wallet" className="text-slate-700 dark:text-slate-300">Refund Destination Wallet</Label>
                 <select
                   id="refund-wallet"
                   value={refundWalletId}
                   onChange={(e) => setRefundWalletId(e.target.value)}
-                  className="flex h-10 w-full rounded-md border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-slate-600"
+                  className="flex h-10 w-full rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-slate-400 dark:focus:ring-slate-600"
                 >
                   <option value="">No refund (delete only)</option>
                   {wallets.map((w) => (
@@ -843,13 +837,13 @@ function InTransitPanel({
           )}
 
           <div className="flex justify-end gap-3 mt-2">
-            <Button variant="outline" onClick={() => { setIsCancelOpen(false); setCancelTarget(null); setRefundWalletId(""); }} disabled={isCancelling} className="border-slate-700 text-slate-300 hover:bg-slate-800">
+            <Button variant="outline" onClick={() => { setIsCancelOpen(false); setCancelTarget(null); setRefundWalletId(""); }} disabled={isCancelling} className="border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800">
               Go Back
             </Button>
             <Button
               onClick={handleCancelOrder}
               disabled={isCancelling}
-              className="bg-red-600 text-white hover:bg-red-700 shadow-[0_0_10px_rgba(239,68,68,0.3)] transition-all w-full sm:w-auto"
+              className="bg-red-600 text-white hover:bg-red-700 shadow-[0_4px_14px_rgba(239,68,68,0.3)] transition-all w-full sm:w-auto"
             >
               {isCancelling ? "Processing..." : "Confirm Cancellation"}
             </Button>
@@ -928,22 +922,22 @@ function BarcodeScanner({ onDetected, disabled }: { onDetected: (barcode: string
   }, [disabled, isScannerOpen, onDetected, scannerContainerId]);
 
   return (
-    <div className="space-y-2 rounded-lg border border-slate-700 p-3">
+    <div className="space-y-2 rounded-lg border border-slate-300 dark:border-slate-700 p-3 bg-slate-50 dark:bg-transparent">
       <div className="flex items-center justify-between gap-2">
-        <p className="text-sm font-medium text-slate-300">Barcode Scanner</p>
+        <p className="text-sm font-medium text-slate-700 dark:text-slate-300">Barcode Scanner</p>
         <Button
           type="button"
           variant="outline"
           size="sm"
           onClick={() => setIsScannerOpen((current) => !current)}
           disabled={disabled}
-          className="border-slate-700 text-slate-300 hover:bg-slate-800"
+          className="border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
         >
           {isScannerOpen ? "Stop Camera" : "Scan Barcode"}
         </Button>
       </div>
-      {isScannerOpen ? <div id={scannerContainerId} className="min-h-28 overflow-hidden rounded-md border border-slate-700" /> : null}
-      {scannerError ? <p className="text-xs text-red-400">{scannerError}</p> : null}
+      {isScannerOpen ? <div id={scannerContainerId} className="min-h-28 overflow-hidden rounded-md border border-slate-300 dark:border-slate-700 bg-black" /> : null}
+      {scannerError ? <p className="text-xs text-red-500 dark:text-red-400">{scannerError}</p> : null}
     </div>
   );
 }
@@ -979,9 +973,9 @@ function SortButton({
   onClick: () => void;
 }) {
   return (
-    <button type="button" className="flex items-center gap-1 text-left hover:text-white transition-colors" onClick={onClick}>
+    <button type="button" className="flex items-center gap-1 text-left text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors font-semibold" onClick={onClick}>
       {label}
-      <span className="text-xs text-slate-500">{isActive ? (direction === "asc" ? "↑" : "↓") : ""}</span>
+      <span className="text-xs text-slate-400 dark:text-slate-500">{isActive ? (direction === "asc" ? "↑" : "↓") : ""}</span>
     </button>
   );
 }
@@ -1087,57 +1081,57 @@ function ImportCsvDialog({
     <Dialog open={open} onOpenChange={(v) => { onOpenChange(v); if (!v) resetState(); }}>
       <DialogTrigger
         render={
-          <Button variant="outline" className="border-orange-500/50 text-orange-500 hover:bg-orange-500/10 hover:text-orange-400" />
+          <Button variant="outline" className="border-orange-500/50 text-orange-600 dark:text-orange-500 hover:bg-orange-50 dark:hover:bg-orange-500/10 hover:text-orange-700 dark:hover:text-orange-400 bg-white dark:bg-transparent" />
         }
       >
         <Upload className="mr-2 h-4 w-4" />
         Import CSV
       </DialogTrigger>
-      <DialogContent className="max-w-lg w-[95vw] md:w-full bg-slate-900 border-slate-800 text-white max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-lg w-[95vw] md:w-full bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="text-white">Import Products from CSV</DialogTitle>
-          <DialogDescription className="text-slate-400">Upload a CSV file to bulk-add products to your inventory.</DialogDescription>
+          <DialogTitle className="text-slate-900 dark:text-white">Import Products from CSV</DialogTitle>
+          <DialogDescription className="text-slate-500 dark:text-slate-400">Upload a CSV file to bulk-add products to your inventory.</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
           <button
             type="button"
             onClick={downloadCsvTemplate}
-            className="flex items-center gap-2 text-sm text-orange-500 hover:text-orange-400 transition-colors underline underline-offset-4"
+            className="flex items-center gap-2 text-sm text-orange-500 hover:text-orange-600 dark:hover:text-orange-400 transition-colors underline underline-offset-4"
           >
             <Download className="h-4 w-4" />
             Download CSV Template
           </button>
 
           <div className="grid gap-2">
-            <Label htmlFor="csv-file" className="text-slate-300">CSV File</Label>
+            <Label htmlFor="csv-file" className="text-slate-700 dark:text-slate-300">CSV File</Label>
             <Input
               id="csv-file"
               ref={fileInputRef}
               type="file"
               accept=".csv"
               onChange={handleFileChange}
-              className="bg-slate-800 border-slate-700 text-white file:mr-3 file:rounded-md file:border-0 file:bg-orange-500/15 file:px-3 file:py-1 file:text-sm file:font-medium file:text-orange-500 hover:file:bg-orange-500/25"
+              className="bg-slate-50 dark:bg-slate-800 border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white file:mr-3 file:rounded-md file:border-0 file:bg-orange-100 dark:file:bg-orange-500/15 file:px-3 file:py-1 file:text-sm file:font-medium file:text-orange-600 dark:file:text-orange-500 hover:file:bg-orange-200 dark:hover:file:bg-orange-500/25"
             />
           </div>
 
           {validationErrors.length > 0 && (
-            <div className="max-h-32 overflow-y-auto space-y-1 rounded-md border border-red-500/50 bg-red-500/10 p-3">
+            <div className="max-h-32 overflow-y-auto space-y-1 rounded-md border border-red-300 dark:border-red-500/50 bg-red-50 dark:bg-red-500/10 p-3">
               {validationErrors.map((err, i) => (
-                <p key={i} className="text-xs text-red-400">{err}</p>
+                <p key={i} className="text-xs text-red-600 dark:text-red-400">{err}</p>
               ))}
             </div>
           )}
 
           {previewRows.length > 0 && validationErrors.length === 0 && (
-            <div className="rounded-md border border-slate-800 bg-slate-800/50 p-3 space-y-2">
-              <p className="text-sm font-medium text-white">
-                Preview: <span className="text-orange-500">{previewRows.length}</span> row(s) ready to import
+            <div className="rounded-md border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 p-3 space-y-2">
+              <p className="text-sm font-medium text-slate-800 dark:text-white">
+                Preview: <span className="text-orange-600 dark:text-orange-500">{previewRows.length}</span> row(s) ready to import
               </p>
               <div className="max-h-40 overflow-y-auto space-y-1">
                 {previewRows.slice(0, 5).map((row, i) => (
-                  <div key={i} className="flex items-center justify-between text-xs text-slate-400 border-b border-slate-700 pb-1">
-                    <span className="font-medium text-slate-200">{row.name}</span>
+                  <div key={i} className="flex items-center justify-between text-xs text-slate-600 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700 pb-1">
+                    <span className="font-medium text-slate-800 dark:text-slate-200">{row.name}</span>
                     <span>{row.status === "in_transit" ? "🚚 In Transit" : "📦 In Stock"}</span>
                   </div>
                 ))}
@@ -1153,7 +1147,7 @@ function ImportCsvDialog({
           <Button
             disabled={isImporting || previewRows.length === 0 || validationErrors.length > 0}
             onClick={handleImport}
-            className="bg-orange-500 text-white hover:bg-orange-600 shadow-[0_0_10px_rgba(249,115,22,0.3)] transition-all w-full md:w-auto"
+            className="bg-orange-500 text-white hover:bg-orange-600 shadow-[0_4px_14px_rgba(249,115,22,0.3)] transition-all w-full md:w-auto"
           >
             {isImporting ? "Importing..." : `Import ${previewRows.length} Product(s)`}
           </Button>

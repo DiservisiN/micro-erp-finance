@@ -104,7 +104,6 @@ export default function RepairsPage() {
     if (error) {
       setDataError(error.message);
     } else {
-      // PERBAIKAN: Memetakan kolom "is_paid" dari database ke tampilan UI
       const mappedData = data.map((item: any) => ({
         ...item,
         isPaid: item.is_paid || false,
@@ -137,7 +136,7 @@ export default function RepairsPage() {
       problem_description: problem.trim(),
       estimated_cost: cost,
       status: "pending",
-      is_paid: false // Pastikan defaultnya false saat dibuat
+      is_paid: false 
     });
 
     if (error) {
@@ -148,7 +147,7 @@ export default function RepairsPage() {
       setDeviceName("");
       setProblem("");
       setEstimatedCost("");
-      loadRepairs(); // Refresh list
+      loadRepairs(); 
     }
     setIsSubmitting(false);
   }
@@ -156,7 +155,6 @@ export default function RepairsPage() {
   async function handleStatusChange(repairId: string, newStatus: RepairStatus) {
     if (!supabase) return;
     
-    // Optimistic UI Update
     setRepairs((prev) =>
       prev.map((r) => (r.id === repairId ? { ...r, status: newStatus } : r))
     );
@@ -168,7 +166,7 @@ export default function RepairsPage() {
 
     if (error) {
       toast.error("Failed to update status", { description: error.message });
-      loadRepairs(); // Revert on error
+      loadRepairs(); 
     } else {
       toast.success("Status updated");
     }
@@ -178,15 +176,15 @@ export default function RepairsPage() {
     const baseClasses = "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold border";
     switch (status) {
       case "pending":
-        return <span className={`${baseClasses} bg-orange-500/10 text-orange-400 border-orange-500/20`}>Pending</span>;
+        return <span className={`${baseClasses} bg-orange-100 dark:bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-300 dark:border-orange-500/20`}>Pending</span>;
       case "processing":
-        return <span className={`${baseClasses} bg-yellow-500/10 text-yellow-400 border-yellow-500/20`}>Processing</span>;
+        return <span className={`${baseClasses} bg-yellow-100 dark:bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-300 dark:border-yellow-500/20`}>Processing</span>;
       case "ready":
-        return <span className={`${baseClasses} bg-blue-500/10 text-blue-400 border-blue-500/20`}>Ready</span>;
+        return <span className={`${baseClasses} bg-blue-100 dark:bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-300 dark:border-blue-500/20`}>Ready</span>;
       case "picked_up":
-        return <span className={`${baseClasses} bg-green-500/10 text-green-400 border-green-500/20`}>Sudah Diambil</span>;
+        return <span className={`${baseClasses} bg-green-100 dark:bg-green-500/10 text-green-700 dark:text-green-400 border-green-300 dark:border-green-500/20`}>Sudah Diambil</span>;
       default:
-        return <span className={`${baseClasses} border-slate-700 text-slate-400`}>{status}</span>;
+        return <span className={`${baseClasses} bg-slate-100 dark:bg-transparent border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-400`}>{status}</span>;
     }
   }
 
@@ -205,7 +203,6 @@ export default function RepairsPage() {
     const fee = Number(finalFee || "0");
 
     if (paymentStatus === "lunas") {
-      // --- PAID NOW: Normal flow ---
       if (!walletId) {
         toast.error("Please select a destination wallet");
         return;
@@ -222,7 +219,6 @@ export default function RepairsPage() {
           note: paymentNote,
         });
 
-        // PERBAIKAN: Set is_paid menjadi true di database
         const { error } = await supabase
           .from("repairs")
           .update({ status: "picked_up" as RepairStatus, is_paid: true }) 
@@ -248,7 +244,6 @@ export default function RepairsPage() {
       setIsProcessingPayment(false);
 
     } else {
-      // --- KASBON: Unpaid / Create receivable debt ---
       setIsProcessingPayment(true);
 
       try {
@@ -259,8 +254,6 @@ export default function RepairsPage() {
           notes: `Unpaid repair - ${paymentTarget.device_name}: ${paymentTarget.problem_description}`,
         });
 
-        // PERBAIKAN: Meskipun Kasbon, kita set is_paid menjadi true agar tombol prosesnya hilang,
-        // karena tagihannya sudah sukses dipindahkan ke halaman Debts (Piutang).
         const { error } = await supabase
           .from("repairs")
           .update({ status: "picked_up" as RepairStatus, is_paid: true })
@@ -365,19 +358,19 @@ export default function RepairsPage() {
   }
 
   return (
-    <section className="space-y-6 bg-[#020617] min-h-screen p-6">
-      <div className="flex items-center justify-between bg-slate-900/50 backdrop-blur-sm border border-slate-800/50 rounded-xl p-6">
+    <section className="space-y-6 bg-slate-50 dark:bg-[#020617] transition-colors duration-300 min-h-screen p-4 md:p-6 w-full">
+      <div className="flex items-center justify-between bg-white dark:bg-slate-900/50 backdrop-blur-sm border border-slate-200 dark:border-slate-800/50 rounded-xl p-6 shadow-sm dark:shadow-none">
         <div>
-          <h2 className="text-2xl font-semibold text-white">Service & Repairs</h2>
-          <p className="text-slate-400 text-sm">Track customer electronics brought in for repair.</p>
+          <h2 className="text-2xl font-semibold text-slate-900 dark:text-white">Service & Repairs</h2>
+          <p className="text-slate-500 dark:text-slate-400 text-sm">Track customer electronics brought in for repair.</p>
         </div>
       </div>
 
-      <div className="bg-slate-900/40 backdrop-blur-sm border border-slate-800/50 rounded-xl p-6">
+      <div className="bg-white dark:bg-slate-900/40 backdrop-blur-sm border border-slate-200 dark:border-slate-800/50 rounded-xl p-6 shadow-sm dark:shadow-none">
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-slate-400 text-sm">Total Potential Revenue</p>
-            <p className="text-3xl font-bold text-white font-mono shadow-[0_0_15px_rgba(249,115,22,0.3)]">
+            <p className="text-slate-500 dark:text-slate-400 text-sm">Total Potential Revenue</p>
+            <p className="text-3xl font-bold text-slate-900 dark:text-white font-mono shadow-none dark:shadow-[0_0_15px_rgba(249,115,22,0.3)]">
               {formatRupiah(repairs.reduce((sum, r) => sum + r.estimated_cost, 0))}
             </p>
           </div>
@@ -387,31 +380,31 @@ export default function RepairsPage() {
         </div>
       </div>
 
-      <div className="bg-slate-900/40 backdrop-blur-sm border border-slate-800/50 rounded-xl p-6">
+      <div className="bg-white dark:bg-slate-900/40 backdrop-blur-sm border border-slate-200 dark:border-slate-800/50 rounded-xl p-6 shadow-sm dark:shadow-none">
         <form onSubmit={handleAddRepair} className="grid gap-4 md:grid-cols-4 items-end">
           <div className="grid gap-2">
-            <Label htmlFor="customerName" className="text-slate-300">Customer Name</Label>
-            <Input id="customerName" required value={customerName} onChange={(e) => setCustomerName(e.target.value)} placeholder="e.g. Budi" className="bg-slate-800/50 border-slate-700/50 text-white placeholder:text-slate-500" />
+            <Label htmlFor="customerName" className="text-slate-700 dark:text-slate-300">Customer Name</Label>
+            <Input id="customerName" required value={customerName} onChange={(e) => setCustomerName(e.target.value)} placeholder="e.g. Budi" className="bg-slate-50 dark:bg-slate-800/50 border-slate-300 dark:border-slate-700/50 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500" />
           </div>
           <div className="grid gap-2">
-            <Label htmlFor="deviceName" className="text-slate-300">Device</Label>
-            <Input id="deviceName" required value={deviceName} onChange={(e) => setDeviceName(e.target.value)} placeholder="e.g. Laptop Asus" className="bg-slate-800/50 border-slate-700/50 text-white placeholder:text-slate-500" />
+            <Label htmlFor="deviceName" className="text-slate-700 dark:text-slate-300">Device</Label>
+            <Input id="deviceName" required value={deviceName} onChange={(e) => setDeviceName(e.target.value)} placeholder="e.g. Laptop Asus" className="bg-slate-50 dark:bg-slate-800/50 border-slate-300 dark:border-slate-700/50 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500" />
           </div>
           <div className="grid gap-2">
-            <Label htmlFor="problem" className="text-slate-300">Problem</Label>
-            <Input id="problem" required value={problem} onChange={(e) => setProblem(e.target.value)} placeholder="e.g. LCD Mati" className="bg-slate-800/50 border-slate-700/50 text-white placeholder:text-slate-500" />
+            <Label htmlFor="problem" className="text-slate-700 dark:text-slate-300">Problem</Label>
+            <Input id="problem" required value={problem} onChange={(e) => setProblem(e.target.value)} placeholder="e.g. LCD Mati" className="bg-slate-50 dark:bg-slate-800/50 border-slate-300 dark:border-slate-700/50 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500" />
           </div>
           <div className="grid gap-2">
-            <Label htmlFor="estimatedCost" className="text-slate-300">Est. Cost</Label>
-            <Input id="estimatedCost" type="number" min="0" step="0.01" value={estimatedCost} onChange={(e) => setEstimatedCost(e.target.value)} placeholder="0" className="bg-slate-800/50 border-slate-700/50 text-white placeholder:text-slate-500" />
+            <Label htmlFor="estimatedCost" className="text-slate-700 dark:text-slate-300">Est. Cost</Label>
+            <Input id="estimatedCost" type="number" min="0" step="0.01" value={estimatedCost} onChange={(e) => setEstimatedCost(e.target.value)} placeholder="0" className="bg-slate-50 dark:bg-slate-800/50 border-slate-300 dark:border-slate-700/50 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500" />
           </div>
-          <Button type="submit" disabled={isSubmitting} className="md:col-span-4 bg-orange-500 text-white hover:bg-orange-600 shadow-[0_0_10px_rgba(249,115,22,0.3)] transition-all">
+          <Button type="submit" disabled={isSubmitting} className="md:col-span-4 bg-orange-500 text-white hover:bg-orange-600 shadow-[0_4px_14px_rgba(249,115,22,0.3)] transition-all">
             {isSubmitting ? "Adding..." : "Add Repair Order"}
           </Button>
         </form>
       </div>
 
-      {dataError ? <p className="text-sm text-destructive">{dataError}</p> : null}
+      {dataError ? <p className="text-sm text-red-500 dark:text-red-400">{dataError}</p> : null}
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {isLoading ? (
@@ -420,12 +413,12 @@ export default function RepairsPage() {
           <p className="text-sm text-slate-500 col-span-full">No active repair orders found.</p>
         ) : (
           repairs.map((repair) => (
-            <Card key={repair.id} className="flex flex-col bg-slate-900/40 backdrop-blur-sm border border-slate-800/50 hover:shadow-[0_0_20px_rgba(249,115,22,0.15)] hover:border-orange-500/30 transition-all duration-300">
+            <Card key={repair.id} className="flex flex-col bg-white dark:bg-slate-900/40 backdrop-blur-sm border border-slate-200 dark:border-slate-800/50 shadow-sm hover:shadow-md dark:hover:shadow-[0_0_20px_rgba(249,115,22,0.15)] hover:border-orange-300 dark:hover:border-orange-500/30 transition-all duration-300">
               <CardHeader className="pb-3">
                 <div className="flex justify-between items-start gap-4">
                   <div className="space-y-1">
-                    <CardTitle className="text-lg text-white">{repair.device_name}</CardTitle>
-                    <CardDescription className="text-slate-400">{repair.customer_name}</CardDescription>
+                    <CardTitle className="text-lg text-slate-900 dark:text-white">{repair.device_name}</CardTitle>
+                    <CardDescription className="text-slate-500 dark:text-slate-400">{repair.customer_name}</CardDescription>
                   </div>
                   {getStatusBadge(repair.status)}
                 </div>
@@ -433,22 +426,22 @@ export default function RepairsPage() {
               <CardContent className="flex-1 space-y-4">
                 <div className="space-y-2 text-sm">
                   <div>
-                    <span className="font-semibold block text-slate-300">Problem:</span>
-                    <span className="text-slate-400">{repair.problem_description}</span>
+                    <span className="font-semibold block text-slate-700 dark:text-slate-300">Problem:</span>
+                    <span className="text-slate-600 dark:text-slate-400">{repair.problem_description}</span>
                   </div>
                   <div>
-                    <span className="font-semibold block text-slate-300">Est. Cost:</span>
-                    <span className="font-mono text-orange-400 font-semibold shadow-[0_0_8px_rgba(249,115,22,0.3)]">{formatRupiah(repair.estimated_cost)}</span>
+                    <span className="font-semibold block text-slate-700 dark:text-slate-300">Est. Cost:</span>
+                    <span className="font-mono text-orange-600 dark:text-orange-400 font-semibold shadow-none dark:shadow-[0_0_8px_rgba(249,115,22,0.3)]">{formatRupiah(repair.estimated_cost)}</span>
                   </div>
                 </div>
 
-                <div className="space-y-2 pt-4 border-t border-slate-800/50">
-                  <Label className="text-slate-300">Update Status</Label>
+                <div className="space-y-2 pt-4 border-t border-slate-200 dark:border-slate-800/50">
+                  <Label className="text-slate-700 dark:text-slate-300">Update Status</Label>
                   <select
                     value={repair.status}
                     onChange={(e) => handleStatusChange(repair.id, e.target.value as RepairStatus)}
                     disabled={paidRepairIds.has(repair.id) || repair.isPaid}
-                    className="flex h-9 w-full rounded-md border border-slate-700 bg-slate-800/50 px-3 py-1 text-sm text-white focus:outline-none focus:ring-2 focus:ring-slate-600 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="flex h-9 w-full rounded-md border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 px-3 py-1 text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-slate-400 dark:focus:ring-slate-600 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     <option value="pending">Pending</option>
                     <option value="processing">Processing</option>
@@ -462,7 +455,7 @@ export default function RepairsPage() {
                     type="button"
                     onClick={() => openEditRepair(repair)}
                     disabled={paidRepairIds.has(repair.id) || repair.isPaid}
-                    className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium text-slate-400 border border-slate-700 bg-slate-800/50 transition-all duration-200 hover:text-orange-400 hover:border-orange-500/50 hover:bg-orange-500/10 hover:shadow-[0_0_10px_rgba(249,115,22,0.3)] disabled:cursor-not-allowed disabled:opacity-50"
+                    className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-400 border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 transition-all duration-200 hover:text-orange-600 dark:hover:text-orange-400 hover:border-orange-300 dark:hover:border-orange-500/50 hover:bg-orange-50 dark:hover:bg-orange-500/10 hover:shadow-sm dark:hover:shadow-[0_0_10px_rgba(249,115,22,0.3)] disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     <Pencil className="h-3.5 w-3.5" />
                     Edit
@@ -470,20 +463,19 @@ export default function RepairsPage() {
                   <button
                     type="button"
                     onClick={() => handleDeleteRepair(repair.id)}
-                    className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium text-slate-400 border border-slate-700 bg-slate-800/50 transition-all duration-200 hover:text-red-400 hover:border-red-500/50 hover:bg-red-500/10 hover:shadow-[0_0_10px_rgba(239,68,68,0.3)]"
+                    className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-400 border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 transition-all duration-200 hover:text-red-600 dark:hover:text-red-400 hover:border-red-300 dark:hover:border-red-500/50 hover:bg-red-50 dark:hover:bg-red-500/10 hover:shadow-sm dark:hover:shadow-[0_0_10px_rgba(239,68,68,0.3)]"
                   >
                     <Trash className="h-3.5 w-3.5" />
                     Delete
                   </button>
                   
-                  {/* PERBAIKAN: Mengubah label teks badge agar mencakup pembayaran lunas dan kasbon */}
                   {paidRepairIds.has(repair.id) || repair.isPaid ? (
-                    <span className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium text-green-400 border border-green-500/50 bg-green-500/10 shadow-[0_0_10px_rgba(34,197,94,0.3)]">
+                    <span className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium text-green-700 dark:text-green-400 border border-green-300 dark:border-green-500/50 bg-green-50 dark:bg-green-500/10 shadow-sm dark:shadow-[0_0_10px_rgba(34,197,94,0.3)]">
                       ✅ Selesai (Billed)
                     </span>
                   ) : repair.status === "picked_up" ? (
                     <Button
-                      className="flex-1 bg-gradient-to-r from-orange-500 to-orange-600 text-white hover:from-orange-600 hover:to-orange-700 shadow-[0_0_15px_rgba(249,115,22,0.4)] transition-all"
+                      className="flex-1 bg-gradient-to-r from-orange-500 to-orange-600 text-white hover:from-orange-600 hover:to-orange-700 shadow-[0_4px_14px_rgba(249,115,22,0.4)] transition-all"
                       onClick={() => handleProcessPayment(repair)}
                     >
                       Process Payment
@@ -494,7 +486,7 @@ export default function RepairsPage() {
                     <button
                       type="button"
                       onClick={() => { setCancelTarget(repair); setIsCancelOpen(true); }}
-                      className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium text-slate-400 border border-slate-700 bg-slate-800/50 transition-all duration-200 hover:text-red-400 hover:border-red-500/50 hover:bg-red-500/10 hover:shadow-[0_0_10px_rgba(239,68,68,0.4)]"
+                      className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-400 border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 transition-all duration-200 hover:text-red-600 dark:hover:text-red-400 hover:border-red-300 dark:hover:border-red-500/50 hover:bg-red-50 dark:hover:bg-red-500/10 hover:shadow-sm dark:hover:shadow-[0_0_10px_rgba(239,68,68,0.4)]"
                     >
                       <XCircle className="h-3.5 w-3.5" />
                       Cancel Service
@@ -509,31 +501,31 @@ export default function RepairsPage() {
 
       {/* Cancel Service Confirmation Dialog */}
       <Dialog open={isCancelOpen} onOpenChange={(v) => { setIsCancelOpen(v); if (!v) setCancelTarget(null); }}>
-        <DialogContent className="sm:max-w-[400px] bg-slate-900 border-slate-800 text-white">
+        <DialogContent className="sm:max-w-[400px] bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white">
           <DialogHeader>
-            <DialogTitle className="text-white">Cancel Service</DialogTitle>
-            <DialogDescription className="text-slate-400">
+            <DialogTitle className="text-slate-900 dark:text-white">Cancel Service</DialogTitle>
+            <DialogDescription className="text-slate-500 dark:text-slate-400">
               Are you sure you want to cancel this service? Any allocated spare parts will be restocked.
             </DialogDescription>
           </DialogHeader>
 
           {cancelTarget && (
-            <div className="rounded-md border border-slate-800 bg-slate-800/50 p-3 text-sm space-y-1">
-              <p><span className="text-slate-400">Customer:</span> {cancelTarget.customer_name}</p>
-              <p><span className="text-slate-400">Device:</span> {cancelTarget.device_name}</p>
-              <p><span className="text-slate-400">Problem:</span> {cancelTarget.problem_description}</p>
-              <p><span className="text-slate-400">Est. Cost:</span> {formatRupiah(cancelTarget.estimated_cost)}</p>
+            <div className="rounded-md border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 p-3 text-sm space-y-1">
+              <p><span className="text-slate-500 dark:text-slate-400">Customer:</span> {cancelTarget.customer_name}</p>
+              <p><span className="text-slate-500 dark:text-slate-400">Device:</span> {cancelTarget.device_name}</p>
+              <p><span className="text-slate-500 dark:text-slate-400">Problem:</span> {cancelTarget.problem_description}</p>
+              <p><span className="text-slate-500 dark:text-slate-400">Est. Cost:</span> {formatRupiah(cancelTarget.estimated_cost)}</p>
             </div>
           )}
 
           <div className="flex justify-end gap-3 mt-2">
-            <Button variant="outline" onClick={() => { setIsCancelOpen(false); setCancelTarget(null); }} disabled={isCancelling} className="border-slate-700 text-slate-300 hover:bg-slate-800">
+            <Button variant="outline" onClick={() => { setIsCancelOpen(false); setCancelTarget(null); }} disabled={isCancelling} className="border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800">
               Go Back
             </Button>
             <Button
               onClick={handleCancelRepair}
               disabled={isCancelling}
-              className="bg-red-600 text-white hover:bg-red-700 shadow-[0_0_10px_rgba(239,68,68,0.3)] transition-all"
+              className="bg-red-600 text-white hover:bg-red-700 shadow-[0_4px_14px_rgba(239,68,68,0.3)] transition-all"
             >
               {isCancelling ? "Cancelling..." : "Cancel Service"}
             </Button>
@@ -543,31 +535,31 @@ export default function RepairsPage() {
 
       {/* Edit Repair Dialog */}
       <Dialog open={isEditOpen} onOpenChange={(v) => { setIsEditOpen(v); if (!v) setEditTarget(null); }}>
-        <DialogContent className="sm:max-w-[420px] bg-slate-900 border-slate-800 text-white">
+        <DialogContent className="sm:max-w-[420px] bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white">
           <DialogHeader>
-            <DialogTitle className="text-white">Edit Repair</DialogTitle>
+            <DialogTitle className="text-slate-900 dark:text-white">Edit Repair</DialogTitle>
           </DialogHeader>
           {editTarget && (
             <div className="space-y-4">
               <div className="grid gap-2">
-                <Label htmlFor="edit-customer" className="text-slate-300">Customer Name</Label>
-                <Input id="edit-customer" value={editCustomer} onChange={(e) => setEditCustomer(e.target.value)} className="bg-slate-800 border-slate-700 text-white" />
+                <Label htmlFor="edit-customer" className="text-slate-700 dark:text-slate-300">Customer Name</Label>
+                <Input id="edit-customer" value={editCustomer} onChange={(e) => setEditCustomer(e.target.value)} className="bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white" />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="edit-device" className="text-slate-300">Device</Label>
-                <Input id="edit-device" value={editDevice} onChange={(e) => setEditDevice(e.target.value)} className="bg-slate-800 border-slate-700 text-white" />
+                <Label htmlFor="edit-device" className="text-slate-700 dark:text-slate-300">Device</Label>
+                <Input id="edit-device" value={editDevice} onChange={(e) => setEditDevice(e.target.value)} className="bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white" />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="edit-problem" className="text-slate-300">Problem</Label>
-                <Input id="edit-problem" value={editProblem} onChange={(e) => setEditProblem(e.target.value)} className="bg-slate-800 border-slate-700 text-white" />
+                <Label htmlFor="edit-problem" className="text-slate-700 dark:text-slate-300">Problem</Label>
+                <Input id="edit-problem" value={editProblem} onChange={(e) => setEditProblem(e.target.value)} className="bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white" />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="edit-cost" className="text-slate-300">Estimated Cost</Label>
-                <Input id="edit-cost" type="number" min="0" step="0.01" value={editCost} onChange={(e) => setEditCost(e.target.value)} className="bg-slate-800 border-slate-700 text-white" />
+                <Label htmlFor="edit-cost" className="text-slate-700 dark:text-slate-300">Estimated Cost</Label>
+                <Input id="edit-cost" type="number" min="0" step="0.01" value={editCost} onChange={(e) => setEditCost(e.target.value)} className="bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white" />
               </div>
               <div className="flex justify-end gap-3">
-                <Button variant="outline" onClick={() => { setIsEditOpen(false); setEditTarget(null); }} disabled={isSavingEdit} className="border-slate-700 text-slate-300 hover:bg-slate-800">Cancel</Button>
-                <Button onClick={handleEditRepair} disabled={isSavingEdit} className="bg-orange-500 text-white hover:bg-orange-600 shadow-[0_0_10px_rgba(249,115,22,0.3)] transition-all">
+                <Button variant="outline" onClick={() => { setIsEditOpen(false); setEditTarget(null); }} disabled={isSavingEdit} className="border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800">Cancel</Button>
+                <Button onClick={handleEditRepair} disabled={isSavingEdit} className="bg-orange-500 text-white hover:bg-orange-600 shadow-[0_4px_14px_rgba(249,115,22,0.3)] transition-all">
                   {isSavingEdit ? "Saving..." : "Save Changes"}
                 </Button>
               </div>
@@ -578,33 +570,33 @@ export default function RepairsPage() {
 
       {/* Repair Payment Modal */}
       <Dialog open={isPaymentOpen} onOpenChange={(v) => { setIsPaymentOpen(v); if (!v) setPaymentTarget(null); }}>
-        <DialogContent className="sm:max-w-[500px] bg-slate-900 border-slate-800 text-white">
+        <DialogContent className="sm:max-w-[500px] bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white">
           <DialogHeader>
-            <DialogTitle className="text-white">Process Repair Payment</DialogTitle>
-            <DialogDescription className="text-slate-400">
+            <DialogTitle className="text-slate-900 dark:text-white">Process Repair Payment</DialogTitle>
+            <DialogDescription className="text-slate-500 dark:text-slate-400">
               Record payment for the completed repair service.
             </DialogDescription>
           </DialogHeader>
 
           {paymentTarget && (
             <div className="space-y-4">
-              <div className="rounded-md border border-slate-800 bg-slate-800/50 p-3 text-sm space-y-1">
-                <p><span className="text-slate-400">Customer:</span> {paymentTarget.customer_name}</p>
-                <p><span className="text-slate-400">Device:</span> {paymentTarget.device_name}</p>
-                <p><span className="text-slate-400">Est. Cost:</span> {formatRupiah(paymentTarget.estimated_cost)}</p>
+              <div className="rounded-md border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 p-3 text-sm space-y-1">
+                <p><span className="text-slate-500 dark:text-slate-400">Customer:</span> {paymentTarget.customer_name}</p>
+                <p><span className="text-slate-500 dark:text-slate-400">Device:</span> {paymentTarget.device_name}</p>
+                <p><span className="text-slate-500 dark:text-slate-400">Est. Cost:</span> {formatRupiah(paymentTarget.estimated_cost)}</p>
               </div>
 
               {/* Payment Status Toggle */}
               <div className="grid gap-2">
-                <Label className="text-slate-300">Payment Status</Label>
+                <Label className="text-slate-700 dark:text-slate-300">Payment Status</Label>
                 <div className="flex gap-2">
                   <button
                     type="button"
                     onClick={() => setPaymentStatus("lunas")}
                     className={`flex-1 px-4 py-2.5 rounded-lg text-sm font-medium border transition-all duration-200 ${
                       paymentStatus === "lunas"
-                        ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/50 shadow-[0_0_10px_rgba(16,185,129,0.2)]"
-                        : "bg-slate-800/50 text-slate-400 border-slate-700/50 hover:border-slate-600"
+                        ? "bg-emerald-50 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border-emerald-300 dark:border-emerald-500/50 shadow-[0_4px_14px_rgba(16,185,129,0.2)]"
+                        : "bg-slate-50 dark:bg-slate-800/50 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700/50 hover:border-slate-300 dark:hover:border-slate-600"
                     }`}
                   >
                     ✅ Lunas (Paid Now)
@@ -614,8 +606,8 @@ export default function RepairsPage() {
                     onClick={() => setPaymentStatus("kasbon")}
                     className={`flex-1 px-4 py-2.5 rounded-lg text-sm font-medium border transition-all duration-200 ${
                       paymentStatus === "kasbon"
-                        ? "bg-orange-500/20 text-orange-400 border-orange-500/50 shadow-[0_0_10px_rgba(249,115,22,0.2)]"
-                        : "bg-slate-800/50 text-slate-400 border-slate-700/50 hover:border-slate-600"
+                        ? "bg-orange-50 dark:bg-orange-500/20 text-orange-600 dark:text-orange-400 border-orange-300 dark:border-orange-500/50 shadow-[0_4px_14px_rgba(249,115,22,0.2)]"
+                        : "bg-slate-50 dark:bg-slate-800/50 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700/50 hover:border-slate-300 dark:hover:border-slate-600"
                     }`}
                   >
                     📋 Kasbon (Belum Lunas)
@@ -624,7 +616,7 @@ export default function RepairsPage() {
               </div>
 
               <div className="grid gap-2">
-                <Label htmlFor="final-fee" className="text-slate-300">Final Service Fee</Label>
+                <Label htmlFor="final-fee" className="text-slate-700 dark:text-slate-300">Final Service Fee</Label>
                 <Input
                   id="final-fee"
                   type="number"
@@ -632,17 +624,17 @@ export default function RepairsPage() {
                   step="0.01"
                   value={finalFee}
                   onChange={(e) => setFinalFee(e.target.value)}
-                  className="bg-slate-800 border-slate-700 text-white"
+                  className="bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white"
                 />
               </div>
 
               <div className="grid gap-2">
-                <Label htmlFor="sparepart" className="text-slate-300">Sparepart Used (Optional)</Label>
+                <Label htmlFor="sparepart" className="text-slate-700 dark:text-slate-300">Sparepart Used (Optional)</Label>
                 <select
                   id="sparepart"
                   value={sparepartId}
                   onChange={(e) => setSparepartId(e.target.value)}
-                  className="w-full flex h-10 items-center justify-between rounded-md border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-500 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="w-full flex h-10 items-center justify-between rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-500 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <option value="">No Sparepart</option>
                   {products.map((product) => (
@@ -653,12 +645,12 @@ export default function RepairsPage() {
 
               {paymentStatus === "lunas" ? (
                 <div className="grid gap-2">
-                  <Label htmlFor="wallet" className="text-slate-300">Destination Wallet *</Label>
+                  <Label htmlFor="wallet" className="text-slate-700 dark:text-slate-300">Destination Wallet *</Label>
                   <select
                     id="wallet"
                     value={walletId}
                     onChange={(e) => setWalletId(e.target.value)}
-                    className="w-full flex h-10 items-center justify-between rounded-md border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-500 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="w-full flex h-10 items-center justify-between rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-500 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     <option value="">Choose wallet...</option>
                     {wallets.map((wallet) => (
@@ -667,9 +659,9 @@ export default function RepairsPage() {
                   </select>
                 </div>
               ) : (
-                <div className="rounded-md border border-orange-500/30 bg-orange-500/10 p-3 text-sm text-orange-300">
+                <div className="rounded-md border border-orange-300 dark:border-orange-500/30 bg-orange-50 dark:bg-orange-500/10 p-3 text-sm text-orange-700 dark:text-orange-300">
                   <p className="font-medium">💡 Kasbon Mode</p>
-                  <p className="text-orange-400/80 text-xs mt-1">
+                  <p className="text-orange-600/80 dark:text-orange-400/80 text-xs mt-1">
                     No wallet needed. A receivable (piutang) record will be created for <strong>{paymentTarget.customer_name}</strong> with amount <strong>{formatRupiah(Number(finalFee || "0"))}</strong>. 
                     You can settle it later from the Debts page.
                   </p>
@@ -677,13 +669,13 @@ export default function RepairsPage() {
               )}
 
               <div className="grid gap-2">
-                <Label htmlFor="payment-note" className="text-slate-300">Note (Optional)</Label>
+                <Label htmlFor="payment-note" className="text-slate-700 dark:text-slate-300">Note (Optional)</Label>
                 <Input
                   id="payment-note"
                   value={paymentNote}
                   onChange={(e) => setPaymentNote(e.target.value)}
                   placeholder="Additional notes..."
-                  className="bg-slate-800 border-slate-700 text-white"
+                  className="bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white"
                 />
               </div>
 
@@ -692,7 +684,7 @@ export default function RepairsPage() {
                   variant="outline"
                   onClick={() => { setIsPaymentOpen(false); setPaymentTarget(null); setPaymentStatus("lunas"); }}
                   disabled={isProcessingPayment}
-                  className="border-slate-700 text-slate-300 hover:bg-slate-800"
+                  className="border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
                 >
                   Cancel
                 </Button>
@@ -700,8 +692,8 @@ export default function RepairsPage() {
                   onClick={handleConfirmPayment}
                   disabled={isProcessingPayment}
                   className={paymentStatus === "lunas"
-                    ? "bg-emerald-500 text-white hover:bg-emerald-600 shadow-[0_0_10px_rgba(16,185,129,0.3)] transition-all"
-                    : "bg-orange-500 text-white hover:bg-orange-600 shadow-[0_0_10px_rgba(249,115,22,0.3)] transition-all"
+                    ? "bg-emerald-500 text-white hover:bg-emerald-600 shadow-[0_4px_14px_rgba(16,185,129,0.3)] transition-all"
+                    : "bg-orange-500 text-white hover:bg-orange-600 shadow-[0_4px_14px_rgba(249,115,22,0.3)] transition-all"
                   }
                 >
                   {isProcessingPayment

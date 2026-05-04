@@ -57,56 +57,54 @@ function TransactionTable({
   return (
     <Table>
       <TableHeader>
-        <TableRow className="border-slate-800/50">
-          <TableHead className="text-slate-300">{reportsLabels.tableHeaders.date}</TableHead>
-          <TableHead className="text-slate-300">{reportsLabels.tableHeaders.type}</TableHead>
-          <TableHead className="text-slate-300">{reportsLabels.tableHeaders.amount}</TableHead>
-          <TableHead className="text-slate-300">{reportsLabels.tableHeaders.adminFee}</TableHead>
-          <TableHead className="text-slate-300">{reportsLabels.tableHeaders.notes}</TableHead>
-          <TableHead className="text-right text-slate-300">{reportsLabels.tableHeaders.actions}</TableHead>
+        <TableRow className="border-slate-200 dark:border-slate-800/50">
+          <TableHead className="text-slate-500 dark:text-slate-400">{reportsLabels.tableHeaders.date}</TableHead>
+          <TableHead className="text-slate-500 dark:text-slate-400">{reportsLabels.tableHeaders.type}</TableHead>
+          <TableHead className="text-slate-500 dark:text-slate-400">{reportsLabels.tableHeaders.amount}</TableHead>
+          <TableHead className="text-slate-500 dark:text-slate-400">{reportsLabels.tableHeaders.adminFee}</TableHead>
+          <TableHead className="text-slate-500 dark:text-slate-400">{reportsLabels.tableHeaders.notes}</TableHead>
+          <TableHead className="text-right text-slate-500 dark:text-slate-400">{reportsLabels.tableHeaders.actions}</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
         {transactions.length === 0 ? (
           <TableRow>
-            <TableCell colSpan={6} className="text-center text-slate-500">
+            <TableCell colSpan={6} className="text-center text-slate-500 dark:text-slate-400">
               {reportsLabels.messages.noTransactions}
             </TableCell>
           </TableRow>
         ) : (
           transactions.map((tx) => (
-            <TableRow key={tx.id} className="border-slate-800/50 hover:bg-slate-800/40 transition-colors">
-              <TableCell className="whitespace-nowrap text-slate-300">{formatDate(tx.date)}</TableCell>
+            <TableRow key={tx.id} className="border-slate-200 dark:border-slate-800/50 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
+              <TableCell className="whitespace-nowrap text-slate-700 dark:text-slate-300">{formatDate(tx.date)}</TableCell>
               <TableCell className="capitalize">
-                <span className={`px-2 py-1 rounded-full text-xs font-medium border ${
+                <span className={`px-2.5 py-1 rounded-full text-[11px] font-medium border ${
                   tx.type === 'income' 
-                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
-                    // PERBAIKAN: Menambahkan asset_purchase agar mendapat label (badge) warna merah
+                    ? 'bg-emerald-50 border-emerald-200 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/30'
                     : (tx.type === 'expense' || tx.type === 'asset_purchase')
-                      ? 'bg-red-500/10 text-red-400 border-red-500/30'
-                      : 'bg-slate-700/30 text-slate-300 border-slate-700/50'
+                      ? 'bg-red-50 border-red-200 text-red-600 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/30'
+                      : 'bg-slate-100 border-slate-200 text-slate-600 dark:bg-slate-700/30 dark:text-slate-300 dark:border-slate-700/50'
                 }`}>
                   {formatType(tx.type, tx.category)}
                 </span>
               </TableCell>
-              {/* PERBAIKAN: Menambahkan asset_purchase agar teks nominalnya berwarna merah dan memiliki tanda minus (-) */}
-              <TableCell className={`font-mono font-semibold ${(tx.type === 'expense' || tx.type === 'asset_purchase') ? 'text-red-400' : tx.type === 'income' ? 'text-emerald-400' : 'text-blue-400'}`}>
+              <TableCell className={`font-mono font-semibold tabular-nums ${(tx.type === 'expense' || tx.type === 'asset_purchase') ? 'text-red-600 dark:text-red-400' : tx.type === 'income' ? 'text-emerald-600 dark:text-emerald-400' : 'text-blue-600 dark:text-blue-400'}`}>
                 {(tx.type === 'expense' || tx.type === 'asset_purchase') ? '- ' : tx.type === 'income' ? '+ ' : ''}{formatRupiah(tx.amount)}
               </TableCell>
-              <TableCell className="text-slate-300">{tx.adminFee ? formatRupiah(tx.adminFee) : "-"}</TableCell>
-              <TableCell className="max-w-xs truncate text-slate-300" title={tx.notes || ""}>
+              <TableCell className="text-slate-700 dark:text-slate-300 font-mono tabular-nums">{tx.adminFee ? formatRupiah(tx.adminFee) : "-"}</TableCell>
+              <TableCell className="max-w-[200px] truncate text-slate-700 dark:text-slate-300" title={tx.notes || ""}>
                 {tx.notes || "-"}
               </TableCell>
               <TableCell className="text-right">
                 <div className="flex items-center justify-end gap-1">
-                  <Button variant="ghost" size="icon" onClick={() => onPrint(tx)} title={reportsLabels.buttons.printReceipt} className="text-slate-400 hover:text-white hover:bg-slate-700/50">
+                  <Button variant="ghost" size="icon" onClick={() => onPrint(tx)} title={reportsLabels.buttons.printReceipt} className="h-8 w-8 text-slate-400 hover:text-slate-900 hover:bg-slate-100 dark:hover:text-white dark:hover:bg-slate-700/50">
                     <Printer className="h-4 w-4" />
                   </Button>
                   <button
                     type="button"
                     title={reportsLabels.titles.editTransaction}
                     onClick={() => onEdit(tx)}
-                    className="inline-flex items-center justify-center rounded-md p-2 text-slate-400 transition-all duration-200 hover:text-orange-400 hover:bg-orange-500/10"
+                    className="inline-flex items-center justify-center rounded-md p-1.5 h-8 w-8 text-slate-400 transition-all duration-200 hover:text-orange-500 dark:hover:text-orange-400 hover:bg-orange-100 dark:hover:bg-orange-500/10"
                   >
                     <Pencil className="h-4 w-4" />
                   </button>
@@ -114,7 +112,7 @@ function TransactionTable({
                     type="button"
                     title={reportsLabels.titles.deleteTransaction}
                     onClick={() => onDelete(tx)}
-                    className="inline-flex items-center justify-center rounded-md p-2 text-slate-400 transition-all duration-200 hover:text-red-400 hover:bg-red-500/10"
+                    className="inline-flex items-center justify-center rounded-md p-1.5 h-8 w-8 text-slate-400 transition-all duration-200 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-100 dark:hover:bg-red-500/10"
                   >
                     <Trash2 className="h-4 w-4" />
                   </button>
@@ -127,79 +125,75 @@ function TransactionTable({
     </Table>
   );
 }
-// DOKUMENTASI: Komponen khusus untuk menghitung dan menampilkan Neraca Keuangan (Balance Sheet)
+
 function BalanceSheetView() {
   const { wallets, products, investments, debts } = useFinanceContext();
 
-  // 1. Hitung HARTA (Aktiva)
   const totalKas = wallets.reduce((sum, w) => sum + (w.balance || 0), 0);
   const totalPiutang = debts.filter(d => d.type === 'receivable' && d.status === 'unpaid').reduce((sum, d) => sum + d.amount, 0);
   const totalPersediaan = products.reduce((sum, p) => sum + (p.stock * p.costPrice), 0);
   const totalInvestasi = investments.reduce((sum, inv) => sum + (inv.quantity * inv.currentPrice), 0);
   const totalAktiva = totalKas + totalPiutang + totalPersediaan + totalInvestasi;
 
-  // 2. Hitung HUTANG (Kewajiban)
   const totalHutang = debts.filter(d => d.type === 'payable' && d.status === 'unpaid').reduce((sum, d) => sum + d.amount, 0);
 
-  // 3. Hitung MODAL (Ekuitas) = Harta - Hutang
   const totalModal = totalAktiva - totalHutang;
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full">
       {/* Kolom Kiri: HARTA (Aktiva) */}
-      <div className="bg-slate-900/40 backdrop-blur-sm border border-slate-800/50 rounded-xl p-6">
-        <h3 className="text-lg font-semibold text-white mb-4 border-b border-slate-800/50 pb-2">Harta (Aktiva)</h3>
+      <div className="bg-white dark:bg-slate-900/40 backdrop-blur-sm border border-slate-200 dark:border-slate-800/50 shadow-sm dark:shadow-none rounded-xl p-6">
+        <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4 border-b border-slate-200 dark:border-slate-800/50 pb-2">Harta (Aktiva)</h3>
         <div className="space-y-3">
           <div className="flex justify-between items-center text-sm">
-            <span className="text-slate-400">Kas & Bank (Wallets)</span>
-            <span className="text-slate-200 font-mono">{formatRupiah(totalKas)}</span>
+            <span className="text-slate-600 dark:text-slate-400">Kas & Bank (Wallets)</span>
+            <span className="text-slate-800 dark:text-slate-200 font-mono">{formatRupiah(totalKas)}</span>
           </div>
           <div className="flex justify-between items-center text-sm">
-            <span className="text-slate-400">Piutang Pelanggan</span>
-            <span className="text-slate-200 font-mono">{formatRupiah(totalPiutang)}</span>
+            <span className="text-slate-600 dark:text-slate-400">Piutang Pelanggan</span>
+            <span className="text-slate-800 dark:text-slate-200 font-mono">{formatRupiah(totalPiutang)}</span>
           </div>
           <div className="flex justify-between items-center text-sm">
-            <span className="text-slate-400">Persediaan Barang (Inventory)</span>
-            <span className="text-slate-200 font-mono">{formatRupiah(totalPersediaan)}</span>
+            <span className="text-slate-600 dark:text-slate-400">Persediaan Barang (Inventory)</span>
+            <span className="text-slate-800 dark:text-slate-200 font-mono">{formatRupiah(totalPersediaan)}</span>
           </div>
           <div className="flex justify-between items-center text-sm">
-            <span className="text-slate-400">Investasi Jangka Panjang</span>
-            <span className="text-slate-200 font-mono">{formatRupiah(totalInvestasi)}</span>
+            <span className="text-slate-600 dark:text-slate-400">Investasi Jangka Panjang</span>
+            <span className="text-slate-800 dark:text-slate-200 font-mono">{formatRupiah(totalInvestasi)}</span>
           </div>
-          <div className="flex justify-between items-center pt-3 border-t border-slate-800/50 mt-2">
-            <span className="font-semibold text-emerald-400">Total Harta</span>
-            <span className="font-bold text-emerald-400 font-mono">{formatRupiah(totalAktiva)}</span>
+          <div className="flex justify-between items-center pt-3 border-t border-slate-200 dark:border-slate-800/50 mt-2">
+            <span className="font-semibold text-emerald-600 dark:text-emerald-400">Total Harta</span>
+            <span className="font-bold text-emerald-600 dark:text-emerald-400 font-mono">{formatRupiah(totalAktiva)}</span>
           </div>
         </div>
       </div>
 
       {/* Kolom Kanan: HUTANG & MODAL (Pasiva) */}
       <div className="flex flex-col gap-6">
-        <div className="bg-slate-900/40 backdrop-blur-sm border border-slate-800/50 rounded-xl p-6">
-          <h3 className="text-lg font-semibold text-white mb-4 border-b border-slate-800/50 pb-2">Hutang (Kewajiban)</h3>
+        <div className="bg-white dark:bg-slate-900/40 backdrop-blur-sm border border-slate-200 dark:border-slate-800/50 shadow-sm dark:shadow-none rounded-xl p-6">
+          <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4 border-b border-slate-200 dark:border-slate-800/50 pb-2">Hutang (Kewajiban)</h3>
           <div className="space-y-3">
             <div className="flex justify-between items-center text-sm">
-              <span className="text-slate-400">Hutang Usaha / Kasbon</span>
-              <span className="text-red-400 font-mono">{formatRupiah(totalHutang)}</span>
+              <span className="text-slate-600 dark:text-slate-400">Hutang Usaha / Kasbon</span>
+              <span className="text-red-600 dark:text-red-400 font-mono">{formatRupiah(totalHutang)}</span>
             </div>
-            <div className="flex justify-between items-center pt-3 border-t border-slate-800/50 mt-2">
-              <span className="font-semibold text-red-400">Total Hutang</span>
-              <span className="font-bold text-red-400 font-mono">{formatRupiah(totalHutang)}</span>
+            <div className="flex justify-between items-center pt-3 border-t border-slate-200 dark:border-slate-800/50 mt-2">
+              <span className="font-semibold text-red-600 dark:text-red-400">Total Hutang</span>
+              <span className="font-bold text-red-600 dark:text-red-400 font-mono">{formatRupiah(totalHutang)}</span>
             </div>
           </div>
         </div>
 
-        <div className="bg-slate-900/40 backdrop-blur-sm border border-orange-500/30 ring-1 ring-orange-500/10 rounded-xl p-6 shadow-[0_0_15px_rgba(249,115,22,0.05)]">
-          <h3 className="text-lg font-semibold text-white mb-4 border-b border-slate-800/50 pb-2">Modal (Ekuitas)</h3>
+        <div className="bg-orange-50/50 dark:bg-slate-900/40 backdrop-blur-sm border border-orange-200 dark:border-orange-500/30 ring-1 ring-orange-100 dark:ring-orange-500/10 rounded-xl p-6 shadow-sm dark:shadow-[0_0_15px_rgba(249,115,22,0.05)]">
+          <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4 border-b border-orange-200 dark:border-slate-800/50 pb-2">Modal (Ekuitas)</h3>
           <div className="space-y-3">
             <div className="flex justify-between items-center text-sm">
-              <span className="text-slate-400">Kekayaan Bersih (Net Worth)</span>
-              <span className="text-orange-400 font-mono">{formatRupiah(totalModal)}</span>
+              <span className="text-slate-600 dark:text-slate-400">Kekayaan Bersih (Net Worth)</span>
+              <span className="text-orange-600 dark:text-orange-400 font-mono">{formatRupiah(totalModal)}</span>
             </div>
-            <div className="flex justify-between items-center pt-3 border-t border-slate-800/50 mt-2">
-              <span className="font-semibold text-orange-400">Total Pasiva (Hutang + Modal)</span>
-              {/* Sesuai rumus akuntansi, Harta harus selalu persis sama dengan Total Pasiva */}
-              <span className="font-bold text-orange-400 font-mono">{formatRupiah(totalHutang + totalModal)}</span>
+            <div className="flex justify-between items-center pt-3 border-t border-orange-200 dark:border-slate-800/50 mt-2">
+              <span className="font-semibold text-orange-600 dark:text-orange-400">Total Pasiva (Hutang + Modal)</span>
+              <span className="font-bold text-orange-600 dark:text-orange-400 font-mono">{formatRupiah(totalHutang + totalModal)}</span>
             </div>
           </div>
         </div>
@@ -209,7 +203,6 @@ function BalanceSheetView() {
 }
 
 export default function ReportsPage() {
-  // Wire up to global context instead of Supabase
   const { transactions, deleteTransaction, updateTransaction } = useFinanceContext();
 
   const [activeTab, setActiveTab] = useState("all");
@@ -226,7 +219,6 @@ export default function ReportsPage() {
   const [editAdminFee, setEditAdminFee] = useState("");
   const [editNotes, setEditNotes] = useState("");
 
-  // ─── Dynamic Summary Metrics ───────────────────────────────────────────
   const totalIncome = useMemo(() =>
     transactions
       .filter((tx) => tx.type === "income")
@@ -244,13 +236,10 @@ export default function ReportsPage() {
   const netProfit = totalIncome - totalExpense;
   const profitMargin = totalIncome > 0 ? ((netProfit / totalIncome) * 100).toFixed(1) : "0.0";
 
-  // ─── Filter Types ──────────────────────────────────────────────────────
   const incomeTypes = ["income"];
   const expenseTypes = ["expense"];
-  // PERBAIKAN: Menambahkan "asset_purchase" ke dalam kategori filter tab Assets & Transfers
   const transferTypes = ["transfer", "kasbon", "asset_purchase"];
 
-  // Sort newest-first by date for display
   const sortedTransactions = useMemo(() =>
     [...transactions].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
     [transactions]
@@ -264,7 +253,6 @@ export default function ReportsPage() {
     return sortedTransactions;
   }, [sortedTransactions, activeTab]);
 
-  // ─── Handlers ──────────────────────────────────────────────────────────
   async function handleDelete() {
     if (!deleteTarget) return;
     await deleteTransaction(deleteTarget.id);
@@ -310,7 +298,6 @@ export default function ReportsPage() {
   }
 
   function formatType(type: string, category?: string) {
-    // Show category if available (more descriptive), else humanize the type
     if (category) return category;
     if (!type) return "-";
     return type
@@ -351,246 +338,260 @@ export default function ReportsPage() {
   }
 
   return (
-    <div className="bg-[#020617] min-h-screen p-6">
-      {/* Page Header */}
-      <div className="mb-6">
-        <h2 className="text-2xl font-semibold text-white">{reportsLabels.titles.financialReports}</h2>
-        <p className="text-slate-400 text-sm">{reportsLabels.titles.description}</p>
-      </div>
-
-      {/* Financial Summary Cards — Driven by context data */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <div className="bg-slate-900/40 backdrop-blur-sm border border-slate-800/50 rounded-xl p-6">
-          <p className="text-slate-400 text-sm mb-2">{reportsLabels.summaryCards.totalRevenue}</p>
-          <p className="text-3xl font-bold text-emerald-400 font-mono">{formatRupiah(totalIncome)}</p>
-          <p className="text-xs text-slate-500 mt-1">{transactions.filter(tx => tx.type === 'income').length} transaksi</p>
-        </div>
-        <div className="bg-slate-900/40 backdrop-blur-sm border border-slate-800/50 rounded-xl p-6">
-          <p className="text-slate-400 text-sm mb-2">{reportsLabels.summaryCards.totalExpenses}</p>
-          <p className="text-3xl font-bold text-red-400 font-mono">{formatRupiah(totalExpense)}</p>
-          <p className="text-xs text-slate-500 mt-1">{transactions.filter(tx => tx.type === 'expense').length} transaksi</p>
-        </div>
-        <div className="bg-slate-900/40 backdrop-blur-sm border border-slate-800/50 rounded-xl p-6">
-          <p className="text-slate-400 text-sm mb-2">{reportsLabels.summaryCards.netProfit}</p>
-          <p className={`text-3xl font-bold font-mono ${netProfit >= 0 ? 'text-orange-400' : 'text-red-400'}`}>{netProfit >= 0 ? '' : '- '}{formatRupiah(Math.abs(netProfit))}</p>
-        </div>
-        <div className="bg-slate-900/40 backdrop-blur-sm border border-slate-800/50 rounded-xl p-6">
-          <p className="text-slate-400 text-sm mb-2">{reportsLabels.summaryCards.profitMargin}</p>
-          <p className={`text-3xl font-bold font-mono ${Number(profitMargin) >= 0 ? 'text-blue-400' : 'text-red-400'}`}>{profitMargin}%</p>
-        </div>
-      </div>
-
-      <Tabs defaultValue="all" value={activeTab} onValueChange={setActiveTab} className="w-full flex flex-col">
-        {/* Unified Control Bar */}
-        <div className="flex flex-col gap-4 mb-6 bg-slate-900/50 backdrop-blur-sm border border-slate-800/50 rounded-xl p-6 w-full">
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 w-full">
-            <TabsList className="flex flex-wrap gap-2 bg-slate-800/50 h-auto p-1 w-full">
-              <TabsTrigger value="balance-sheet" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-orange-500 data-[state=active]:to-orange-600 data-[state=active]:text-white data-[state=active]:shadow-[0_0_15px_rgba(249,115,22,0.4)] transition-all rounded-full px-4 py-2">  Neraca Keuangan</TabsTrigger>
-              <TabsTrigger value="all" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-orange-500 data-[state=active]:to-orange-600 data-[state=active]:text-white data-[state=active]:shadow-[0_0_15px_rgba(249,115,22,0.4)] transition-all rounded-full px-4 py-2">{reportsLabels.filters.all}</TabsTrigger>
-              <TabsTrigger value="income" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-orange-500 data-[state=active]:to-orange-600 data-[state=active]:text-white data-[state=active]:shadow-[0_0_15px_rgba(249,115,22,0.4)] transition-all rounded-full px-4 py-2">{reportsLabels.filters.income}</TabsTrigger>
-              <TabsTrigger value="operating-expenses" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-orange-500 data-[state=active]:to-orange-600 data-[state=active]:text-white data-[state=active]:shadow-[0_0_15px_rgba(249,115,22,0.4)] transition-all rounded-full px-4 py-2">{reportsLabels.filters.operatingExpenses}</TabsTrigger>
-              <TabsTrigger value="assets-transfers" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-orange-500 data-[state=active]:to-orange-600 data-[state=active]:text-white data-[state=active]:shadow-[0_0_15px_rgba(249,115,22,0.4)] transition-all rounded-full px-4 py-2">{reportsLabels.filters.assetsTransfers}</TabsTrigger>
-            </TabsList>
-            <Button onClick={handleExportCSV} variant="outline" size="default" className="border-slate-700 text-slate-300 hover:bg-slate-800 hover:text-orange-400 shadow-[0_0_10px_rgba(249,115,22,0.2)] transition-all shrink-0" disabled={sortedTransactions.length === 0}>
-              <Download className="mr-2 h-4 w-4" />
-              {reportsLabels.buttons.exportToCSV}
-            </Button>
-          </div>
-        </div>
-
-        <TabsContent value="all">
-          <div className="bg-slate-900/40 backdrop-blur-sm border border-slate-800/50 rounded-xl p-6 w-full">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-white">{reportsLabels.titles.allTransactions}</h3>
-              <p className="text-slate-400 text-sm">{reportsLabels.titles.allTransactionsDesc}</p>
-            </div>
-            <TransactionTable 
-              transactions={filteredTransactions} 
-              formatDate={formatDate}
-              formatType={formatType}
-              onPrint={(tx) => { setSelectedReceipt(tx); setIsReceiptOpen(true); }}
-              onEdit={openEdit}
-              onDelete={(tx) => { setDeleteTarget(tx); setIsDeleteOpen(true); }}
-            />
-          </div>
-        </TabsContent>
-
-        <TabsContent value="income">
-          <div className="bg-slate-900/40 backdrop-blur-sm border border-slate-800/50 rounded-xl p-6 w-full">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-white">{reportsLabels.titles.incomeTransactions}</h3>
-              <p className="text-slate-400 text-sm">{reportsLabels.titles.incomeTransactionsDesc}</p>
-            </div>
-            <TransactionTable 
-              transactions={filteredTransactions} 
-              formatDate={formatDate}
-              formatType={formatType}
-              onPrint={(tx) => { setSelectedReceipt(tx); setIsReceiptOpen(true); }}
-              onEdit={openEdit}
-              onDelete={(tx) => { setDeleteTarget(tx); setIsDeleteOpen(true); }}
-            />
-          </div>
-        </TabsContent>
-
-        <TabsContent value="operating-expenses">
-          <div className="bg-slate-900/40 backdrop-blur-sm border border-slate-800/50 rounded-xl p-6 w-full">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-white">{reportsLabels.titles.operatingExpenses}</h3>
-              <p className="text-slate-400 text-sm">{reportsLabels.titles.operatingExpensesDesc}</p>
-            </div>
-            <TransactionTable 
-              transactions={filteredTransactions} 
-              formatDate={formatDate}
-              formatType={formatType}
-              onPrint={(tx) => { setSelectedReceipt(tx); setIsReceiptOpen(true); }}
-              onEdit={openEdit}
-              onDelete={(tx) => { setDeleteTarget(tx); setIsDeleteOpen(true); }}
-            />
-          </div>
-        </TabsContent>
-
-        <TabsContent value="assets-transfers">
-          <div className="bg-slate-900/40 backdrop-blur-sm border border-slate-800/50 rounded-xl p-6 w-full">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-white">{reportsLabels.titles.assetsTransfers}</h3>
-              <p className="text-slate-400 text-sm">{reportsLabels.titles.assetsTransfersDesc}</p>
-            </div>
-            <TransactionTable 
-              transactions={filteredTransactions} 
-              formatDate={formatDate}
-              formatType={formatType}
-              onPrint={(tx) => { setSelectedReceipt(tx); setIsReceiptOpen(true); }}
-              onEdit={openEdit}
-              onDelete={(tx) => { setDeleteTarget(tx); setIsDeleteOpen(true); }}
-            />
-          </div>
-        </TabsContent>
+    <div className="bg-slate-50 dark:bg-[#020617] transition-colors duration-300 min-h-screen p-4 md:p-6 lg:p-8 w-full">
+      <div className="max-w-7xl mx-auto">
         
-        <TabsContent value="balance-sheet">
-  <div className="bg-slate-900/40 backdrop-blur-sm border border-slate-800/50 rounded-xl p-6 w-full">
-    <div className="flex items-center justify-between mb-6">
-      <div>
-        <h3 className="text-lg font-semibold text-white">Neraca Keuangan (Balance Sheet)</h3>
-        <p className="text-slate-400 text-sm">Ringkasan posisi keuangan: Harta, Hutang, dan Modal Bersih.</p>
-      </div>
-    </div>
-    <BalanceSheetView />
-  </div>
-</TabsContent>
-      </Tabs>
+        {/* Page Header */}
+        <div className="mb-6">
+          <h2 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">{reportsLabels.titles.financialReports}</h2>
+          <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">{reportsLabels.titles.description}</p>
+        </div>
 
-      {/* Receipt Preview Dialog */}
-      <Dialog open={isReceiptOpen} onOpenChange={setIsReceiptOpen}>
-        <DialogContent className="sm:max-w-[425px] bg-slate-900 border-slate-800 text-white">
-          <DialogHeader className="print:hidden">
-            <DialogTitle className="text-white">{reportsLabels.titles.receiptPreview}</DialogTitle>
-          </DialogHeader>
-          {selectedReceipt && (
-            <div className="flex flex-col items-center justify-center py-4 print:py-0">
-              <div 
-                id="receipt-print-area" 
-                className="w-[300px] bg-white text-black p-6 font-mono text-sm leading-tight border border-dashed border-gray-300 print:border-none print:w-full print:max-w-none print:p-0"
-              >
-                <div className="text-center font-bold text-lg mb-2">MicroERP Store</div>
-                <div className="text-center text-xs mb-4">Jl. Teknologi No. 1, Jakarta<br/>Telp: 0812-3456-7890</div>
-                <div className="border-b border-dashed border-black mb-2 pb-2">
-                  <div>Date: {formatDate(selectedReceipt.date)}</div>
-                  <div>Trx ID: {selectedReceipt.id.slice(0, 8).toUpperCase()}</div>
+        {/* Financial Summary Cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+          <div className="bg-white dark:bg-slate-900/40 backdrop-blur-sm border border-slate-200 dark:border-slate-800/50 shadow-sm dark:shadow-none rounded-xl p-6">
+            <p className="text-slate-500 dark:text-slate-400 text-sm font-medium mb-2">{reportsLabels.summaryCards.totalRevenue}</p>
+            <p className="text-2xl md:text-3xl font-bold text-emerald-600 dark:text-emerald-400 font-mono tracking-tight">{formatRupiah(totalIncome)}</p>
+            <p className="text-xs text-slate-400 dark:text-slate-500 mt-2">{transactions.filter(tx => tx.type === 'income').length} transaksi</p>
+          </div>
+          <div className="bg-white dark:bg-slate-900/40 backdrop-blur-sm border border-slate-200 dark:border-slate-800/50 shadow-sm dark:shadow-none rounded-xl p-6">
+            <p className="text-slate-500 dark:text-slate-400 text-sm font-medium mb-2">{reportsLabels.summaryCards.totalExpenses}</p>
+            <p className="text-2xl md:text-3xl font-bold text-red-600 dark:text-red-400 font-mono tracking-tight">{formatRupiah(totalExpense)}</p>
+            <p className="text-xs text-slate-400 dark:text-slate-500 mt-2">{transactions.filter(tx => tx.type === 'expense').length} transaksi</p>
+          </div>
+          <div className="bg-white dark:bg-slate-900/40 backdrop-blur-sm border border-slate-200 dark:border-slate-800/50 shadow-sm dark:shadow-none rounded-xl p-6">
+            <p className="text-slate-500 dark:text-slate-400 text-sm font-medium mb-2">{reportsLabels.summaryCards.netProfit}</p>
+            <p className={`text-2xl md:text-3xl font-bold font-mono tracking-tight ${netProfit >= 0 ? 'text-orange-600 dark:text-orange-400' : 'text-red-600 dark:text-red-400'}`}>{netProfit >= 0 ? '' : '- '}{formatRupiah(Math.abs(netProfit))}</p>
+          </div>
+          <div className="bg-white dark:bg-slate-900/40 backdrop-blur-sm border border-slate-200 dark:border-slate-800/50 shadow-sm dark:shadow-none rounded-xl p-6">
+            <p className="text-slate-500 dark:text-slate-400 text-sm font-medium mb-2">{reportsLabels.summaryCards.profitMargin}</p>
+            <p className={`text-2xl md:text-3xl font-bold font-mono tracking-tight ${Number(profitMargin) >= 0 ? 'text-blue-600 dark:text-blue-400' : 'text-red-600 dark:text-red-400'}`}>{profitMargin}%</p>
+          </div>
+        </div>
+
+        <Tabs defaultValue="all" value={activeTab} onValueChange={setActiveTab} className="w-full flex flex-col">
+          {/* Unified Control Bar */}
+          <div className="flex flex-col mb-6 bg-white dark:bg-slate-900/50 backdrop-blur-sm border border-slate-200 dark:border-slate-800/50 shadow-sm dark:shadow-none rounded-xl p-4 w-full">
+            <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 w-full overflow-hidden">
+              <div className="w-full lg:w-auto overflow-x-auto pb-1 custom-scrollbar">
+                <TabsList className="flex flex-row w-max min-w-full bg-slate-100 dark:bg-slate-800/50 h-auto p-1.5 rounded-lg border border-slate-200 dark:border-slate-700/50">
+                  <TabsTrigger value="balance-sheet" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-slate-500 dark:text-slate-400 data-[state=active]:shadow-sm dark:data-[state=active]:shadow-[0_0_15px_rgba(249,115,22,0.4)] transition-all rounded-md px-4 py-2 text-sm font-medium hover:text-slate-700 dark:hover:text-slate-200">Neraca Keuangan</TabsTrigger>
+                  <TabsTrigger value="all" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-slate-500 dark:text-slate-400 data-[state=active]:shadow-sm dark:data-[state=active]:shadow-[0_0_15px_rgba(249,115,22,0.4)] transition-all rounded-md px-4 py-2 text-sm font-medium hover:text-slate-700 dark:hover:text-slate-200">{reportsLabels.filters.all}</TabsTrigger>
+                  <TabsTrigger value="income" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-slate-500 dark:text-slate-400 data-[state=active]:shadow-sm dark:data-[state=active]:shadow-[0_0_15px_rgba(249,115,22,0.4)] transition-all rounded-md px-4 py-2 text-sm font-medium hover:text-slate-700 dark:hover:text-slate-200">{reportsLabels.filters.income}</TabsTrigger>
+                  <TabsTrigger value="operating-expenses" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-slate-500 dark:text-slate-400 data-[state=active]:shadow-sm dark:data-[state=active]:shadow-[0_0_15px_rgba(249,115,22,0.4)] transition-all rounded-md px-4 py-2 text-sm font-medium hover:text-slate-700 dark:hover:text-slate-200">{reportsLabels.filters.operatingExpenses}</TabsTrigger>
+                  <TabsTrigger value="assets-transfers" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-slate-500 dark:text-slate-400 data-[state=active]:shadow-sm dark:data-[state=active]:shadow-[0_0_15px_rgba(249,115,22,0.4)] transition-all rounded-md px-4 py-2 text-sm font-medium hover:text-slate-700 dark:hover:text-slate-200">{reportsLabels.filters.assetsTransfers}</TabsTrigger>
+                </TabsList>
+              </div>
+              <Button onClick={handleExportCSV} variant="outline" className="w-full lg:w-auto border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-orange-600 dark:hover:text-orange-400 shadow-sm dark:shadow-[0_0_10px_rgba(249,115,22,0.1)] transition-all shrink-0 font-medium" disabled={sortedTransactions.length === 0}>
+                <Download className="mr-2 h-4 w-4" />
+                {reportsLabels.buttons.exportToCSV}
+              </Button>
+            </div>
+          </div>
+
+          <TabsContent value="all" className="mt-0">
+            <div className="bg-white dark:bg-slate-900/40 backdrop-blur-sm border border-slate-200 dark:border-slate-800/50 shadow-sm dark:shadow-none rounded-xl p-4 md:p-6 w-full">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-slate-900 dark:text-white">{reportsLabels.titles.allTransactions}</h3>
+                <p className="text-slate-500 dark:text-slate-400 text-sm hidden md:block">{reportsLabels.titles.allTransactionsDesc}</p>
+              </div>
+              <div className="overflow-x-auto">
+                <TransactionTable 
+                  transactions={filteredTransactions} 
+                  formatDate={formatDate}
+                  formatType={formatType}
+                  onPrint={(tx) => { setSelectedReceipt(tx); setIsReceiptOpen(true); }}
+                  onEdit={openEdit}
+                  onDelete={(tx) => { setDeleteTarget(tx); setIsDeleteOpen(true); }}
+                />
+              </div>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="income" className="mt-0">
+            <div className="bg-white dark:bg-slate-900/40 backdrop-blur-sm border border-slate-200 dark:border-slate-800/50 shadow-sm dark:shadow-none rounded-xl p-4 md:p-6 w-full">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-slate-900 dark:text-white">{reportsLabels.titles.incomeTransactions}</h3>
+                <p className="text-slate-500 dark:text-slate-400 text-sm hidden md:block">{reportsLabels.titles.incomeTransactionsDesc}</p>
+              </div>
+              <div className="overflow-x-auto">
+                <TransactionTable 
+                  transactions={filteredTransactions} 
+                  formatDate={formatDate}
+                  formatType={formatType}
+                  onPrint={(tx) => { setSelectedReceipt(tx); setIsReceiptOpen(true); }}
+                  onEdit={openEdit}
+                  onDelete={(tx) => { setDeleteTarget(tx); setIsDeleteOpen(true); }}
+                />
+              </div>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="operating-expenses" className="mt-0">
+            <div className="bg-white dark:bg-slate-900/40 backdrop-blur-sm border border-slate-200 dark:border-slate-800/50 shadow-sm dark:shadow-none rounded-xl p-4 md:p-6 w-full">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-slate-900 dark:text-white">{reportsLabels.titles.operatingExpenses}</h3>
+                <p className="text-slate-500 dark:text-slate-400 text-sm hidden md:block">{reportsLabels.titles.operatingExpensesDesc}</p>
+              </div>
+              <div className="overflow-x-auto">
+                <TransactionTable 
+                  transactions={filteredTransactions} 
+                  formatDate={formatDate}
+                  formatType={formatType}
+                  onPrint={(tx) => { setSelectedReceipt(tx); setIsReceiptOpen(true); }}
+                  onEdit={openEdit}
+                  onDelete={(tx) => { setDeleteTarget(tx); setIsDeleteOpen(true); }}
+                />
+              </div>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="assets-transfers" className="mt-0">
+            <div className="bg-white dark:bg-slate-900/40 backdrop-blur-sm border border-slate-200 dark:border-slate-800/50 shadow-sm dark:shadow-none rounded-xl p-4 md:p-6 w-full">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-slate-900 dark:text-white">{reportsLabels.titles.assetsTransfers}</h3>
+                <p className="text-slate-500 dark:text-slate-400 text-sm hidden md:block">{reportsLabels.titles.assetsTransfersDesc}</p>
+              </div>
+              <div className="overflow-x-auto">
+                <TransactionTable 
+                  transactions={filteredTransactions} 
+                  formatDate={formatDate}
+                  formatType={formatType}
+                  onPrint={(tx) => { setSelectedReceipt(tx); setIsReceiptOpen(true); }}
+                  onEdit={openEdit}
+                  onDelete={(tx) => { setDeleteTarget(tx); setIsDeleteOpen(true); }}
+                />
+              </div>
+            </div>
+          </TabsContent>
+          
+          <TabsContent value="balance-sheet" className="mt-0">
+            <div className="bg-white dark:bg-slate-900/40 backdrop-blur-sm border border-slate-200 dark:border-slate-800/50 shadow-sm dark:shadow-none rounded-xl p-4 md:p-6 w-full">
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <h3 className="text-lg font-semibold text-slate-900 dark:text-white">Neraca Keuangan (Balance Sheet)</h3>
+                  <p className="text-slate-500 dark:text-slate-400 text-sm">Ringkasan posisi keuangan: Harta, Hutang, dan Modal Bersih.</p>
                 </div>
-                <div className="mb-4">
-                  <div className="font-semibold">{formatType(selectedReceipt.type, selectedReceipt.category)}</div>
-                  <div className="text-xs break-words">{selectedReceipt.notes || "-"}</div>
-                </div>
-                <div className="border-t border-dashed border-black mt-2 pt-2 flex justify-between items-center">
-                  <span>Subtotal</span>
-                  <span>{formatRupiah(selectedReceipt.amount)}</span>
-                </div>
-                {(selectedReceipt.adminFee ?? 0) > 0 && (
-                  <div className="flex justify-between items-center text-xs mt-1">
-                    <span>Admin Fee</span>
-                    <span>{formatRupiah(selectedReceipt.adminFee!)}</span>
+              </div>
+              <BalanceSheetView />
+            </div>
+          </TabsContent>
+        </Tabs>
+
+        {/* Receipt Preview Dialog */}
+        <Dialog open={isReceiptOpen} onOpenChange={setIsReceiptOpen}>
+          <DialogContent className="sm:max-w-[425px] bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white shadow-xl">
+            <DialogHeader className="print:hidden">
+              <DialogTitle className="text-slate-900 dark:text-white">{reportsLabels.titles.receiptPreview}</DialogTitle>
+            </DialogHeader>
+            {selectedReceipt && (
+              <div className="flex flex-col items-center justify-center py-4 print:py-0">
+                <div 
+                  id="receipt-print-area" 
+                  className="w-[300px] bg-white text-black p-6 font-mono text-sm leading-tight border border-dashed border-gray-300 print:border-none print:w-full print:max-w-none print:p-0"
+                >
+                  <div className="text-center font-bold text-lg mb-2">MicroERP Store</div>
+                  <div className="text-center text-xs mb-4">Jl. Teknologi No. 1, Jakarta<br/>Telp: 0812-3456-7890</div>
+                  <div className="border-b border-dashed border-black mb-2 pb-2">
+                    <div>Date: {formatDate(selectedReceipt.date)}</div>
+                    <div>Trx ID: {selectedReceipt.id.slice(0, 8).toUpperCase()}</div>
                   </div>
-                )}
-                <div className="border-t border-dashed border-black mt-2 pt-2 flex justify-between items-center font-bold">
-                  <span>TOTAL</span>
-                  <span>{formatRupiah(selectedReceipt.amount + (selectedReceipt.adminFee || 0))}</span>
+                  <div className="mb-4">
+                    <div className="font-semibold">{formatType(selectedReceipt.type, selectedReceipt.category)}</div>
+                    <div className="text-xs break-words">{selectedReceipt.notes || "-"}</div>
+                  </div>
+                  <div className="border-t border-dashed border-black mt-2 pt-2 flex justify-between items-center">
+                    <span>Subtotal</span>
+                    <span>{formatRupiah(selectedReceipt.amount)}</span>
+                  </div>
+                  {(selectedReceipt.adminFee ?? 0) > 0 && (
+                    <div className="flex justify-between items-center text-xs mt-1">
+                      <span>Admin Fee</span>
+                      <span>{formatRupiah(selectedReceipt.adminFee!)}</span>
+                    </div>
+                  )}
+                  <div className="border-t border-dashed border-black mt-2 pt-2 flex justify-between items-center font-bold">
+                    <span>TOTAL</span>
+                    <span>{formatRupiah(selectedReceipt.amount + (selectedReceipt.adminFee || 0))}</span>
+                  </div>
+                  <div className="text-center text-xs mt-6">
+                    Thank you for your business!
+                  </div>
                 </div>
-                <div className="text-center text-xs mt-6">
-                  Thank you for your business!
+              </div>
+            )}
+            <div className="flex justify-end gap-3 mt-4 print:hidden">
+              <Button variant="outline" className="border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800" onClick={() => setIsReceiptOpen(false)}>{reportsLabels.buttons.cancel}</Button>
+              <Button onClick={() => window.print()} className="bg-slate-900 text-white hover:bg-slate-800 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-200">
+                <Printer className="h-4 w-4 mr-2" />
+                {reportsLabels.buttons.printReceipt}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* ---------- Delete Confirmation Dialog ---------- */}
+        <Dialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
+          <DialogContent className="sm:max-w-[400px] bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white">
+            <DialogHeader>
+              <DialogTitle className="text-slate-900 dark:text-white">{reportsLabels.titles.deleteTransaction}</DialogTitle>
+            </DialogHeader>
+            <p className="text-sm text-slate-600 dark:text-slate-400">
+              Apakah Anda yakin? Ini akan <span className="font-semibold text-red-600 dark:text-red-400">menghapus permanen</span> catatan transaksi ini dan membalikkan saldo dompet.
+            </p>
+            {deleteTarget && (
+              <div className="rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 p-3 text-sm space-y-1 mt-2">
+                <p><span className="text-slate-500 dark:text-slate-400">Tipe:</span> <span className="font-medium">{formatType(deleteTarget.type, deleteTarget.category)}</span></p>
+                <p><span className="text-slate-500 dark:text-slate-400">Jumlah:</span> <span className="font-medium font-mono">{formatRupiah(deleteTarget.amount)}</span></p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 truncate mt-2 italic">"{deleteTarget.notes || "No notes"}"</p>
+              </div>
+            )}
+            <div className="flex justify-end gap-3 mt-4">
+              <Button variant="outline" onClick={() => { setIsDeleteOpen(false); setDeleteTarget(null); }} className="border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800">
+                {reportsLabels.buttons.cancel}
+              </Button>
+              <Button
+                onClick={handleDelete}
+                className="bg-red-600 text-white hover:bg-red-700 shadow-[0_4px_14px_rgba(239,68,68,0.3)] transition-all"
+              >
+                {reportsLabels.buttons.delete}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* ---------- Edit Transaction Dialog ---------- */}
+        <Dialog open={isEditOpen} onOpenChange={(v) => { setIsEditOpen(v); if (!v) setEditTarget(null); }}>
+          <DialogContent className="sm:max-w-[420px] bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white">
+            <DialogHeader>
+              <DialogTitle className="text-slate-900 dark:text-white">{reportsLabels.titles.editTransaction}</DialogTitle>
+            </DialogHeader>
+            {editTarget && (
+              <div className="space-y-4 pt-2">
+                <div className="grid gap-2">
+                  <Label htmlFor="edit-amount" className="text-slate-700 dark:text-slate-300">{reportsLabels.tableHeaders.amount}</Label>
+                  <Input id="edit-amount" type="number" min="0" step="0.01" value={editAmount} onChange={(e) => setEditAmount(e.target.value)} className="bg-white dark:bg-slate-800/50 border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white" />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="edit-admin-fee" className="text-slate-700 dark:text-slate-300">{reportsLabels.tableHeaders.adminFee}</Label>
+                  <Input id="edit-admin-fee" type="number" min="0" step="0.01" value={editAdminFee} onChange={(e) => setEditAdminFee(e.target.value)} className="bg-white dark:bg-slate-800/50 border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white" />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="edit-notes" className="text-slate-700 dark:text-slate-300">{reportsLabels.tableHeaders.notes}</Label>
+                  <Input id="edit-notes" value={editNotes} onChange={(e) => setEditNotes(e.target.value)} placeholder="Transaction notes" className="bg-white dark:bg-slate-800/50 border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white placeholder:text-slate-400" />
+                </div>
+                <div className="flex justify-end gap-3 mt-4">
+                  <Button variant="outline" onClick={() => { setIsEditOpen(false); setEditTarget(null); }} className="border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800">{reportsLabels.buttons.cancel}</Button>
+                  <Button onClick={handleEditSave} className="bg-gradient-to-r from-orange-500 to-orange-600 text-white hover:from-orange-600 hover:to-orange-700 shadow-[0_4px_14px_rgba(249,115,22,0.4)] transition-all">
+                    {reportsLabels.buttons.saveChanges}
+                  </Button>
                 </div>
               </div>
-            </div>
-          )}
-          <div className="flex justify-end gap-3 mt-4 print:hidden">
-            <Button variant="outline" onClick={() => setIsReceiptOpen(false)}>{reportsLabels.buttons.cancel}</Button>
-            <Button onClick={() => window.print()}>
-              <Printer className="h-4 w-4 mr-2" />
-              {reportsLabels.buttons.printReceipt}
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* ---------- Delete Confirmation Dialog ---------- */}
-      <Dialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
-        <DialogContent className="sm:max-w-[400px] bg-slate-900 border-slate-800 text-white">
-          <DialogHeader>
-            <DialogTitle className="text-white">{reportsLabels.titles.deleteTransaction}</DialogTitle>
-          </DialogHeader>
-          <p className="text-sm text-slate-400">
-            Apakah Anda yakin? Ini akan <span className="font-semibold text-red-400">menghapus permanen</span> catatan transaksi ini dan membalikkan saldo dompet.
-          </p>
-          {deleteTarget && (
-            <div className="rounded-md border border-slate-700 bg-slate-800/50 p-3 text-sm space-y-1">
-              <p><span className="text-slate-400">Tipe:</span> {formatType(deleteTarget.type, deleteTarget.category)}</p>
-              <p><span className="text-slate-400">Jumlah:</span> {formatRupiah(deleteTarget.amount)}</p>
-              <p className="text-xs text-slate-400 truncate">{deleteTarget.notes || "No notes"}</p>
-            </div>
-          )}
-          <div className="flex justify-end gap-3 mt-2">
-            <Button variant="outline" onClick={() => { setIsDeleteOpen(false); setDeleteTarget(null); }} className="border-slate-700 text-slate-300 hover:bg-slate-800">
-              {reportsLabels.buttons.cancel}
-            </Button>
-            <Button
-              onClick={handleDelete}
-              className="bg-red-600 text-white hover:bg-red-700 shadow-[0_0_10px_rgba(239,68,68,0.3)] transition-all"
-            >
-              {reportsLabels.buttons.delete}
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* ---------- Edit Transaction Dialog ---------- */}
-      <Dialog open={isEditOpen} onOpenChange={(v) => { setIsEditOpen(v); if (!v) setEditTarget(null); }}>
-        <DialogContent className="sm:max-w-[420px] bg-slate-900 border-slate-800 text-white">
-          <DialogHeader>
-            <DialogTitle className="text-white">{reportsLabels.titles.editTransaction}</DialogTitle>
-          </DialogHeader>
-          {editTarget && (
-            <div className="space-y-4">
-              <div className="grid gap-2">
-                <Label htmlFor="edit-amount" className="text-slate-300">{reportsLabels.tableHeaders.amount}</Label>
-                <Input id="edit-amount" type="number" min="0" step="0.01" value={editAmount} onChange={(e) => setEditAmount(e.target.value)} className="bg-slate-800/50 border-slate-700 text-white" />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="edit-admin-fee" className="text-slate-300">{reportsLabels.tableHeaders.adminFee}</Label>
-                <Input id="edit-admin-fee" type="number" min="0" step="0.01" value={editAdminFee} onChange={(e) => setEditAdminFee(e.target.value)} className="bg-slate-800/50 border-slate-700 text-white" />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="edit-notes" className="text-slate-300">{reportsLabels.tableHeaders.notes}</Label>
-                <Input id="edit-notes" value={editNotes} onChange={(e) => setEditNotes(e.target.value)} placeholder="Transaction notes" className="bg-slate-800/50 border-slate-700 text-white placeholder:text-slate-500" />
-              </div>
-              <div className="flex justify-end gap-3">
-                <Button variant="outline" onClick={() => { setIsEditOpen(false); setEditTarget(null); }} className="border-slate-700 text-slate-300 hover:bg-slate-800">{reportsLabels.buttons.cancel}</Button>
-                <Button onClick={handleEditSave} className="bg-gradient-to-r from-orange-500 to-orange-600 text-white hover:from-orange-600 hover:to-orange-700 shadow-[0_0_15px_rgba(249,115,22,0.4)] transition-all">
-                  {reportsLabels.buttons.saveChanges}
-                </Button>
-              </div>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
+            )}
+          </DialogContent>
+        </Dialog>
+        
+      </div>
     </div>
   );
 }
