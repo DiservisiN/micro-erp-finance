@@ -1495,27 +1495,30 @@ function TransactionsDashboard() {
   };
 
   return (
-    <div className="flex flex-col w-full gap-6 bg-[#020617] min-h-screen p-6">
-      <div className="w-full bg-slate-900/50 backdrop-blur-sm border border-slate-800/50 rounded-xl p-6 space-y-4">
-        <div className="flex items-center justify-between">
+    <div className="flex flex-col w-full gap-4 md:gap-6 bg-[#020617] min-h-screen p-4 md:p-6">
+      
+      {/* 1. HEADER & BUTTONS (RESPONSIVE) */}
+      <div className="w-full bg-slate-900/50 backdrop-blur-sm border border-slate-800/50 rounded-xl p-4 md:p-6 space-y-4">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
-            <h2 className="text-2xl font-semibold text-white">Transactions</h2>
-            <p className="text-slate-400 text-sm">View and manage all income and expense transactions.</p>
+            <h2 className="text-xl md:text-2xl font-semibold text-white">Transactions</h2>
+            <p className="text-slate-400 text-xs md:text-sm">View and manage all income and expense transactions.</p>
           </div>
-          <div className="flex gap-3">
-            <Button onClick={() => setIsIncomeModalOpen(true)} className="bg-gradient-to-r from-emerald-500 to-emerald-600 text-white hover:from-emerald-600 hover:to-emerald-700 shadow-[0_0_15px_rgba(16,185,129,0.4)] transition-all">
+          <div className="flex flex-col sm:flex-row gap-2 md:gap-3 w-full md:w-auto">
+            <Button onClick={() => setIsIncomeModalOpen(true)} className="w-full sm:w-auto bg-gradient-to-r from-emerald-500 to-emerald-600 text-white hover:from-emerald-600 hover:to-emerald-700 shadow-[0_0_15px_rgba(16,185,129,0.4)] transition-all">
               <Plus className="mr-2 h-4 w-4" />
               Add Income
             </Button>
-            <Button onClick={() => setIsExpenseModalOpen(true)} className="bg-gradient-to-r from-orange-500 to-orange-600 text-white hover:from-orange-600 hover:to-orange-700 shadow-[0_0_15px_rgba(249,115,22,0.4)] transition-all">
+            <Button onClick={() => setIsExpenseModalOpen(true)} className="w-full sm:w-auto bg-gradient-to-r from-orange-500 to-orange-600 text-white hover:from-orange-600 hover:to-orange-700 shadow-[0_0_15px_rgba(249,115,22,0.4)] transition-all">
               <Plus className="mr-2 h-4 w-4" />
               Add Expense
             </Button>
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="relative flex-1 min-w-[200px] max-w-sm">
+        {/* 2. FILTERS (RESPONSIVE) */}
+        <div className="flex flex-col md:flex-row flex-wrap items-start md:items-center gap-3">
+          <div className="relative w-full md:flex-1 md:max-w-sm">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
             <input
               type="text"
@@ -1525,205 +1528,217 @@ function TransactionsDashboard() {
               className="w-full h-9 pl-9 pr-3 rounded-lg border border-slate-700/50 bg-slate-800/50 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500/50 transition-all"
             />
           </div>
-          <div className="flex items-center gap-2">
-            <CalendarDays className="h-4 w-4 text-slate-500" />
-            <input
-              type="date"
-              value={dateFrom}
-              onChange={(e) => setDateFrom(e.target.value)}
-              className="h-9 px-3 rounded-lg border border-slate-700/50 bg-slate-800/50 text-sm text-white focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500/50 transition-all"
-            />
-            <span className="text-slate-500 text-xs">to</span>
-            <input
-              type="date"
-              value={dateTo}
-              onChange={(e) => setDateTo(e.target.value)}
-              className="h-9 px-3 rounded-lg border border-slate-700/50 bg-slate-800/50 text-sm text-white focus:outline-none focus:ring-2 focus:ring-orange-500/50 focus:border-orange-500/50 transition-all"
-            />
+          
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 w-full md:w-auto">
+            <div className="flex flex-row items-center gap-1 sm:gap-2 w-full sm:w-auto bg-slate-800/50 p-1.5 px-3 rounded-lg border border-slate-700/50 overflow-hidden">
+              <input
+                type="date"
+                value={dateFrom}
+                onChange={(e) => setDateFrom(e.target.value)}
+                className="h-8 flex-1 min-w-[90px] sm:w-[130px] bg-transparent text-[11px] sm:text-sm text-white focus:outline-none"
+              />
+              <span className="text-slate-500 text-[11px] sm:text-xs font-medium shrink-0">to</span>
+              <input
+                type="date"
+                value={dateTo}
+                onChange={(e) => setDateTo(e.target.value)}
+                className="h-8 flex-1 min-w-[90px] sm:w-[130px] bg-transparent text-[11px] sm:text-sm text-white focus:outline-none"
+              />
+            </div>
+            
+            {(searchQuery || dateFrom || dateTo) && (
+              <button
+                onClick={() => { setSearchQuery(""); setDateFrom(""); setDateTo(""); }}
+                className="h-9 px-3 rounded-lg border border-slate-700/50 bg-slate-800/30 text-xs text-slate-400 hover:text-white hover:border-slate-600 transition-all w-full sm:w-auto"
+              >
+                Clear filters
+              </button>
+            )}
           </div>
-          {(searchQuery || dateFrom || dateTo) && (
-            <button
-              onClick={() => { setSearchQuery(""); setDateFrom(""); setDateTo(""); }}
-              className="h-9 px-3 rounded-lg border border-slate-700/50 bg-slate-800/30 text-xs text-slate-400 hover:text-white hover:border-slate-600 transition-all"
-            >
-              Clear filters
-            </button>
-          )}
         </div>
       </div>
 
-      <div className="w-full grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-slate-900/40 backdrop-blur-sm border border-slate-800/50 rounded-xl p-6">
-          {/* UBAH TEKS INI: Agar lebih mencerminkan Arus Kas */}
-          <p className="text-slate-400 text-sm">Total Cash In (Uang Masuk)</p>
-          <p className="text-3xl font-bold text-emerald-400 font-jetbrains">{formatRupiah(totalIncome)}</p>
+      {/* 3. SUMMARY CARDS (RESPONSIVE) */}
+      <div className="w-full grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="bg-slate-900/40 backdrop-blur-sm border border-slate-800/50 rounded-xl p-4 md:p-6">
+          <p className="text-slate-400 text-xs md:text-sm">Total Cash In (Uang Masuk)</p>
+          <p className="text-xl md:text-3xl font-bold text-emerald-400 font-jetbrains">{formatRupiah(totalIncome)}</p>
         </div>
-        <div className="bg-slate-900/40 backdrop-blur-sm border border-slate-800/50 rounded-xl p-6">
-          {/* UBAH TEKS INI: Agar tidak membingungkan dengan Biaya/Rugi */}
-          <p className="text-slate-400 text-sm">Total Cash Out (Uang Keluar)</p>
-          <p className="text-3xl font-bold text-red-400 font-jetbrains">{formatRupiah(totalExpense)}</p>
+        <div className="bg-slate-900/40 backdrop-blur-sm border border-slate-800/50 rounded-xl p-4 md:p-6">
+          <p className="text-slate-400 text-xs md:text-sm">Total Cash Out (Uang Keluar)</p>
+          <p className="text-xl md:text-3xl font-bold text-red-400 font-jetbrains">{formatRupiah(totalExpense)}</p>
         </div>
-        <div className="bg-slate-900/40 backdrop-blur-sm border border-slate-800/50 rounded-xl p-6">
-          <p className="text-slate-400 text-sm">Current Balance</p>
-          <p className="text-3xl font-bold text-white font-jetbrains">{formatRupiah(currentBalance)}</p>
+        <div className="bg-slate-900/40 backdrop-blur-sm border border-slate-800/50 rounded-xl p-4 md:p-6">
+          <p className="text-slate-400 text-xs md:text-sm">Current Balance</p>
+          <p className="text-xl md:text-3xl font-bold text-white font-jetbrains">{formatRupiah(currentBalance)}</p>
         </div>
       </div>
 
+      {/* 4. TABLES (RESPONSIVE SCROLL) */}
       <div className="w-full flex flex-col gap-6">
-        <div className="bg-slate-900/40 backdrop-blur-sm border border-slate-800/50 rounded-xl p-6">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold text-white">Cash In (Pemasukan Uang)</h3>
-        </div>
-        <Table>
-          <TableHeader>
-            <TableRow className="border-slate-800/50">
-              <TableHead className="text-slate-300">Date</TableHead>
-              <TableHead className="text-slate-300">Description</TableHead>
-              <TableHead className="text-slate-300">Category</TableHead>
-              <TableHead className="text-slate-300">Wallet</TableHead>
-              <TableHead className="text-right text-slate-300">Amount</TableHead>
-              <TableHead className="text-right text-slate-300 w-[80px]">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {filteredIncome.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={6} className="text-center py-12">
-                  <div className="flex flex-col items-center gap-3">
-                    <Receipt className="h-12 w-12 text-slate-700/60" strokeWidth={1} />
-                    <p className="text-slate-500 text-sm">No income transactions recorded yet.</p>
-                  </div>
-                </TableCell>
-              </TableRow>
-            ) : (
-              filteredIncome.map((transaction) => {
-                const wallet = wallets.find(w => w.id === transaction.to_wallet_id);
-                const catColor = getCategoryColor(transaction.type);
-                return (
-                  <TableRow key={transaction.id} className="border-slate-800/50 hover:bg-slate-800/40 transition-colors group">
-                    <TableCell className="text-slate-300 text-sm">{formatDate(transaction.date)}</TableCell>
-                    <TableCell className="text-slate-300 text-sm max-w-[200px] truncate">{transaction.notes || "-"}</TableCell>
-                    <TableCell>
-                      <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-medium border ${getGhostBadgeClasses(catColor)}`}>
-                        {getCategoryLabel(transaction.type)}
-                      </span>
-                    </TableCell>
-                    <TableCell>
-                      {wallet ? (
-                        <span className="inline-flex px-2.5 py-1 rounded-full text-xs font-medium border bg-slate-500/10 text-slate-300 border-slate-500/20">
-                          {wallet.name}
-                        </span>
-                      ) : (
-                        <span className="text-slate-500 text-sm">-</span>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-right font-jetbrains text-emerald-400 font-semibold text-sm tabular-nums">
-                      +{formatRupiah(transaction.amount)}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button 
-                          onClick={() => {
-                            setEditingTransaction(transaction);
-                            setIsIncomeModalOpen(true);
-                          }} 
-                          className="p-1.5 rounded-md hover:bg-slate-700/50 text-slate-500 hover:text-slate-300 transition-colors" 
-                          title="Edit"
-                        >
-                          <Pencil className="h-3.5 w-3.5" />
-                        </button>
-                        <button onClick={() => handleDelete(transaction.id)} className="p-1.5 rounded-md hover:bg-red-500/10 text-slate-500 hover:text-red-400 transition-colors" title="Delete">
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
+        
+        {/* TABEL PEMASUKAN */}
+        <div className="bg-slate-900/40 backdrop-blur-sm border border-slate-800/50 rounded-xl p-4 md:p-6 w-full overflow-hidden">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold text-white">Cash In (Pemasukan Uang)</h3>
+          </div>
+          {/* WRAPPER OVERFLOW-X-AUTO UNTUK MOBILE */}
+          <div className="overflow-x-auto w-full pb-2">
+            <Table className="min-w-[800px] w-full">
+              <TableHeader>
+                <TableRow className="border-slate-800/50">
+                  <TableHead className="text-slate-300">Date</TableHead>
+                  <TableHead className="text-slate-300">Description</TableHead>
+                  <TableHead className="text-slate-300">Category</TableHead>
+                  <TableHead className="text-slate-300">Wallet</TableHead>
+                  <TableHead className="text-right text-slate-300">Amount</TableHead>
+                  <TableHead className="text-right text-slate-300 w-[80px]">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredIncome.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center py-12">
+                      <div className="flex flex-col items-center gap-3">
+                        <Receipt className="h-12 w-12 text-slate-700/60" strokeWidth={1} />
+                        <p className="text-slate-500 text-sm">No income transactions recorded yet.</p>
                       </div>
                     </TableCell>
                   </TableRow>
-                );
-              })
-            )}
-          </TableBody>
-        </Table>
-      </div>
+                ) : (
+                  filteredIncome.map((transaction) => {
+                    const wallet = wallets.find(w => w.id === transaction.to_wallet_id);
+                    const catColor = getCategoryColor(transaction.type);
+                    return (
+                      <TableRow key={transaction.id} className="border-slate-800/50 hover:bg-slate-800/40 transition-colors group md:hover:bg-slate-800/40">
+                        <TableCell className="text-slate-300 text-sm whitespace-nowrap">{formatDate(transaction.date)}</TableCell>
+                        <TableCell className="text-slate-300 text-sm max-w-[200px] truncate" title={transaction.notes || ""}>{transaction.notes || "-"}</TableCell>
+                        <TableCell className="whitespace-nowrap">
+                          <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-medium border ${getGhostBadgeClasses(catColor)}`}>
+                            {getCategoryLabel(transaction.type)}
+                          </span>
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap">
+                          {wallet ? (
+                            <span className="inline-flex px-2.5 py-1 rounded-full text-xs font-medium border bg-slate-500/10 text-slate-300 border-slate-500/20">
+                              {wallet.name}
+                            </span>
+                          ) : (
+                            <span className="text-slate-500 text-sm">-</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right font-jetbrains text-emerald-400 font-semibold text-sm tabular-nums whitespace-nowrap">
+                          +{formatRupiah(transaction.amount)}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex items-center justify-end gap-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+                            <button 
+                              onClick={() => {
+                                setEditingTransaction(transaction);
+                                setIsIncomeModalOpen(true);
+                              }} 
+                              className="p-1.5 md:p-2 rounded-md border border-slate-700 md:border-transparent md:hover:bg-slate-700/50 text-slate-400 hover:text-slate-200 transition-colors" 
+                              title="Edit"
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                            </button>
+                            <button onClick={() => handleDelete(transaction.id)} className="p-1.5 md:p-2 rounded-md border border-slate-700 md:border-transparent md:hover:bg-red-500/10 text-slate-400 hover:text-red-400 transition-colors" title="Delete">
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </div>
 
-        <div className="bg-slate-900/40 backdrop-blur-sm border border-slate-800/50 rounded-xl p-6">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold text-white">Cash Out (Pengeluaran Uang)</h3>
-        </div>
-        <Table>
-          <TableHeader>
-            <TableRow className="border-slate-800/50">
-              <TableHead className="text-slate-300">Date</TableHead>
-              <TableHead className="text-slate-300">Description</TableHead>
-              <TableHead className="text-slate-300">Category</TableHead>
-              <TableHead className="text-slate-300">Wallet</TableHead>
-              <TableHead className="text-right text-slate-300">Amount</TableHead>
-              <TableHead className="text-right text-slate-300 w-[80px]">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {filteredExpenses.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={6} className="text-center py-12">
-                  <div className="flex flex-col items-center gap-3">
-                    <FolderOpen className="h-12 w-12 text-slate-700/60" strokeWidth={1} />
-                    <p className="text-slate-500 text-sm">No expense transactions recorded yet.</p>
-                  </div>
-                </TableCell>
-              </TableRow>
-            ) : (
-              filteredExpenses.map((expense) => {
-                const expWallet = wallets.find(w => w.id === expense.from_wallet_id);
-                return (
-                  <TableRow key={expense.id} className="border-slate-800/50 hover:bg-slate-800/40 transition-colors group">
-                    <TableCell className="text-slate-300 text-sm">{formatDate(expense.date)}</TableCell>
-                    <TableCell className="text-slate-300 text-sm max-w-[200px] truncate">{expense.description || "-"}</TableCell>
-                    <TableCell>
-                      <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-medium border ${getGhostBadgeClasses("red")}`}>
-                        {expense.expense_category || "Uncategorized"}
-                      </span>
-                    </TableCell>
-                    <TableCell>
-                      {expWallet ? (
-                        <span className="inline-flex px-2.5 py-1 rounded-full text-xs font-medium border bg-slate-500/10 text-slate-300 border-slate-500/20">
-                          {expWallet.name}
-                        </span>
-                      ) : (
-                        <span className="inline-flex px-2.5 py-1 rounded-full text-xs font-medium border bg-slate-500/10 text-slate-300 border-slate-500/20">
-                          {expense.wallet_name}
-                        </span>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-right font-jetbrains text-red-400 font-semibold text-sm tabular-nums">
-                      -{formatRupiah(expense.amount)}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button 
-                          onClick={() => {
-                            setEditingTransaction(expense as any);
-                            setIsExpenseModalOpen(true);
-                          }} 
-                          className="p-1.5 rounded-md hover:bg-slate-700/50 text-slate-500 hover:text-slate-300 transition-colors" 
-                          title="Edit"
-                        >
-                          <Pencil className="h-3.5 w-3.5" />
-                        </button>
-                        <button onClick={() => handleDelete(expense.id)} className="p-1.5 rounded-md hover:bg-red-500/10 text-slate-500 hover:text-red-400 transition-colors" title="Delete">
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
+        {/* TABEL PENGELUARAN */}
+        <div className="bg-slate-900/40 backdrop-blur-sm border border-slate-800/50 rounded-xl p-4 md:p-6 w-full overflow-hidden">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold text-white">Cash Out (Pengeluaran Uang)</h3>
+          </div>
+          {/* WRAPPER OVERFLOW-X-AUTO UNTUK MOBILE */}
+          <div className="overflow-x-auto w-full pb-2">
+            <Table className="min-w-[800px] w-full">
+              <TableHeader>
+                <TableRow className="border-slate-800/50">
+                  <TableHead className="text-slate-300">Date</TableHead>
+                  <TableHead className="text-slate-300">Description</TableHead>
+                  <TableHead className="text-slate-300">Category</TableHead>
+                  <TableHead className="text-slate-300">Wallet</TableHead>
+                  <TableHead className="text-right text-slate-300">Amount</TableHead>
+                  <TableHead className="text-right text-slate-300 w-[80px]">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredExpenses.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center py-12">
+                      <div className="flex flex-col items-center gap-3">
+                        <FolderOpen className="h-12 w-12 text-slate-700/60" strokeWidth={1} />
+                        <p className="text-slate-500 text-sm">No expense transactions recorded yet.</p>
                       </div>
                     </TableCell>
                   </TableRow>
-                );
-              })
-            )}
-          </TableBody>
-        </Table>
-      </div>
+                ) : (
+                  filteredExpenses.map((expense) => {
+                    const expWallet = wallets.find(w => w.id === expense.from_wallet_id);
+                    return (
+                      <TableRow key={expense.id} className="border-slate-800/50 hover:bg-slate-800/40 transition-colors group md:hover:bg-slate-800/40">
+                        <TableCell className="text-slate-300 text-sm whitespace-nowrap">{formatDate(expense.date)}</TableCell>
+                        <TableCell className="text-slate-300 text-sm max-w-[200px] truncate" title={expense.description || ""}>{expense.description || "-"}</TableCell>
+                        <TableCell className="whitespace-nowrap">
+                          <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-medium border ${getGhostBadgeClasses("red")}`}>
+                            {expense.expense_category || "Uncategorized"}
+                          </span>
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap">
+                          {expWallet ? (
+                            <span className="inline-flex px-2.5 py-1 rounded-full text-xs font-medium border bg-slate-500/10 text-slate-300 border-slate-500/20">
+                              {expWallet.name}
+                            </span>
+                          ) : (
+                            <span className="inline-flex px-2.5 py-1 rounded-full text-xs font-medium border bg-slate-500/10 text-slate-300 border-slate-500/20">
+                              {expense.wallet_name}
+                            </span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right font-jetbrains text-red-400 font-semibold text-sm tabular-nums whitespace-nowrap">
+                          -{formatRupiah(expense.amount)}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex items-center justify-end gap-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+                            <button 
+                              onClick={() => {
+                                setEditingTransaction(expense as any);
+                                setIsExpenseModalOpen(true);
+                              }} 
+                              className="p-1.5 md:p-2 rounded-md border border-slate-700 md:border-transparent md:hover:bg-slate-700/50 text-slate-400 hover:text-slate-200 transition-colors" 
+                              title="Edit"
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                            </button>
+                            <button onClick={() => handleDelete(expense.id)} className="p-1.5 md:p-2 rounded-md border border-slate-700 md:border-transparent md:hover:bg-red-500/10 text-slate-400 hover:text-red-400 transition-colors" title="Delete">
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </div>
       </div>
 
       <Dialog open={isIncomeModalOpen} onOpenChange={(open) => { setIsIncomeModalOpen(open); if (!open) setEditingTransaction(null); }}>
-        <DialogContent className="sm:max-w-[600px] bg-slate-900 border-slate-800 text-white max-h-[90vh] overflow-y-auto">
+        <DialogContent className="w-[95vw] sm:max-w-[600px] bg-slate-900 border-slate-800 text-white max-h-[90vh] overflow-y-auto rounded-xl">
           <DialogHeader>
             <DialogTitle className="text-white">{editingTransaction ? "Edit Transaction" : "Add Income Transaction"}</DialogTitle>
           </DialogHeader>
@@ -1732,7 +1747,7 @@ function TransactionsDashboard() {
       </Dialog>
 
       <Dialog open={isExpenseModalOpen} onOpenChange={(open) => { setIsExpenseModalOpen(open); if (!open) setEditingTransaction(null); }}>
-        <DialogContent className="sm:max-w-[500px] bg-slate-900 border-slate-800 text-white">
+        <DialogContent className="w-[95vw] sm:max-w-[500px] bg-slate-900 border-slate-800 text-white rounded-xl">
           <DialogHeader>
             <DialogTitle className="text-white">Add Expense</DialogTitle>
           </DialogHeader>
