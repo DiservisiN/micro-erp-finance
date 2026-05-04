@@ -127,6 +127,86 @@ function TransactionTable({
     </Table>
   );
 }
+// DOKUMENTASI: Komponen khusus untuk menghitung dan menampilkan Neraca Keuangan (Balance Sheet)
+function BalanceSheetView() {
+  const { wallets, products, investments, debts } = useFinanceContext();
+
+  // 1. Hitung HARTA (Aktiva)
+  const totalKas = wallets.reduce((sum, w) => sum + (w.balance || 0), 0);
+  const totalPiutang = debts.filter(d => d.type === 'receivable' && d.status === 'unpaid').reduce((sum, d) => sum + d.amount, 0);
+  const totalPersediaan = products.reduce((sum, p) => sum + (p.stock * p.costPrice), 0);
+  const totalInvestasi = investments.reduce((sum, inv) => sum + (inv.quantity * inv.currentPrice), 0);
+  const totalAktiva = totalKas + totalPiutang + totalPersediaan + totalInvestasi;
+
+  // 2. Hitung HUTANG (Kewajiban)
+  const totalHutang = debts.filter(d => d.type === 'payable' && d.status === 'unpaid').reduce((sum, d) => sum + d.amount, 0);
+
+  // 3. Hitung MODAL (Ekuitas) = Harta - Hutang
+  const totalModal = totalAktiva - totalHutang;
+
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full">
+      {/* Kolom Kiri: HARTA (Aktiva) */}
+      <div className="bg-slate-900/40 backdrop-blur-sm border border-slate-800/50 rounded-xl p-6">
+        <h3 className="text-lg font-semibold text-white mb-4 border-b border-slate-800/50 pb-2">Harta (Aktiva)</h3>
+        <div className="space-y-3">
+          <div className="flex justify-between items-center text-sm">
+            <span className="text-slate-400">Kas & Bank (Wallets)</span>
+            <span className="text-slate-200 font-mono">{formatRupiah(totalKas)}</span>
+          </div>
+          <div className="flex justify-between items-center text-sm">
+            <span className="text-slate-400">Piutang Pelanggan</span>
+            <span className="text-slate-200 font-mono">{formatRupiah(totalPiutang)}</span>
+          </div>
+          <div className="flex justify-between items-center text-sm">
+            <span className="text-slate-400">Persediaan Barang (Inventory)</span>
+            <span className="text-slate-200 font-mono">{formatRupiah(totalPersediaan)}</span>
+          </div>
+          <div className="flex justify-between items-center text-sm">
+            <span className="text-slate-400">Investasi Jangka Panjang</span>
+            <span className="text-slate-200 font-mono">{formatRupiah(totalInvestasi)}</span>
+          </div>
+          <div className="flex justify-between items-center pt-3 border-t border-slate-800/50 mt-2">
+            <span className="font-semibold text-emerald-400">Total Harta</span>
+            <span className="font-bold text-emerald-400 font-mono">{formatRupiah(totalAktiva)}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Kolom Kanan: HUTANG & MODAL (Pasiva) */}
+      <div className="flex flex-col gap-6">
+        <div className="bg-slate-900/40 backdrop-blur-sm border border-slate-800/50 rounded-xl p-6">
+          <h3 className="text-lg font-semibold text-white mb-4 border-b border-slate-800/50 pb-2">Hutang (Kewajiban)</h3>
+          <div className="space-y-3">
+            <div className="flex justify-between items-center text-sm">
+              <span className="text-slate-400">Hutang Usaha / Kasbon</span>
+              <span className="text-red-400 font-mono">{formatRupiah(totalHutang)}</span>
+            </div>
+            <div className="flex justify-between items-center pt-3 border-t border-slate-800/50 mt-2">
+              <span className="font-semibold text-red-400">Total Hutang</span>
+              <span className="font-bold text-red-400 font-mono">{formatRupiah(totalHutang)}</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-slate-900/40 backdrop-blur-sm border border-orange-500/30 ring-1 ring-orange-500/10 rounded-xl p-6 shadow-[0_0_15px_rgba(249,115,22,0.05)]">
+          <h3 className="text-lg font-semibold text-white mb-4 border-b border-slate-800/50 pb-2">Modal (Ekuitas)</h3>
+          <div className="space-y-3">
+            <div className="flex justify-between items-center text-sm">
+              <span className="text-slate-400">Kekayaan Bersih (Net Worth)</span>
+              <span className="text-orange-400 font-mono">{formatRupiah(totalModal)}</span>
+            </div>
+            <div className="flex justify-between items-center pt-3 border-t border-slate-800/50 mt-2">
+              <span className="font-semibold text-orange-400">Total Pasiva (Hutang + Modal)</span>
+              {/* Sesuai rumus akuntansi, Harta harus selalu persis sama dengan Total Pasiva */}
+              <span className="font-bold text-orange-400 font-mono">{formatRupiah(totalHutang + totalModal)}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function ReportsPage() {
   // Wire up to global context instead of Supabase
@@ -305,6 +385,7 @@ export default function ReportsPage() {
         <div className="flex flex-col gap-4 mb-6 bg-slate-900/50 backdrop-blur-sm border border-slate-800/50 rounded-xl p-6 w-full">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4 w-full">
             <TabsList className="flex flex-wrap gap-2 bg-slate-800/50 h-auto p-1 w-full">
+              <TabsTrigger value="balance-sheet" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-orange-500 data-[state=active]:to-orange-600 data-[state=active]:text-white data-[state=active]:shadow-[0_0_15px_rgba(249,115,22,0.4)] transition-all rounded-full px-4 py-2">  Neraca Keuangan</TabsTrigger>
               <TabsTrigger value="all" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-orange-500 data-[state=active]:to-orange-600 data-[state=active]:text-white data-[state=active]:shadow-[0_0_15px_rgba(249,115,22,0.4)] transition-all rounded-full px-4 py-2">{reportsLabels.filters.all}</TabsTrigger>
               <TabsTrigger value="income" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-orange-500 data-[state=active]:to-orange-600 data-[state=active]:text-white data-[state=active]:shadow-[0_0_15px_rgba(249,115,22,0.4)] transition-all rounded-full px-4 py-2">{reportsLabels.filters.income}</TabsTrigger>
               <TabsTrigger value="operating-expenses" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-orange-500 data-[state=active]:to-orange-600 data-[state=active]:text-white data-[state=active]:shadow-[0_0_15px_rgba(249,115,22,0.4)] transition-all rounded-full px-4 py-2">{reportsLabels.filters.operatingExpenses}</TabsTrigger>
@@ -384,6 +465,18 @@ export default function ReportsPage() {
             />
           </div>
         </TabsContent>
+        
+        <TabsContent value="balance-sheet">
+  <div className="bg-slate-900/40 backdrop-blur-sm border border-slate-800/50 rounded-xl p-6 w-full">
+    <div className="flex items-center justify-between mb-6">
+      <div>
+        <h3 className="text-lg font-semibold text-white">Neraca Keuangan (Balance Sheet)</h3>
+        <p className="text-slate-400 text-sm">Ringkasan posisi keuangan: Harta, Hutang, dan Modal Bersih.</p>
+      </div>
+    </div>
+    <BalanceSheetView />
+  </div>
+</TabsContent>
       </Tabs>
 
       {/* Receipt Preview Dialog */}

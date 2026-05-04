@@ -424,6 +424,9 @@ export default function Home() {
           <DebtTableCard title="Piutang Belum Dibayar (Receivables)" items={activeReceivables} accent="green" emptyMsg="Tidak ada piutang aktif." />
           <DebtTableCard title="Hutang Belum Dibayar (Payables)" items={activePayables} accent="red" emptyMsg="Kamu tidak memiliki tanggungan hutang." />
         </div>
+        
+        {/* NERACA KEUANGAN */}
+        <BalanceSheetView />
       </div>
     </div>
   );
@@ -522,4 +525,84 @@ function shortCurrency(value: number) {
   if (absValue >= 1_000_000) return `${sign}Rp ${(absValue / 1_000_000).toFixed(1)}jt`;
   if (absValue >= 1_000) return `${sign}Rp ${(absValue / 1_000).toFixed(1)}rb`;
   return `${sign}Rp ${absValue}`;
+}
+
+// DOKUMENTASI: Komponen untuk menghitung dan menampilkan Neraca Keuangan (Balance Sheet)
+function BalanceSheetView() {
+  const { wallets, products, investments, debts } = useFinanceContext();
+
+  // 1. Hitung HARTA (Aktiva)
+  const totalKas = wallets.reduce((sum, w) => sum + (w.balance || 0), 0);
+  const totalPiutang = debts.filter(d => d.type === 'receivable' && d.status === 'unpaid').reduce((sum, d) => sum + d.amount, 0);
+  const totalPersediaan = products.reduce((sum, p) => sum + (p.stock * p.costPrice), 0);
+  const totalInvestasi = investments.reduce((sum, inv) => sum + (inv.quantity * inv.currentPrice), 0);
+  const totalAktiva = totalKas + totalPiutang + totalPersediaan + totalInvestasi;
+
+  // 2. Hitung HUTANG (Kewajiban)
+  const totalHutang = debts.filter(d => d.type === 'payable' && d.status === 'unpaid').reduce((sum, d) => sum + d.amount, 0);
+
+  // 3. Hitung MODAL (Ekuitas) = Harta - Hutang
+  const totalModal = totalAktiva - totalHutang;
+
+  return (
+    <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 md:gap-6 w-full mt-6">
+      {/* Kolom Kiri: HARTA (Aktiva) */}
+      <div className="bg-slate-900/40 backdrop-blur-sm border border-slate-800/50 rounded-xl p-5 md:p-6 w-full h-fit">
+        <h3 className="text-base md:text-lg font-semibold text-white mb-4 border-b border-slate-800/50 pb-2">Harta (Aktiva)</h3>
+        <div className="space-y-3">
+          <div className="flex justify-between items-center text-xs md:text-sm">
+            <span className="text-slate-400">Kas & Bank (Wallets)</span>
+            <span className="text-slate-200 font-mono">{formatRupiah(totalKas)}</span>
+          </div>
+          <div className="flex justify-between items-center text-xs md:text-sm">
+            <span className="text-slate-400">Piutang Pelanggan</span>
+            <span className="text-slate-200 font-mono">{formatRupiah(totalPiutang)}</span>
+          </div>
+          <div className="flex justify-between items-center text-xs md:text-sm">
+            <span className="text-slate-400">Persediaan Barang (Inventory)</span>
+            <span className="text-slate-200 font-mono">{formatRupiah(totalPersediaan)}</span>
+          </div>
+          <div className="flex justify-between items-center text-xs md:text-sm">
+            <span className="text-slate-400">Investasi Jangka Panjang</span>
+            <span className="text-slate-200 font-mono">{formatRupiah(totalInvestasi)}</span>
+          </div>
+          <div className="flex justify-between items-center pt-3 border-t border-slate-800/50 mt-2">
+            <span className="font-semibold text-emerald-400 text-xs md:text-sm">Total Harta</span>
+            <span className="font-bold text-emerald-400 font-mono">{formatRupiah(totalAktiva)}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Kolom Kanan: HUTANG & MODAL (Pasiva) */}
+      <div className="flex flex-col gap-4 md:gap-6 w-full">
+        <div className="bg-slate-900/40 backdrop-blur-sm border border-slate-800/50 rounded-xl p-5 md:p-6 w-full h-fit">
+          <h3 className="text-base md:text-lg font-semibold text-white mb-4 border-b border-slate-800/50 pb-2">Hutang (Kewajiban)</h3>
+          <div className="space-y-3">
+            <div className="flex justify-between items-center text-xs md:text-sm">
+              <span className="text-slate-400">Hutang Usaha / Kasbon</span>
+              <span className="text-red-400 font-mono">{formatRupiah(totalHutang)}</span>
+            </div>
+            <div className="flex justify-between items-center pt-3 border-t border-slate-800/50 mt-2">
+              <span className="font-semibold text-red-400 text-xs md:text-sm">Total Hutang</span>
+              <span className="font-bold text-red-400 font-mono">{formatRupiah(totalHutang)}</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-slate-900/40 backdrop-blur-sm border border-orange-500/30 ring-1 ring-orange-500/10 rounded-xl p-5 md:p-6 shadow-[0_0_15px_rgba(249,115,22,0.05)] w-full h-fit">
+          <h3 className="text-base md:text-lg font-semibold text-white mb-4 border-b border-slate-800/50 pb-2">Modal (Ekuitas)</h3>
+          <div className="space-y-3">
+            <div className="flex justify-between items-center text-xs md:text-sm">
+              <span className="text-slate-400">Kekayaan Bersih (Net Worth)</span>
+              <span className="text-orange-400 font-mono">{formatRupiah(totalModal)}</span>
+            </div>
+            <div className="flex justify-between items-center pt-3 border-t border-slate-800/50 mt-2">
+              <span className="font-semibold text-orange-400 text-xs md:text-sm">Total Pasiva (Hutang + Modal)</span>
+              <span className="font-bold text-orange-400 font-mono">{formatRupiah(totalHutang + totalModal)}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }

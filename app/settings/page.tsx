@@ -4,7 +4,6 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { getSupabaseClient } from "@/lib/supabase/client";
 import {
   Table,
   TableBody,
@@ -21,16 +20,24 @@ import {
 } from "@/components/ui/dialog";
 import { Pencil, Trash2, DownloadCloud, UploadCloud, MonitorSmartphone, Plus } from "lucide-react";
 import { useFinanceContext } from "@/context/FinanceContext";
+import { useAppContext } from "@/context/AppContext"; // <-- INI KUNCI UTAMANYA
 import { toast } from "sonner";
 import { formatRupiah } from "@/lib/utils";
+import { getSupabaseClient } from "@/lib/supabase/client";
+
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState("general");
   const supabase = getSupabaseClient();
   const [isRestoring, setIsRestoring] = useState(false);
 
+  // 1. Mengambil data dari Global Context (Finance)
   const { 
     wallets, 
     categories, 
+    products,       
+    transactions,   
+    debts,          
+    investments,
     addCategory, 
     deleteCategory, 
     editCategory,
@@ -39,7 +46,15 @@ export default function SettingsPage() {
     deleteWallet     
   } = useFinanceContext();
 
-  // Category form state
+  // 2. Mengambil data pengaturan navigasi dari Global Context (App)
+  // Perbaikan: Kita tidak lagi memakai useState lokal untuk navigasi!
+  const { 
+    isCompact, setIsCompact, 
+    landingPage, setLandingPage, 
+    menuItems, setMenuItems 
+  } = useAppContext();
+
+  // Category form state (Lokal)
   const [categoryName, setCategoryName] = useState("");
   const [categoryType, setCategoryType] = useState<"inventory" | "expense">("inventory");
   const [categoryDescription, setCategoryDescription] = useState("");
@@ -49,7 +64,7 @@ export default function SettingsPage() {
   const [editCategoryType, setEditCategoryType] = useState<"inventory" | "expense">("inventory");
   const [editCategoryDescription, setEditCategoryDescription] = useState("");
 
-  // Wallet modal state
+  // Wallet modal state (Lokal)
   const [isWalletModalOpen, setIsWalletModalOpen] = useState(false);
   const [walletName, setWalletName] = useState("");
   const [walletType, setWalletType] = useState<"business" | "personal">("business");
@@ -58,22 +73,7 @@ export default function SettingsPage() {
   const [editWalletTarget, setEditWalletTarget] = useState<typeof wallets[0] | null>(null);
   const [isSavingWallet, setIsSavingWallet] = useState(false);
 
-  // Navigation preferences state
-  const [landingPage, setLandingPage] = useState("Dashboard");
-  const [isCompact, setIsCompact] = useState(false);
-
-  // Sidebar menu state
-  const [menuItems, setMenuItems] = useState([
-    { id: "dashboard", name: "Dashboard", visible: true },
-    { id: "inventory", name: "Inventory", visible: true },
-    { id: "repairs", name: "Repairs", visible: true },
-    { id: "transactions", name: "Transactions", visible: true },
-    { id: "reports", name: "Reports", visible: true },
-    { id: "debts", name: "Debts", visible: true },
-    { id: "investments", name: "Investments", visible: true },
-  ]);
-
-  // Handler functions
+  // --- HANDLER FUNCTIONS ---
   const handleAddCategory = async (e: React.FormEvent) => {
     e.preventDefault();
     if (categoryName) {
@@ -166,24 +166,47 @@ export default function SettingsPage() {
     setIsWalletModalOpen(false);
   };
 
-  // Mock functions for new features
   const handleBackupData = () => {
-    toast.success("Processing backup... (This is a visual demo)");
+    try {
+      const backupData = {
+        exportDate: new Date().toISOString(),
+        wallets: wallets,
+        categories: categories,
+        products: products,
+        transactions: transactions,
+        debts: debts,
+        investments: investments,
+      };
+
+      const dataString = JSON.stringify(backupData, null, 2);
+      const blob = new Blob([dataString], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `MicroERP_Backup_${new Date().toISOString().split('T')[0]}.json`;
+      
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      toast.success("Database backup downloaded successfully!");
+    } catch (error) {
+      console.error("Backup error:", error);
+      toast.error("Failed to generate backup file.");
+    }
   };
 
- // DOKUMENTASI: Mesin pemulihan data (Restore) yang akan menghapus data lama dan memasukkan data dari file JSON
   const handleRestoreData = () => {
-    // 1. Buat elemen input file tersembunyi
     const fileInput = document.createElement("input");
     fileInput.type = "file";
     fileInput.accept = ".json,application/json";
 
-    // 2. Tentukan apa yang terjadi saat file JSON dipilih
     fileInput.onchange = async (e: any) => {
       const file = e.target.files[0];
       if (!file) return;
 
-      // Konfirmasi keamanan tingkat tinggi
       if (!window.confirm("PERINGATAN KRITIKAL: Proses ini akan MENGHAPUS SEMUA DATA LAMA di database dan menggantinya dengan data dari file backup. Lanjutkan?")) {
         return;
       }
@@ -198,16 +221,12 @@ export default function SettingsPage() {
           const jsonText = event.target?.result as string;
           const data = JSON.parse(jsonText);
 
-          // Validasi file (memastikan ini file backup MicroERP kita)
           if (!data.wallets || !data.transactions) {
             throw new Error("File backup tidak valid atau rusak.");
           }
 
           toast.success("Memulai proses restore data...");
 
-          // --- FASE 1: MENGHAPUS DATA LAMA ---
-          // Urutan penghapusan sangat penting untuk menghindari error Foreign Key!
-          // Kita hapus anak-anaknya dulu (Transactions), baru induknya (Wallets, Products)
           await supabase.from("transactions").delete().neq("id", "0");
           await supabase.from("products").delete().neq("id", "0");
           await supabase.from("debts").delete().neq("id", "0");
@@ -215,10 +234,6 @@ export default function SettingsPage() {
           await supabase.from("categories").delete().neq("id", "0");
           await supabase.from("wallets").delete().neq("id", "0");
 
-          // --- FASE 2: MEMASUKKAN DATA BARU ---
-          // Urutan pemasukan adalah kebalikan dari penghapusan (Induk dulu, baru anak)
-          // Kita juga melakukan pemetaan (mapping) untuk mengubah gaya tulisan camelCase menjadi snake_case ala database
-          
           if (data.wallets.length > 0) {
             const walletsPayload = data.wallets.map((w: any) => ({
               id: w.id, name: w.name, type: w.type, wallet_type: w.walletType, balance: w.balance
@@ -263,7 +278,6 @@ export default function SettingsPage() {
 
           toast.success("Restore berhasil! Memuat ulang aplikasi...");
           
-          // Muat ulang halaman agar Global Context menarik data segar dari database
           setTimeout(() => {
             window.location.reload();
           }, 1500);
@@ -278,15 +292,13 @@ export default function SettingsPage() {
       reader.readAsText(file);
     };
 
-    // 3. Pemicu klik untuk membuka jendela pemilihan file di komputer/HP
     fileInput.click();
   };
 
   return (
     <div className="flex flex-col w-full gap-4 md:gap-6 bg-[#020617] min-h-screen p-4 md:p-6 overflow-x-hidden">
       
-      {/* 1. TOP NAVIGATION BAR (RESPONSIVE SCROLL) */}
-      {/* PERBAIKAN: Menambahkan overflow-x-auto agar tab tidak memotong layar di HP */}
+      {/* TOP NAVIGATION BAR */}
       <div className="w-full overflow-x-auto bg-slate-900/40 border border-slate-800/50 p-2 md:p-4 rounded-xl backdrop-blur-sm">
         <div className="flex flex-row min-w-max gap-4 md:gap-8 px-2">
           <button 
@@ -316,14 +328,13 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      {/* 2. SETTINGS CONTENT */}
+      {/* SETTINGS CONTENT */}
       <div className="w-full flex flex-col gap-4 md:gap-6">
         
-        {/* === KONTEN TAB GENERAL === */}
+        {/* KONTEN TAB GENERAL */}
         {activeTab === "general" && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
             
-            {/* Theme & Display (Pengganti Language yang dihapus) */}
             <div className="w-full bg-slate-900/40 border border-slate-800/50 p-5 md:p-6 rounded-xl backdrop-blur-sm flex flex-col gap-4 h-fit">
               <div>
                 <h3 className="text-base md:text-lg font-semibold text-white">Theme & Display</h3>
@@ -342,12 +353,9 @@ export default function SettingsPage() {
               </div>
             </div>
 
-            {/* Backup & Data Management (Fitur Baru) */}
             <div className="w-full bg-slate-900/40 border border-slate-800/50 p-5 md:p-6 rounded-xl backdrop-blur-sm flex flex-col gap-4 h-fit">
               <div>
-                <Button onClick={handleRestoreData} disabled={isRestoring} variant="outline" className="w-full sm:w-auto border-slate-600 text-slate-300 hover:bg-slate-800">
-                    <UploadCloud className="h-4 w-4 mr-2" /> {isRestoring ? "Restoring..." : "Restore"}
-                  </Button>
+                <h3 className="text-base md:text-lg font-semibold text-white">Data Management</h3>
                 <p className="text-xs md:text-sm text-slate-400">Backup or restore your entire ERP database.</p>
               </div>
               
@@ -367,8 +375,8 @@ export default function SettingsPage() {
                     <h4 className="text-sm font-medium text-white">Import Database</h4>
                     <p className="text-xs text-slate-400 mt-1">Restore from a previous backup file.</p>
                   </div>
-                  <Button onClick={handleRestoreData} variant="outline" className="w-full sm:w-auto border-slate-600 text-slate-300 hover:bg-slate-800">
-                    <UploadCloud className="h-4 w-4 mr-2" /> Restore
+                  <Button onClick={handleRestoreData} disabled={isRestoring} variant="outline" className="w-full sm:w-auto border-slate-600 text-slate-300 hover:bg-slate-800">
+                    <UploadCloud className="h-4 w-4 mr-2" /> {isRestoring ? "Restoring..." : "Restore"}
                   </Button>
                 </div>
               </div>
@@ -377,11 +385,10 @@ export default function SettingsPage() {
           </div>
         )}
 
-        {/* === KONTEN TAB BUSINESS === */}
+        {/* KONTEN TAB BUSINESS */}
         {activeTab === "business" && (
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 md:gap-6">
             
-            {/* Form Tambah Kategori */}
             <div className="xl:col-span-1 w-full bg-slate-900/40 backdrop-blur-sm border border-slate-800/50 rounded-xl p-5 md:p-6 h-fit">
               <h3 className="text-base md:text-lg font-semibold text-white mb-1">Add New Category</h3>
               <p className="text-slate-400 text-xs md:text-sm mb-4">Create a new category tag.</p>
@@ -426,7 +433,6 @@ export default function SettingsPage() {
               </form>
             </div>
 
-            {/* Tabel Kategori */}
             <div className="xl:col-span-2 w-full bg-slate-900/40 backdrop-blur-sm border border-slate-800/50 rounded-xl p-5 md:p-6 overflow-hidden">
               <h3 className="text-base md:text-lg font-semibold text-white mb-1">Manage Categories</h3>
               <p className="text-slate-400 text-xs md:text-sm mb-4">View and edit your existing categories.</p>
@@ -478,7 +484,7 @@ export default function SettingsPage() {
           </div>
         )}
 
-        {/* === KONTEN TAB WALLETS === */}
+        {/* KONTEN TAB WALLETS */}
         {activeTab === "wallets" && (
           <div className="w-full flex flex-col gap-4 md:gap-6">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-slate-900/40 p-4 md:p-6 rounded-xl border border-slate-800/50">
@@ -504,24 +510,19 @@ export default function SettingsPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {wallets.map((wallet) => (
                 <div key={wallet.id} className="group bg-slate-900/40 border border-slate-800/50 p-5 rounded-xl backdrop-blur-sm hover:border-orange-500/50 transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_0_15px_rgba(249,115,22,0.1)] relative overflow-hidden">
-                  
-                  {/* Decorative background glow */}
                   <div className="absolute -right-6 -top-6 w-24 h-24 bg-slate-800/50 rounded-full blur-2xl group-hover:bg-orange-500/10 transition-colors"></div>
-
                   <div className="flex justify-between items-start mb-6 relative z-10">
                     <div className="text-white font-medium tracking-wide">{wallet.name}</div>
                     <span className="text-[10px] font-bold tracking-wider uppercase bg-slate-800/80 border border-slate-700 text-slate-300 px-2 py-1 rounded">
                       {wallet.walletType}
                     </span>
                   </div>
-                  
                   <div className="mb-6 relative z-10">
                      <p className="text-xs text-slate-400 mb-1">Balance</p>
                      <div className="text-2xl font-bold font-mono text-white truncate" title={formatRupiah(wallet.balance)}>
                         {formatRupiah(wallet.balance)}
                      </div>
                   </div>
-                  
                   <div className="flex gap-2 justify-end pt-4 border-t border-slate-800/50 relative z-10">
                     <button
                       type="button"
@@ -544,10 +545,9 @@ export default function SettingsPage() {
           </div>
         )}
 
-        {/* === KONTEN TAB NAVIGATION === */}
+        {/* KONTEN TAB NAVIGATION */}
         {activeTab === "navigation" && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
-            
             <div className="w-full bg-slate-900/40 border border-slate-800/50 p-5 md:p-6 rounded-xl backdrop-blur-sm h-fit space-y-6">
               <div>
                 <h3 className="text-base md:text-lg font-semibold text-white">App Preferences</h3>
@@ -565,9 +565,10 @@ export default function SettingsPage() {
                     onChange={(e) => setLandingPage(e.target.value)}
                     className="bg-slate-900 border border-slate-700 text-white text-sm rounded-lg px-3 py-2 w-full sm:w-auto focus:outline-none focus:ring-1 focus:ring-orange-500"
                   >
-                    <option>Dashboard</option>
-                    <option>Transactions</option>
-                    <option>Inventory</option>
+                    <option value="Dashboard">Dashboard</option>
+                    <option value="POS / Kasir">POS / Kasir</option> {/* <-- TAMBAHKAN BARIS INI */}
+                    <option value="Transactions">Transactions</option>
+                    <option value="Inventory">Inventory</option>
                   </select>
                 </div>
 
@@ -608,13 +609,12 @@ export default function SettingsPage() {
                 ))}
               </div>
             </div>
-
           </div>
         )}
 
       </div>
 
-      {/* Wallet Add/Edit Dialog */}
+      {/* Wallet Dialog */}
       <Dialog open={isWalletModalOpen} onOpenChange={setIsWalletModalOpen}>
         <DialogContent className="w-[95vw] sm:max-w-[425px] bg-slate-900 border-slate-800 text-white rounded-xl">
           <DialogHeader>
@@ -628,7 +628,6 @@ export default function SettingsPage() {
                 required
                 value={walletName}
                 onChange={(e) => setWalletName(e.target.value)}
-                placeholder="e.g. BCA Utama"
                 className="bg-slate-800/50 border-slate-700/50 text-white focus:border-slate-600 focus:ring-orange-500/50"
               />
             </div>
@@ -655,7 +654,6 @@ export default function SettingsPage() {
                 step="0.01"
                 value={walletBalance}
                 onChange={(e) => setWalletBalance(e.target.value)}
-                placeholder="0"
                 className="bg-slate-800/50 border-slate-700/50 text-white focus:border-slate-600 focus:ring-orange-500/50"
               />
             </div>
@@ -664,14 +662,14 @@ export default function SettingsPage() {
                 Cancel
               </Button>
               <Button type="submit" disabled={isSavingWallet} className="bg-gradient-to-r from-orange-500 to-orange-600 text-white hover:from-orange-600 hover:to-orange-700 shadow-[0_0_15px_rgba(249,115,22,0.4)] transition-all">
-                {isSavingWallet ? "Saving..." : (editWalletTarget ? "Update" : "Create Wallet")}
+                {isSavingWallet ? "Saving..." : (editWalletTarget ? "Update" : "Create")}
               </Button>
             </div>
           </form>
         </DialogContent>
       </Dialog>
 
-      {/* Edit Category Dialog */}
+      {/* Category Dialog */}
       <Dialog open={isCategoryEditOpen} onOpenChange={setIsCategoryEditOpen}>
         <DialogContent className="w-[95vw] sm:max-w-[425px] bg-slate-900 border-slate-800 text-white rounded-xl">
           <DialogHeader>
@@ -716,7 +714,6 @@ export default function SettingsPage() {
           </form>
         </DialogContent>
       </Dialog>
-
     </div>
   );
 }
