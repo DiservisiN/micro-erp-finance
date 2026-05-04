@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
-import { AlertCircleIcon, WalletIcon, TrendingUpIcon, Trash2, Pencil } from "lucide-react";
+import { AlertCircleIcon, WalletIcon, TrendingUpIcon, Trash2, Pencil, ShieldAlert } from "lucide-react";
 import { toast } from "sonner";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { formatRupiah } from "@/lib/utils";
 import { useFinanceContext } from "@/context/FinanceContext";
+import { useAppContext } from "@/context/AppContext"; // <-- IMPOR BARU
 
 type InvestmentType = "gold" | "bibit";
 
@@ -24,6 +25,7 @@ type Investment = {
 };
 
 export default function InvestmentsPage() {
+  const { mode, setMode } = useAppContext(); // <-- MENGAMBIL STATE MODE
   const { 
     wallets, 
     goldPrice, 
@@ -65,6 +67,31 @@ export default function InvestmentsPage() {
   const [currentPrice, setCurrentPrice] = useState("");
 
   const supabase = getSupabaseClient();
+
+  // === PENGAMAN HALAMAN (EARLY RETURN) ===
+  // Jika sedang mode bisnis, tampilkan pesan peringatan ramah ini
+  if (mode === "business") {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[80vh] w-full bg-slate-50 dark:bg-[#020617] p-6 transition-colors duration-300">
+        <div className="bg-white dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800/50 rounded-2xl p-8 max-w-md text-center shadow-sm dark:shadow-none">
+          <div className="mx-auto w-16 h-16 bg-blue-50 dark:bg-blue-500/10 flex items-center justify-center rounded-full mb-4">
+            <TrendingUpIcon className="h-8 w-8 text-blue-600 dark:text-blue-400" />
+          </div>
+          <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-2">Area Khusus Pribadi</h2>
+          <p className="text-slate-500 dark:text-slate-400 text-sm mb-6">
+            Portofolio investasi dan perhitungan Zakat Mal hanya bisa dikelola dan dilihat saat Anda berada di mode <b>Personal</b>.
+          </p>
+          <Button 
+            onClick={() => setMode("personal")}
+            className="bg-blue-600 hover:bg-blue-700 text-white w-full transition-all shadow-[0_4px_14px_rgba(37,99,235,0.3)]"
+          >
+            Beralih ke Mode Personal
+          </Button>
+        </div>
+      </div>
+    );
+  }
+  // =======================================
 
   async function handleEditSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();

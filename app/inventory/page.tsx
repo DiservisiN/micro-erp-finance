@@ -2,7 +2,7 @@
 
 import { FormEvent, useEffect, useId, useMemo, useRef, useState } from "react";
 import Papa from "papaparse";
-import { Upload, Download, CheckCircle2, XCircle, Pencil, Trash } from "lucide-react";
+import { Upload, Download, CheckCircle2, XCircle, Pencil, Trash, Scale } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -96,6 +96,11 @@ export default function InventoryPage() {
   const inventoryCategories = categories.filter(c => c.type === "inventory");
 
   const [editTarget, setEditTarget] = useState<Product | null>(null);
+  const [adjustTarget, setAdjustTarget] = useState<Product | null>(null);
+  const [isAdjustOpen, setIsAdjustOpen] = useState(false);
+  const [actualStock, setActualStock] = useState("");
+  const [adjustReason, setAdjustReason] = useState("rusak");
+  const [isAdjusting, setIsAdjusting] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isSavingEdit, setIsSavingEdit] = useState(false);
   const [editForm, setEditForm] = useState({
@@ -225,7 +230,48 @@ export default function InventoryPage() {
     setIsEditOpen(false);
     setEditTarget(null);
   }
+async function handleAdjustStock() {
+    if (!adjustTarget) return;
+    setIsAdjusting(true);
 
+    const systemStock = adjustTarget.stock;
+    const physicalStock = Number(actualStock);
+    const difference = physicalStock - systemStock;
+
+    if (difference === 0) {
+      toast.info("Tidak ada selisih stok. Penyesuaian dibatalkan.");
+      setIsAdjusting(false);
+      setIsAdjustOpen(false);
+      return;
+    }
+
+    try {
+      // 1. Update stok produk
+      await editProduct(adjustTarget.id, { stock: physicalStock });
+
+      // 2. Jika stok berkurang (rugi/hilang/rusak), catat sebagai pengeluaran
+      if (difference < 0 && adjustReason !== "salah_input") {
+        const lossValue = Math.abs(difference) * adjustTarget.costPrice;
+        await addTransaction({
+          id: Date.now().toString(),
+          type: "expense",
+          category: "Kerugian/Penyusutan Stok",
+          amount: lossValue,
+          date: new Date().toISOString().split('T')[0],
+          notes: `Penyesuaian Stok: ${adjustTarget.name} berkurang ${Math.abs(difference)} unit karena ${adjustReason}.`,
+        });
+      }
+
+      toast.success("Stok berhasil disesuaikan!");
+      setIsAdjustOpen(false);
+      setAdjustTarget(null);
+      setActualStock("");
+    } catch (error) {
+      toast.error("Gagal melakukan penyesuaian stok.");
+    } finally {
+      setIsAdjusting(false);
+    }
+  }
   async function handleDeleteProduct(productId: string) {
     if (!window.confirm('Hapus produk ini?')) return;
     await deleteProduct(productId);
@@ -389,6 +435,18 @@ export default function InventoryPage() {
                         >
                           <Trash className="h-3.5 w-3.5" />
                         </button>
+                        <button
+                              type="button"
+                              title="Adjust Stock (Stock Opname)"
+                              onClick={() => {
+                                setAdjustTarget(product);
+                                setActualStock(String(product.stock));
+                                setIsAdjustOpen(true);
+                              }}
+                              className="p-1.5 rounded-md text-slate-400 transition-all hover:text-blue-500 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-slate-800 mr-1"
+                            >
+                              <Scale className="h-3.5 w-3.5" />
+                            </button>
                       </TableCell>
                     </TableRow>
                   ))
@@ -471,6 +529,47 @@ export default function InventoryPage() {
                 <Button variant="outline" onClick={() => { setIsEditOpen(false); setEditTarget(null); }} disabled={isSavingEdit} className="border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800">Cancel</Button>
                 <Button onClick={handleEditProduct} disabled={isSavingEdit} className="bg-orange-500 text-white hover:bg-orange-600 shadow-[0_4px_14px_rgba(249,115,22,0.3)] transition-all">
                   {isSavingEdit ? "Saving..." : "Save Changes"}
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+      {/* Dialog Penyesuaian Stok (Stock Adjustment) */}
+      <Dialog open={isAdjustOpen} onOpenChange={(v) => { setIsAdjustOpen(v); if (!v) setAdjustTarget(null); }}>
+        <DialogContent className="sm:max-w-[420px] bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white rounded-xl shadow-xl">
+          <DialogHeader>
+            <DialogTitle className="text-slate-900 dark:text-white">Stock Adjustment (Opname)</DialogTitle>
+            <DialogDescription className="text-slate-500 dark:text-slate-400">Sesuaikan stok sistem dengan stok fisik aktual.</DialogDescription>
+          </DialogHeader>
+          
+          {adjustTarget && (
+            <div className="space-y-4 pt-2">
+              <div className="rounded-lg border border-slate-200 dark:border-slate-700/50 bg-slate-50 dark:bg-slate-800/30 p-3 space-y-1 text-sm">
+                <div className="flex justify-between"><span className="text-slate-500">Produk</span><span className="font-medium text-slate-900 dark:text-white">{adjustTarget.name}</span></div>
+                <div className="flex justify-between"><span className="text-slate-500">Stok Sistem Saat Ini</span><span className="font-mono font-bold text-slate-900 dark:text-white">{adjustTarget.stock}</span></div>
+              </div>
+
+              <div className="grid gap-2">
+                <Label className="text-slate-700 dark:text-slate-300">Stok Fisik Aktual</Label>
+                <Input type="number" min="0" value={actualStock} onChange={(e) => setActualStock(e.target.value)} className="bg-white dark:bg-slate-800/50 border-slate-300 dark:border-slate-700/50 font-mono text-lg" />
+              </div>
+
+              <div className="grid gap-2">
+                <Label className="text-slate-700 dark:text-slate-300">Alasan Penyesuaian</Label>
+                <select value={adjustReason} onChange={(e) => setAdjustReason(e.target.value)} className="w-full h-10 rounded-md border border-slate-300 dark:border-slate-700/50 bg-white dark:bg-slate-800/50 px-3 text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-orange-500/50">
+                  <option value="rusak">Barang Rusak / Cacat</option>
+                  <option value="hilang">Barang Hilang</option>
+                  <option value="kadaluarsa">Barang Kadaluarsa</option>
+                  <option value="salah_input">Koreksi Salah Input Sebelumnya</option>
+                </select>
+                <p className="text-[11px] text-slate-500 mt-1">Catatan: Jika barang rusak/hilang, nilai kerugian otomatis dicatat di pembukuan.</p>
+              </div>
+
+              <div className="flex justify-end gap-3 pt-4">
+                <Button variant="outline" onClick={() => setIsAdjustOpen(false)} className="border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800">Batal</Button>
+                <Button onClick={handleAdjustStock} disabled={isAdjusting} className="bg-blue-600 text-white hover:bg-blue-700 transition-all">
+                  {isAdjusting ? "Menyimpan..." : "Sesuaikan Stok"}
                 </Button>
               </div>
             </div>

@@ -637,7 +637,7 @@ export default function SettingsPage() {
 
       </div>
 
-      {/* Wallet Dialog */}
+     {/* Wallet Dialog */}
       <Dialog open={isWalletModalOpen} onOpenChange={setIsWalletModalOpen}>
         <DialogContent className="w-[95vw] sm:max-w-[425px] bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white rounded-xl shadow-xl">
           <DialogHeader>
@@ -654,6 +654,21 @@ export default function SettingsPage() {
                 className="bg-slate-50 dark:bg-slate-800/50 border-slate-300 dark:border-slate-700/50 text-slate-900 dark:text-white focus:border-slate-400 dark:focus:border-slate-600 focus:ring-orange-500/50"
               />
             </div>
+
+            {/* DOKUMENTASI: Ini adalah kolom pilihan Business/Personal yang sebelumnya tersembunyi */}
+            <div className="grid gap-2">
+              <Label htmlFor="wallet-usage-type" className="text-slate-700 dark:text-slate-300">Wallet Usage (Type)</Label>
+              <select
+                id="wallet-usage-type"
+                value={walletType}
+                onChange={(e) => setWalletType(e.target.value as "business" | "personal")}
+                className="flex h-10 w-full rounded-md border border-slate-300 dark:border-slate-700/50 bg-slate-50 dark:bg-slate-800/50 px-3 py-2 text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-slate-400 dark:focus:ring-orange-500/50"
+              >
+                <option value="business">Business / Toko</option>
+                <option value="personal">Personal / Pribadi</option>
+              </select>
+            </div>
+
             <div className="grid gap-2">
               <Label htmlFor="wallet-category" className="text-slate-700 dark:text-slate-300">Category</Label>
               <select

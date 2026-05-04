@@ -80,16 +80,29 @@ export default function Home() {
     return { monthlyIncome, monthlyExpenses, monthlyNetProfit };
   }, [pureMonthlyTransactions]);
 
+  // =====================================================================
+  // LOGIKA PINTAR: FILTER ASET BERDASARKAN MODE BISNIS/PRIBADI
+  // =====================================================================
   const totalWalletBalance = wallets.reduce((sum, w) => sum + (w.balance || 0), 0);
-  const totalInvestmentValue = investments.reduce((sum, inv) => sum + ((inv.quantity || 1) * (inv.currentPrice || 0)), 0);
-  const totalInventoryValue = products
-    .filter((product) => (product.status ?? "in_stock") === "in_stock")
-    .reduce((sum, item) => sum + ((item.stock || 0) * (item.costPrice || 0)), 0);
+  
+  // Investasi hanya dihitung jika mode Personal
+  const totalInvestmentValue = mode === "personal" 
+    ? investments.reduce((sum, inv) => sum + ((inv.quantity || 1) * (inv.currentPrice || 0)), 0)
+    : 0;
+    
+  // Persediaan Gudang (Inventory) hanya dihitung jika mode Bisnis
+  const totalInventoryValue = mode === "business"
+    ? products
+        .filter((product) => (product.status ?? "in_stock") === "in_stock")
+        .reduce((sum, item) => sum + ((item.stock || 0) * (item.costPrice || 0)), 0)
+    : 0;
+    
   const totalReceivables = debts
     .filter(d => d.type === 'receivable' && d.status === 'unpaid')
     .reduce((sum, d) => sum + (d.amount || 0), 0);
   
   const totalAssets = totalWalletBalance + totalInvestmentValue + totalInventoryValue + totalReceivables;
+  // =====================================================================
 
   const activeReceivables = useMemo(() => debts.filter(d => d.type === "receivable" && d.status === "unpaid"), [debts]);
   const activePayables = useMemo(() => debts.filter(d => d.type === "payable" && d.status === "unpaid"), [debts]);
@@ -507,14 +520,21 @@ function shortCurrency(value: number) {
   return `${sign}Rp ${absValue}`;
 }
 
-// DOKUMENTASI: Komponen untuk menghitung dan menampilkan Neraca Keuangan (Balance Sheet)
 function BalanceSheetView() {
+  const { mode } = useAppContext();
   const { wallets, products, investments, debts } = useFinanceContext();
 
   const totalKas = wallets.reduce((sum, w) => sum + (w.balance || 0), 0);
   const totalPiutang = debts.filter(d => d.type === 'receivable' && d.status === 'unpaid').reduce((sum, d) => sum + d.amount, 0);
-  const totalPersediaan = products.reduce((sum, p) => sum + (p.stock * p.costPrice), 0);
-  const totalInvestasi = investments.reduce((sum, inv) => sum + (inv.quantity * inv.currentPrice), 0);
+  
+  const totalPersediaan = mode === "business" 
+    ? products.reduce((sum, p) => sum + (p.stock * p.costPrice), 0) 
+    : 0;
+    
+  const totalInvestasi = mode === "personal"
+    ? investments.reduce((sum, inv) => sum + (inv.quantity * inv.currentPrice), 0)
+    : 0;
+
   const totalAktiva = totalKas + totalPiutang + totalPersediaan + totalInvestasi;
 
   const totalHutang = debts.filter(d => d.type === 'payable' && d.status === 'unpaid').reduce((sum, d) => sum + d.amount, 0);
@@ -533,14 +553,21 @@ function BalanceSheetView() {
             <span className="text-slate-600 dark:text-slate-400">Piutang Pelanggan</span>
             <span className="text-slate-800 dark:text-slate-200 font-mono">{formatRupiah(totalPiutang)}</span>
           </div>
-          <div className="flex justify-between items-center text-xs md:text-sm">
-            <span className="text-slate-600 dark:text-slate-400">Persediaan Barang (Inventory)</span>
-            <span className="text-slate-800 dark:text-slate-200 font-mono">{formatRupiah(totalPersediaan)}</span>
-          </div>
-          <div className="flex justify-between items-center text-xs md:text-sm">
-            <span className="text-slate-600 dark:text-slate-400">Investasi Jangka Panjang</span>
-            <span className="text-slate-800 dark:text-slate-200 font-mono">{formatRupiah(totalInvestasi)}</span>
-          </div>
+          
+          {mode === "business" && (
+            <div className="flex justify-between items-center text-xs md:text-sm">
+              <span className="text-slate-600 dark:text-slate-400">Persediaan Barang (Inventory)</span>
+              <span className="text-slate-800 dark:text-slate-200 font-mono">{formatRupiah(totalPersediaan)}</span>
+            </div>
+          )}
+
+          {mode === "personal" && (
+            <div className="flex justify-between items-center text-xs md:text-sm">
+              <span className="text-slate-600 dark:text-slate-400">Investasi Jangka Panjang</span>
+              <span className="text-slate-800 dark:text-slate-200 font-mono">{formatRupiah(totalInvestasi)}</span>
+            </div>
+          )}
+
           <div className="flex justify-between items-center pt-3 border-t border-slate-200 dark:border-slate-800/50 mt-2">
             <span className="font-semibold text-emerald-600 dark:text-emerald-400 text-xs md:text-sm">Total Harta</span>
             <span className="font-bold text-emerald-600 dark:text-emerald-400 font-mono">{formatRupiah(totalAktiva)}</span>
