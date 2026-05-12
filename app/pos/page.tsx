@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useMemo, FormEvent } from "react";
-import { Search, ShoppingCart, Plus, Minus, Trash2, PackageOpen, Store, Zap } from "lucide-react";
+import { useState, useMemo, FormEvent, useEffect, useRef, useId } from "react";
+import { Search, ShoppingCart, Plus, Minus, Trash2, PackageOpen, Store, Zap, Camera } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -57,13 +57,15 @@ export default function POSPage() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<"lunas" | "kasbon">("lunas");
   const [personName, setPersonName] = useState("");
+  const [isScannerOpen, setIsScannerOpen] = useState(false);
 
   const availableProducts = useMemo(() => {
     return products.filter(
       (p) => 
         (p.status ?? "in_stock") === "in_stock" && 
         p.stock > 0 &&
-        p.name.toLowerCase().includes(searchQuery.toLowerCase())
+        (p.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+         (p.barcode && p.barcode.toLowerCase().includes(searchQuery.toLowerCase())))
     );
   }, [products, searchQuery]);
 
@@ -79,6 +81,22 @@ export default function POSPage() {
       }
       return [...prevCart, { productId: product.id, name: product.name, price: product.sellingPrice, quantity: 1, maxStock: product.stock }];
     });
+  };
+
+  // LOGIKA SCANNER BARCODE
+  const handleBarcodeScanned = (scannedBarcode: string) => {
+    const foundProduct = products.find(p => p.barcode === scannedBarcode && (p.status ?? "in_stock") === "in_stock");
+    
+    if (foundProduct) {
+      if (foundProduct.stock > 0) {
+        addToCart(foundProduct);
+        toast.success(`Berhasil memindai: ${foundProduct.name}`);
+      } else {
+        toast.error(`Stok habis untuk produk: ${foundProduct.name}`);
+      }
+    } else {
+      toast.error(`Barcode ${scannedBarcode} tidak ditemukan di gudang!`);
+    }
   };
 
   const updateQuantity = (productId: string, delta: number) => {
@@ -146,7 +164,7 @@ export default function POSPage() {
       }
 
       toast.success(paymentMethod === "lunas" ? "Transaksi sukses!" : "Kasbon tercatat, stok dipotong.");
-      setCart([]); setSearchQuery(""); setPersonName("");
+      setCart([]); setSearchQuery(""); setPersonName(""); setIsScannerOpen(false);
     } catch (error) {
       toast.error("Kesalahan sistem saat checkout.");
     } finally {
@@ -262,7 +280,6 @@ export default function POSPage() {
     }
 
     toast.success("Transaksi Jasa/Layanan berhasil dicatat!");
-    // Reset Form
     setServiceAmount(""); setServiceFee(""); setServiceAdminFee("0"); setServiceSourceWalletId(""); setServiceDestWalletId(""); setServiceNotes(""); setSparepartProductId(""); setPpobProductName(""); setPpobCost(""); setPpobSellingPrice(""); setPlatformName(""); setCommissionAmount(""); setCustomerName(""); setInternetAmount(""); setEmployeeName(""); setPersonName(""); setPaymentMethod("lunas");
     setIsProcessing(false);
   };
@@ -288,20 +305,39 @@ export default function POSPage() {
       {/* --- TAB 1: RETAIL (PENJUALAN FISIK) --- */}
       {activeTab === "retail" && (
         <div className="flex flex-col lg:flex-row w-full gap-4 md:gap-6">
-          {/* Kolom Kiri: Produk */}
           <div className="flex-1 flex flex-col gap-4">
-            <div className="bg-white dark:bg-slate-900/40 backdrop-blur-sm border border-slate-200 dark:border-slate-800/50 shadow-sm rounded-xl p-4">
-              <div className="relative w-full">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 dark:text-slate-500" />
-                <Input 
-                  type="text" 
-                  placeholder="Cari produk di gudang..." 
-                  value={searchQuery} 
-                  onChange={(e) => setSearchQuery(e.target.value)} 
-                  className="pl-9 bg-slate-50 dark:bg-slate-800/50 border-slate-300 dark:border-slate-700/50 text-slate-900 dark:text-white focus:ring-orange-500/50" 
-                />
+            
+            {/* Pencarian Produk & Tombol Scanner */}
+            <div className="bg-white dark:bg-slate-900/40 backdrop-blur-sm border border-slate-200 dark:border-slate-800/50 shadow-sm rounded-xl p-4 flex flex-col gap-3">
+              <div className="flex gap-2 w-full">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 dark:text-slate-500" />
+                  <Input 
+                    type="text" 
+                    placeholder="Cari produk atau barcode..." 
+                    value={searchQuery} 
+                    onChange={(e) => setSearchQuery(e.target.value)} 
+                    className="pl-9 bg-slate-50 dark:bg-slate-800/50 border-slate-300 dark:border-slate-700/50 text-slate-900 dark:text-white focus:ring-orange-500/50 w-full" 
+                  />
+                </div>
+                <Button 
+                  onClick={() => setIsScannerOpen(!isScannerOpen)} 
+                  variant="outline" 
+                  className={`border-slate-300 dark:border-slate-700 transition-colors ${isScannerOpen ? 'bg-orange-100 dark:bg-orange-500/20 text-orange-600 dark:text-orange-400 border-orange-300 dark:border-orange-500/50' : 'bg-slate-50 dark:bg-slate-800/50 text-slate-600 dark:text-slate-300 hover:text-orange-500'}`}
+                >
+                  <Camera className="h-4 w-4" />
+                </Button>
               </div>
+
+              {/* Area Tampilan Kamera Scanner */}
+              {isScannerOpen && (
+                <div className="w-full bg-black/5 dark:bg-black/20 p-2 rounded-lg border border-slate-200 dark:border-slate-700/50 overflow-hidden">
+                  <BarcodeScanner onDetected={handleBarcodeScanned} disabled={!isScannerOpen} />
+                </div>
+              )}
             </div>
+
+            {/* Grid Produk */}
             <div className="bg-slate-100 dark:bg-slate-900/20 rounded-xl p-2 md:p-4 border border-slate-200 dark:border-slate-800/30 flex-1 min-h-[400px] overflow-y-auto custom-scrollbar">
               {availableProducts.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-full text-slate-400 dark:text-slate-500 py-12">
@@ -334,9 +370,10 @@ export default function POSPage() {
             </div>
           </div>
 
-          {/* Kolom Kanan: Keranjang */}
+          {/* Keranjang Belanja */}
           <div className="w-full lg:w-[350px] xl:w-[400px] flex flex-col gap-4">
             <div className="bg-white dark:bg-slate-900/40 backdrop-blur-sm border border-slate-200 dark:border-slate-800/50 shadow-sm rounded-xl p-4 md:p-6 flex flex-col h-[calc(100vh-8rem)] sticky top-6">
+              
               <div className="flex items-center gap-2 mb-4 pb-4 border-b border-slate-200 dark:border-slate-800/50">
                 <ShoppingCart className="h-5 w-5 text-orange-500" />
                 <h3 className="text-lg font-semibold text-slate-900 dark:text-white">Keranjang</h3>
@@ -347,12 +384,13 @@ export default function POSPage() {
 
               <div className="flex-1 overflow-y-auto space-y-3 pr-1 custom-scrollbar">
                 {cart.length === 0 ? (
-                  <div className="text-center text-slate-400 dark:text-slate-500 py-10 text-sm">Pilih barang di sebelah kiri.</div>
+                  <div className="text-center text-slate-400 dark:text-slate-500 py-10 text-sm">Pilih barang atau pindai barcode.</div>
                 ) : (
                   cart.map((item) => (
                     <div key={item.productId} className="flex justify-between items-start bg-slate-50 dark:bg-slate-800/30 p-3 rounded-lg border border-slate-200 dark:border-slate-700/30">
                       <div className="flex-1 min-w-0 pr-2">
                         <h4 className="text-slate-800 dark:text-white text-sm font-medium truncate">{item.name}</h4>
+                        
                         <div className="flex items-center gap-1 mt-1">
                           <span className="text-slate-400 dark:text-slate-500 text-xs font-mono">Rp</span>
                           <Input
@@ -427,7 +465,6 @@ export default function POSPage() {
               </select>
             </div>
             
-            {/* 1. ELECTRONIC SERVICE */}
             {transactionType === "Electronic Service" && (
               <div className="grid gap-4 bg-slate-50 dark:bg-slate-800/30 p-4 rounded-lg border border-slate-200 dark:border-slate-700/50">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -442,7 +479,6 @@ export default function POSPage() {
               </div>
             )}
 
-            {/* 2. MONEY TRANSFER & CASH WITHDRAWAL */}
             {(transactionType === "Money Transfer" || transactionType === "Cash Withdrawal") && (
               <div className="grid gap-4 bg-slate-50 dark:bg-slate-800/30 p-4 rounded-lg border border-slate-200 dark:border-slate-700/50">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -472,7 +508,6 @@ export default function POSPage() {
               </div>
             )}
 
-            {/* 3. DIGITAL PPOB */}
             {transactionType === "Digital PPOB (Pulsa/Game)" && (
               <div className="grid gap-4 bg-slate-50 dark:bg-slate-800/30 p-4 rounded-lg border border-slate-200 dark:border-slate-700/50">
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -490,7 +525,6 @@ export default function POSPage() {
               </div>
             )}
 
-            {/* 4. AFFILIATE */}
             {transactionType === "Affiliate / Passive Income" && (
               <div className="grid gap-4 bg-slate-50 dark:bg-slate-800/30 p-4 rounded-lg border border-slate-200 dark:border-slate-700/50">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -500,7 +534,6 @@ export default function POSPage() {
               </div>
             )}
 
-            {/* 5. INTERNET SHARING */}
             {transactionType === "Internet Sharing (BIZNET)" && (
               <div className="grid gap-4 bg-slate-50 dark:bg-slate-800/30 p-4 rounded-lg border border-slate-200 dark:border-slate-700/50">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -510,7 +543,6 @@ export default function POSPage() {
               </div>
             )}
 
-            {/* 6. BALANCE TRANSFER */}
             {transactionType === "Balance Transfer" && (
               <div className="grid gap-4 bg-slate-50 dark:bg-slate-800/30 p-4 rounded-lg border border-slate-200 dark:border-slate-700/50">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -525,7 +557,6 @@ export default function POSPage() {
               </div>
             )}
 
-            {/* 7. KASBON EMPLOYEE LOAN */}
             {transactionType === "Kasbon (Employee Loan)" && (
               <div className="grid gap-4 bg-slate-50 dark:bg-slate-800/30 p-4 rounded-lg border border-slate-200 dark:border-slate-700/50">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -538,7 +569,6 @@ export default function POSPage() {
               </div>
             )}
 
-            {/* KOMPONEN BAWAH (METODE PEMBAYARAN) - Disembunyikan untuk Balance Transfer dan Kasbon Karyawan */}
             {transactionType !== "Balance Transfer" && transactionType !== "Kasbon (Employee Loan)" && (
               <div className="grid gap-4 bg-slate-50 dark:bg-slate-800/30 p-4 rounded-lg border border-slate-200 dark:border-slate-700/50">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -569,7 +599,70 @@ export default function POSPage() {
           </form>
         </div>
       )}
+    </div>
+  );
+}
 
+// ============================================================================
+// KOMPONEN BARCODE SCANNER (Menggunakan html5-qrcode)
+// ============================================================================
+function BarcodeScanner({ onDetected, disabled }: { onDetected: (barcode: string) => void; disabled?: boolean }) {
+  const [scannerError, setScannerError] = useState<string | null>(null);
+  const scannerContainerId = useId().replace(/:/g, "");
+  const scannerRef = useRef<{ stop: () => Promise<void>; clear: () => void | Promise<void> } | null>(null);
+  const hasDetectedRef = useRef(false);
+
+  useEffect(() => {
+    async function startScanner() {
+      if (disabled) return;
+
+      const { Html5Qrcode } = await import("html5-qrcode");
+      const html5QrCode = new Html5Qrcode(scannerContainerId, { verbose: false });
+
+      scannerRef.current = html5QrCode;
+      hasDetectedRef.current = false;
+      setScannerError(null);
+
+      try {
+        await html5QrCode.start(
+          { facingMode: "environment" }, // Gunakan kamera belakang jika di HP
+          { fps: 10, qrbox: { width: 250, height: 120 } },
+          (decodedText) => {
+            if (hasDetectedRef.current) return;
+            hasDetectedRef.current = true; // Mencegah scan beruntun yang sama
+            onDetected(decodedText);
+            
+            // Jeda sejenak sebelum bisa scan lagi
+            setTimeout(() => {
+              hasDetectedRef.current = false;
+            }, 2000); 
+          },
+          () => {}, // Abaikan error frame kosong
+        );
+      } catch (error) {
+        setScannerError(error instanceof Error ? error.message : "Gagal mengaktifkan kamera.");
+      }
+    }
+
+    async function stopScanner() {
+      if (!scannerRef.current) return;
+      try { await scannerRef.current.stop(); } catch { /* no-op */ }
+      try { await scannerRef.current.clear(); } catch { /* no-op */ }
+      scannerRef.current = null;
+    }
+
+    startScanner();
+
+    return () => {
+      stopScanner();
+    };
+  }, [disabled, onDetected, scannerContainerId]);
+
+  return (
+    <div className="w-full flex flex-col items-center justify-center">
+      <div id={scannerContainerId} className="w-full max-w-sm overflow-hidden rounded-md bg-black min-h-[200px]" />
+      {scannerError && <p className="text-xs text-red-500 mt-2">{scannerError}</p>}
+      <p className="text-xs text-slate-500 mt-2">Arahkan kamera ke barcode barang.</p>
     </div>
   );
 }
