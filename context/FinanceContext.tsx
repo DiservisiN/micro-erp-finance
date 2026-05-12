@@ -942,7 +942,7 @@ const addTransaction = async (transaction: Transaction) => {
       throw error;
     }
   };
-  
+
   const deleteProduct = async (productId: string) => {
     if (supabase) await supabase.from("products").delete().eq("id", productId);
     setProducts(prev => prev.filter(p => p.id !== productId));
