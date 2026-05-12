@@ -215,21 +215,30 @@ export default function InventoryPage() {
     if (!editTarget) return;
     setIsSavingEdit(true);
 
-    await editProduct(editTarget.id, {
-      name: editForm.name.trim(),
-      category: editForm.category === "none" ? null : editForm.category.trim() || null,
-      costPrice: Number(editForm.costPrice),
-      sellingPrice: Number(editForm.sellingPrice),
-      stock: Number(editForm.stock),
-      expiredDate: editForm.expiredDate || null,
-      status: editForm.status || "in_stock",
-    });
+    try {
+      // Tunggu sampai fungsi editProduct benar-benar selesai
+      await editProduct(editTarget.id, {
+        name: editForm.name.trim(),
+        category: editForm.category === "none" ? null : editForm.category.trim() || null,
+        costPrice: Number(editForm.costPrice),
+        sellingPrice: Number(editForm.sellingPrice),
+        stock: Number(editForm.stock),
+        expiredDate: editForm.expiredDate || null,
+        status: editForm.status || "in_stock",
+      });
 
-    toast.success("Product updated successfully");
-    setIsSavingEdit(false);
-    setIsEditOpen(false);
-    setEditTarget(null);
+      // Jika baris di atas berhasil tanpa error, baru tampilkan sukses
+      toast.success("Product updated successfully");
+      setIsEditOpen(false);
+      setEditTarget(null);
+    } catch (err) {
+      // Jika gagal, toast sukses tidak akan muncul karena sudah di-handle oleh alert di context
+      console.error("Gagal menyimpan:", err);
+    } finally {
+      setIsSavingEdit(false);
+    }
   }
+  
 async function handleAdjustStock() {
     if (!adjustTarget) return;
     setIsAdjusting(true);

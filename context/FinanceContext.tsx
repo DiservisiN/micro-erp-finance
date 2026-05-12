@@ -911,22 +911,38 @@ const addTransaction = async (transaction: Transaction) => {
     }
   };
 
-  const editProduct = async (productId: string, updates: Partial<Product>) => {
-    if (supabase) {
-      const payload: any = {};
-      if (updates.barcode !== undefined) payload.barcode = updates.barcode;
-      if (updates.name !== undefined) payload.name = updates.name;
-      if (updates.category !== undefined) payload.category = updates.category;
-      if (updates.costPrice !== undefined) payload.costPrice = updates.costPrice;
-      if (updates.sellingPrice !== undefined) payload.selling_price = updates.sellingPrice;
-      if (updates.stock !== undefined) payload.stock = updates.stock;
-      if (updates.status !== undefined) payload.status = updates.status;
-      if (updates.expiredDate !== undefined) payload.expired_date = updates.expiredDate;
-      await supabase.from("products").update(payload).eq("id", productId);
-    }
-    setProducts(prev => prev.map(p => (p.id === productId ? { ...p, ...updates } : p)));
-  };
+ const editProduct = async (productId: string, updates: Partial<Product>) => {
+    try {
+      if (supabase) {
+        const payload: any = {};
+        if (updates.barcode !== undefined) payload.barcode = updates.barcode;
+        if (updates.name !== undefined) payload.name = updates.name;
+        if (updates.category !== undefined) payload.category = updates.category;
+        if (updates.costPrice !== undefined) payload.cost_price = updates.costPrice;
+        if (updates.sellingPrice !== undefined) payload.selling_price = updates.sellingPrice;
+        if (updates.stock !== undefined) payload.stock = updates.stock;
+        if (updates.status !== undefined) payload.status = updates.status;
+        if (updates.expiredDate !== undefined) payload.expired_date = updates.expiredDate;
 
+        // Eksekusi ke Supabase
+        const { error } = await supabase.from("products").update(payload).eq("id", productId);
+        
+        if (error) {
+          console.error("Supabase Update Error:", error);
+          throw error; // Lempar error agar ditangkap catch block
+        }
+      }
+
+      // HANYA update state lokal jika database berhasil diupdate
+      setProducts(prev => prev.map(p => (p.id === productId ? { ...p, ...updates } : p)));
+    } catch (error: any) {
+      console.error("Gagal melakukan edit produk:", error);
+      alert("⚠️ Gagal menyimpan ke Database: " + (error.message || "Cek koneksi atau kebijakan RLS"));
+      // Kita lempar error lagi agar fungsi pemanggil (di page.tsx) tahu kalau ini gagal
+      throw error;
+    }
+  };
+  
   const deleteProduct = async (productId: string) => {
     if (supabase) await supabase.from("products").delete().eq("id", productId);
     setProducts(prev => prev.filter(p => p.id !== productId));
