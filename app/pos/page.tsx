@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useMemo, FormEvent, useEffect, useRef, useId } from "react";
+// PERBAIKAN: Menambahkan useCallback di impor
+import { useState, useMemo, FormEvent, useEffect, useRef, useId, useCallback } from "react";
 import { Search, ShoppingCart, Plus, Minus, Trash2, PackageOpen, Store, Zap, Camera } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -69,22 +70,29 @@ export default function POSPage() {
     );
   }, [products, searchQuery]);
 
-  const addToCart = (product: typeof products[0]) => {
+  // PERBAIKAN: Menggunakan useCallback agar fungsi stabil dan tidak merestart kamera
+  const addToCart = useCallback((product: typeof products[0]) => {
     setCart((prevCart) => {
-      const existingItem = prevCart.find((item) => item.productId === product.id);
+      // Pastikan membandingkan ID sebagai string agar akurat
+      const existingItem = prevCart.find((item) => String(item.productId) === String(product.id));
+      
       if (existingItem) {
         if (existingItem.quantity >= product.stock) {
-          toast.error("Stok tidak mencukupi!");
+          toast.error(`Stok ${product.name} tidak mencukupi!`);
           return prevCart;
         }
-        return prevCart.map((item) => item.productId === product.id ? { ...item, quantity: item.quantity + 1 } : item);
+        return prevCart.map((item) => 
+          String(item.productId) === String(product.id) 
+            ? { ...item, quantity: item.quantity + 1 } 
+            : item
+        );
       }
       return [...prevCart, { productId: product.id, name: product.name, price: product.sellingPrice, quantity: 1, maxStock: product.stock }];
     });
-  };
+  }, []);
 
-  // LOGIKA SCANNER BARCODE
-  const handleBarcodeScanned = (scannedBarcode: string) => {
+  // PERBAIKAN: Menggunakan useCallback agar fungsi stabil dan tidak merestart kamera
+  const handleBarcodeScanned = useCallback((scannedBarcode: string) => {
     const foundProduct = products.find(p => p.barcode === scannedBarcode && (p.status ?? "in_stock") === "in_stock");
     
     if (foundProduct) {
@@ -97,12 +105,12 @@ export default function POSPage() {
     } else {
       toast.error(`Barcode ${scannedBarcode} tidak ditemukan di gudang!`);
     }
-  };
+  }, [products, addToCart]);
 
   const updateQuantity = (productId: string, delta: number) => {
     setCart((prevCart) => {
       return prevCart.map((item) => {
-        if (item.productId === productId) {
+        if (String(item.productId) === String(productId)) {
           const newQuantity = item.quantity + delta;
           if (newQuantity <= 0) return item;
           if (newQuantity > item.maxStock) {
@@ -119,7 +127,7 @@ export default function POSPage() {
   const updatePrice = (productId: string, newPrice: number) => {
     setCart((prevCart) => {
       return prevCart.map((item) => {
-        if (item.productId === productId) {
+        if (String(item.productId) === String(productId)) {
           return { ...item, price: newPrice };
         }
         return item;
@@ -127,7 +135,7 @@ export default function POSPage() {
     });
   };
 
-  const removeFromCart = (productId: string) => setCart((prev) => prev.filter((item) => item.productId !== productId));
+  const removeFromCart = (productId: string) => setCart((prev) => prev.filter((item) => String(item.productId) !== String(productId)));
 
   const totalAmount = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
 
