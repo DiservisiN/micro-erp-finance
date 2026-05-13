@@ -1,8 +1,7 @@
 "use client";
 
-// PERBAIKAN: Menambahkan useCallback di impor
 import { useState, useMemo, FormEvent, useEffect, useRef, useId, useCallback } from "react";
-import { Search, ShoppingCart, Plus, Minus, Trash2, PackageOpen, Store, Zap, Camera } from "lucide-react";
+import { Search, ShoppingCart, Plus, Minus, Trash2, PackageOpen, Store, Zap, Camera, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -59,6 +58,14 @@ export default function POSPage() {
   const [paymentMethod, setPaymentMethod] = useState<"lunas" | "kasbon">("lunas");
   const [personName, setPersonName] = useState("");
   const [isScannerOpen, setIsScannerOpen] = useState(false);
+  
+  // LOGIKA BARU: Batas Tampilan Produk
+  const [displayLimit, setDisplayLimit] = useState(30);
+
+  // Reset limit setiap kali pencarian berubah
+  useEffect(() => {
+    setDisplayLimit(30);
+  }, [searchQuery]);
 
   const availableProducts = useMemo(() => {
     return products.filter(
@@ -70,12 +77,14 @@ export default function POSPage() {
     );
   }, [products, searchQuery]);
 
-  // PERBAIKAN: Menggunakan useCallback agar fungsi stabil dan tidak merestart kamera
+  // Memotong daftar produk sesuai batas limit
+  const displayedProducts = useMemo(() => {
+    return availableProducts.slice(0, displayLimit);
+  }, [availableProducts, displayLimit]);
+
   const addToCart = useCallback((product: typeof products[0]) => {
     setCart((prevCart) => {
-      // Pastikan membandingkan ID sebagai string agar akurat
       const existingItem = prevCart.find((item) => String(item.productId) === String(product.id));
-      
       if (existingItem) {
         if (existingItem.quantity >= product.stock) {
           toast.error(`Stok ${product.name} tidak mencukupi!`);
@@ -91,7 +100,6 @@ export default function POSPage() {
     });
   }, []);
 
-  // PERBAIKAN: Menggunakan useCallback agar fungsi stabil dan tidak merestart kamera
   const handleBarcodeScanned = useCallback((scannedBarcode: string) => {
     const foundProduct = products.find(p => p.barcode === scannedBarcode && (p.status ?? "in_stock") === "in_stock");
     
@@ -345,34 +353,51 @@ export default function POSPage() {
               )}
             </div>
 
-            {/* Grid Produk */}
-            <div className="bg-slate-100 dark:bg-slate-900/20 rounded-xl p-2 md:p-4 border border-slate-200 dark:border-slate-800/30 flex-1 min-h-[400px] overflow-y-auto custom-scrollbar">
-              {availableProducts.length === 0 ? (
+            {/* Grid Produk - COMPACT MODE & LOAD MORE */}
+            <div className="bg-slate-100 dark:bg-slate-900/20 rounded-xl p-2 md:p-3 border border-slate-200 dark:border-slate-800/30 flex-1 min-h-[400px] overflow-y-auto custom-scrollbar">
+              {displayedProducts.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-full text-slate-400 dark:text-slate-500 py-12">
                   <PackageOpen className="h-12 w-12 mb-3 opacity-20" />
-                  <p>Tidak ada produk yang tersedia atau cocok.</p>
+                  <p className="text-sm">Tidak ada produk yang ditemukan.</p>
                 </div>
               ) : (
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 md:gap-4">
-                  {availableProducts.map((product) => (
+                <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2 pb-4">
+                  {displayedProducts.map((product) => (
                     <div 
                       key={product.id} 
                       onClick={() => addToCart(product)} 
-                      className="bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700/50 rounded-lg p-3 md:p-4 cursor-pointer hover:border-orange-500/50 dark:hover:border-orange-500/50 hover:bg-slate-50 dark:hover:bg-slate-800/80 transition-all flex flex-col justify-between group active:scale-95 shadow-sm"
+                      className="bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700/50 rounded-md p-2 md:p-2.5 cursor-pointer hover:border-orange-500/50 dark:hover:border-orange-500/50 hover:bg-orange-50 dark:hover:bg-slate-800/80 transition-all flex flex-col justify-between group active:scale-95 shadow-sm min-h-[85px]"
                     >
-                      <div>
-                        <h3 className="text-slate-800 dark:text-white font-medium text-sm leading-tight mb-1 group-hover:text-orange-500 dark:group-hover:text-orange-400 transition-colors line-clamp-2">
-                          {product.name}
-                        </h3>
-                        <p className="text-[10px] md:text-xs text-slate-500 dark:text-slate-400 mb-3 bg-slate-100 dark:bg-slate-800/80 w-fit px-1.5 py-0.5 rounded border border-slate-200 dark:border-transparent">
+                      <h3 
+                        className="text-slate-800 dark:text-slate-200 font-medium text-[11px] md:text-xs leading-snug mb-1.5 group-hover:text-orange-600 dark:group-hover:text-orange-400 transition-colors line-clamp-2"
+                        title={product.name}
+                      >
+                        {product.name}
+                      </h3>
+                      
+                      <div className="flex items-end justify-between mt-auto gap-1">
+                        <div className="font-mono font-bold text-emerald-600 dark:text-emerald-400 text-[11px] md:text-xs truncate">
+                          {formatRupiah(product.sellingPrice)}
+                        </div>
+                        <p className="text-[9px] text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800/80 px-1 py-0.5 rounded shrink-0">
                           Stok: {product.stock}
                         </p>
                       </div>
-                      <div className="font-mono font-bold text-emerald-600 dark:text-emerald-400 text-sm">
-                        {formatRupiah(product.sellingPrice)}
-                      </div>
                     </div>
                   ))}
+
+                  {/* Tombol Tampilkan Selengkapnya */}
+                  {displayLimit < availableProducts.length && (
+                    <div className="col-span-full flex justify-center mt-4 pt-2 border-t border-slate-200 dark:border-slate-800/50">
+                      <Button
+                        variant="ghost"
+                        onClick={() => setDisplayLimit((prev) => prev + 30)}
+                        className="text-slate-500 dark:text-slate-400 hover:text-orange-600 dark:hover:text-orange-400 hover:bg-orange-50 dark:hover:bg-slate-800/80"
+                      >
+                        Tampilkan {availableProducts.length - displayLimit} lainnya <ChevronDown className="ml-2 h-4 w-4" />
+                      </Button>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
