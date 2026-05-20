@@ -3,8 +3,6 @@
 import { createContext, useContext, useState, ReactNode, useEffect, useMemo } from "react";
 import { formatRupiah } from "@/lib/utils";
 import { createClient } from "@supabase/supabase-js";
-
-// PERBAIKAN: Kita memanggil AppContext agar FinanceContext tahu mode apa yang sedang aktif
 import { useAppContext } from "./AppContext"; 
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -18,6 +16,7 @@ type Wallet = {
   type: "business" | "personal";
   walletType: "Bank" | "E-Wallet" | "Cash";
   balance: number;
+  profileMode?: string;
 };
 
 type Transaction = {
@@ -32,6 +31,7 @@ type Transaction = {
   fromWalletId?: string | null;
   toWalletId?: string | null;
   debtId?: string | null;
+  profileMode?: string;
 };
 
 type Product = {
@@ -44,6 +44,7 @@ type Product = {
   stock: number;
   status: string;
   expiredDate: string | null;
+  profileMode?: string;
 };
 
 type Investment = {
@@ -53,7 +54,8 @@ type Investment = {
   quantity: number;
   averageBuyPrice: number;
   currentPrice: number;
-  walletId?: string; // DOKUMENTASI: Asumsi, investasi terkait dompet mana
+  walletId?: string;
+  profileMode?: string;
 };
 
 type Debt = {
@@ -63,7 +65,8 @@ type Debt = {
   status: "unpaid" | "paid";
   amount: number;
   notes: string | null;
-  walletId?: string; // DOKUMENTASI: Asumsi, hutang terkait dompet mana (Bisa null jika Kasbon dari POS)
+  walletId?: string; 
+  profileMode?: string;
 };
 
 type Category = {
@@ -71,6 +74,7 @@ type Category = {
   name: string;
   type: "inventory" | "expense";
   description: string;
+  profileMode?: string;
 };
 
 type FinanceContextValue = {
@@ -112,31 +116,27 @@ type FinanceContextValue = {
   editWallet: (id: string, updates: Partial<Wallet>) => Promise<void>;
   deleteWallet: (id: string) => Promise<void>;
   
-  // State for Month/Year filtering
   selectedMonth: number;
   setSelectedMonth: (month: number) => void;
   selectedYear: number;
   setSelectedYear: (year: number) => void;
   
-  // Data Mentah Tanpa Filter (Untuk keperluan komputasi di latar belakang)
   allWalletsRaw: Wallet[];
 };
 
 const FinanceContext = createContext<FinanceContextValue | undefined>(undefined);
-
 const STORAGE_KEY = "aether_erp_data";
 
 export function FinanceProvider({ children }: { children: ReactNode }) {
   const [isHydrated, setIsHydrated] = useState(false);
   
-  // PERBAIKAN: Menarik Mode (business/personal) dari AppContext
+  // Menarik Mode (business/personal) dari AppContext
   const { mode } = useAppContext();
 
-  // Ini adalah Gudang Data Mentah (Menyimpan SEMUA data tanpa terkecuali)
+  // Gudang Data Mentah (Menyimpan SEMUA data)
   const [allWallets, setAllWallets] = useState<Wallet[]>([]);
   const [allTransactions, setAllTransactions] = useState<Transaction[]>([]);
   const [allDebts, setAllDebts] = useState<Debt[]>([]);
-  
   const [products, setProducts] = useState<Product[]>([]);
   const [investments, setInvestments] = useState<Investment[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -167,35 +167,41 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
         if (walletsRes.data) {
           setAllWallets(walletsRes.data.map((item: any) => ({
             id: item.id, name: item.name, type: item.type, walletType: item.wallet_type, balance: Number(item.balance) || 0,
+            profileMode: item.profile_mode || 'business', // Fallback aman
           })));
         }
         if (transRes.data) {
           setAllTransactions(transRes.data.map((item: any) => ({
             id: item.id, type: item.type, category: item.category, amount: Number(item.amount) || 0, adminFee: item.admin_fee,
             date: item.date, notes: item.notes, productId: item.product_id, fromWalletId: item.from_wallet_id,
-            toWalletId: item.to_wallet_id, debtId: item.debt_id,
+            toWalletId: item.to_wallet_id, debtId: item.debt_id, 
+            profileMode: item.profile_mode || 'business',
           })));
         }
         if (invRes.data) {
           setInvestments(invRes.data.map((item: any) => ({
             id: item.id, name: item.name, type: item.type, quantity: Number(item.quantity) || 0,
             averageBuyPrice: Number(item.average_buy_price) || 0, currentPrice: Number(item.current_price) || 0,
+            profileMode: item.profile_mode || 'business',
           })));
         }
         if (prodRes.data) {
           setProducts(prodRes.data.map((item: any) => ({
             id: item.id, barcode: item.barcode, name: item.name, category: item.category, costPrice: Number(item.cost_price) || 0,
             sellingPrice: Number(item.selling_price) || 0, stock: Number(item.stock) || 0, status: item.status, expiredDate: item.expired_date,
+            profileMode: item.profile_mode || 'business',
           })));
         }
         if (debtsRes.data) {
           setAllDebts(debtsRes.data.map((item: any) => ({
             id: item.id, personName: item.person_name, type: item.type, status: item.status, amount: Number(item.amount) || 0, notes: item.notes,
+            profileMode: item.profile_mode || 'business',
           })));
         }
         if (catRes.data) {
           setCategories(catRes.data.map((item: any) => ({
             id: item.id, name: item.name, type: item.type, description: item.description,
+            profileMode: item.profile_mode || 'business',
           })));
         }
 
@@ -223,37 +229,25 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
   // MESIN FILTER PINTAR (BERDASARKAN MODE)
   // ==========================================
   
-  // 1. Filter Dompet: Hanya kembalikan dompet yang tipenya (business/personal) sama dengan Mode saat ini.
   const filteredWallets = useMemo(() => {
-    return allWallets.filter(wallet => wallet.type === mode);
+    return allWallets.filter(w => w.profileMode === mode);
   }, [allWallets, mode]);
 
-  // 2. Filter Transaksi: Hanya kembalikan transaksi yang bersentuhan dengan dompet di mode ini.
-  // Pengecualian: Transaksi tanpa dompet (seperti penjualan Cash Keras tanpa masuk dompet)
   const filteredTransactions = useMemo(() => {
-    const validWalletIds = new Set(filteredWallets.map(w => w.id));
-    return allTransactions.filter(tx => {
-      // Jika transaksi tidak punya dompet sama sekali, tampilkan saja (opsional)
-      if (!tx.fromWalletId && !tx.toWalletId) return true;
-      
-      // Jika punya fromWalletId, pastikan dompet itu ada di mode ini
-      if (tx.fromWalletId && validWalletIds.has(tx.fromWalletId)) return true;
-      
-      // Jika punya toWalletId, pastikan dompet itu ada di mode ini
-      if (tx.toWalletId && validWalletIds.has(tx.toWalletId)) return true;
+    return allTransactions.filter(tx => tx.profileMode === mode);
+  }, [allTransactions, mode]);
 
-      // Jika dompet asal/tujuan BUKAN milik mode ini, sembunyikan!
-      return false;
-    });
-  }, [allTransactions, filteredWallets]);
-
-  // 3. Filter Hutang (Opsional): Jika sistem kasbonmu terhubung dengan dompet tertentu
   const filteredDebts = useMemo(() => {
-    return allDebts; 
-    // Catatan: Karena fitur Hutang (Debts) saat ini belum mencatat 'walletId' asal usulnya,
-    // kita biarkan terbuka semua. Jika kamu ingin memisahkan hutang bisnis/pribadi nanti, 
-    // kita perlu menambahkan kolom "type (business/personal)" di tabel Supabase 'debts'.
-  }, [allDebts]);
+    return allDebts.filter(debt => debt.profileMode === mode);
+  }, [allDebts, mode]);
+  
+  const filteredProducts = useMemo(() => {
+    return products.filter(product => product.profileMode === mode);
+  }, [products, mode]);
+
+  const filteredCategories = useMemo(() => {
+    return categories.filter(category => category.profileMode === mode);
+  }, [categories, mode]);
 
 
   // ==========================================
@@ -295,6 +289,7 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
         from_wallet_id: transaction.fromWalletId,
         to_wallet_id: transaction.toWalletId,
         debt_id: transaction.debtId,
+        profile_mode: transaction.profileMode || mode, // Otomatis pakai mode aktif jika kosong
       };
       
       const { data, error } = await supabase.from("transactions").insert(payload).select().single();
@@ -305,7 +300,7 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
         return;
       }
       
-      const finalTransaction = { ...transaction, id: data.id };
+      const finalTransaction = { ...transaction, id: data.id, profileMode: payload.profile_mode };
       setAllTransactions(prev => [...prev, finalTransaction]);
     } catch (e) {
       console.error("Kesalahan sistem:", e);
@@ -346,6 +341,7 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
       notes: fee > 0 ? `Transfer with ${formatRupiah(fee)} fee` : "Balance transfer",
       fromWalletId: fromWalletId,
       toWalletId: toWalletId,
+      profileMode: mode
     };
     await recordTransactionToDB(transferTransaction);
 
@@ -359,6 +355,7 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
         date: new Date().toISOString().split('T')[0],
         notes: `Transfer fee from ${fromWalletId} to ${toWalletId}`,
         fromWalletId: fromWalletId,
+        profileMode: mode
       };
       await recordTransactionToDB(feeTransaction);
     }
@@ -391,6 +388,7 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
       notes: `Transfer service: ${formatRupiah(amount)} from bank to customer`,
       fromWalletId: bankWalletId,
       toWalletId: cashWalletId,
+      profileMode: mode
     };
     await recordTransactionToDB(transferTransaction);
 
@@ -404,6 +402,7 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
         date: new Date().toISOString().split('T')[0],
         notes: `Admin fee for transfer service`,
         toWalletId: cashWalletId,
+        profileMode: mode
       };
       await recordTransactionToDB(feeTransaction);
     }
@@ -436,6 +435,7 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
       notes: `Cash withdrawal service: ${formatRupiah(amount)} given to customer`,
       fromWalletId: cashWalletId,
       toWalletId: bankWalletId,
+      profileMode: mode
     };
     await recordTransactionToDB(transferTransaction);
 
@@ -449,6 +449,7 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
         date: new Date().toISOString().split('T')[0],
         notes: `Admin fee for cash withdrawal service`,
         toWalletId: bankWalletId,
+        profileMode: mode
       };
       await recordTransactionToDB(feeTransaction);
     }
@@ -482,6 +483,7 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
       date: new Date().toISOString().split('T')[0],
       notes: `PPOB cost for ${productName}`,
       fromWalletId: sourceWalletId,
+      profileMode: mode
     };
     await recordTransactionToDB(costTransaction);
 
@@ -495,6 +497,7 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
         date: new Date().toISOString().split('T')[0],
         notes: `Profit from PPOB: ${productName} (Cost: ${formatRupiah(cost)}, Sell: ${formatRupiah(sellingPrice)})`,
         toWalletId: destWalletId,
+        profileMode: mode
       };
       await recordTransactionToDB(profitTransaction);
     }
@@ -521,6 +524,7 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
       date: new Date().toISOString().split('T')[0],
       notes: note || `Repair payment for repair ID: ${repairId}`,
       toWalletId: walletId,
+      profileMode: mode
     };
     await recordTransactionToDB(incomeTransaction);
 
@@ -566,7 +570,8 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
       date: new Date().toISOString().split('T')[0],
       notes: `Modal kembali: ${quantity}x ${product.name}`,
       productId: productId,
-      toWalletId: walletId
+      toWalletId: walletId,
+      profileMode: mode
     };
     await recordTransactionToDB(returnOfCapitalTx);
 
@@ -580,7 +585,8 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
         date: new Date().toISOString().split('T')[0],
         notes: `Laba penjualan: ${quantity}x ${product.name}`,
         productId: productId,
-        toWalletId: walletId
+        toWalletId: walletId,
+        profileMode: mode
       };
       await recordTransactionToDB(profitTx);
     } else if (profit < 0) {
@@ -593,7 +599,8 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
         date: new Date().toISOString().split('T')[0],
         notes: `Rugi penjualan: ${quantity}x ${product.name}`,
         productId: productId,
-        fromWalletId: walletId
+        fromWalletId: walletId,
+        profileMode: mode
       };
       await recordTransactionToDB(lossTx);
     }
@@ -634,6 +641,7 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
       notes: `Restocked ${quantity} units`,
       productId: productId,
       fromWalletId: walletId,
+      profileMode: mode
     };
     await recordTransactionToDB(newTransaction);
 
@@ -656,7 +664,6 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
 
       const newAmount = debt.amount - amount;
       const isPaid = newAmount === 0;
-      
       const newStatus = isPaid ? "paid" : debt.status; 
       
       if(supabase) supabase.from("debts").update({ amount: newAmount, status: newStatus }).eq("id", debtId).then();
@@ -686,17 +693,12 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
   // TRANSACTION CRUD OPERATIONS
   // ==========================================
   
-const addTransaction = async (transaction: Transaction) => {
+  const addTransaction = async (transaction: Transaction) => {
     if (!supabase) {
-      console.warn("Supabase not available, using local state only");
       setAllWallets(prevWallets => {
         return prevWallets.map(w => {
-          if (transaction.type === "income" && transaction.toWalletId === w.id) {
-            return { ...w, balance: w.balance + transaction.amount };
-          }
-          if ((transaction.type === "expense" || transaction.type === "asset_purchase") && transaction.fromWalletId === w.id) {
-            return { ...w, balance: w.balance - transaction.amount };
-          }
+          if (transaction.type === "income" && transaction.toWalletId === w.id) return { ...w, balance: w.balance + transaction.amount };
+          if ((transaction.type === "expense" || transaction.type === "asset_purchase") && transaction.fromWalletId === w.id) return { ...w, balance: w.balance - transaction.amount };
           if (transaction.type === "transfer") {
             if (transaction.fromWalletId === w.id) return { ...w, balance: w.balance - transaction.amount };
             if (transaction.toWalletId === w.id) return { ...w, balance: w.balance + transaction.amount };
@@ -704,12 +706,12 @@ const addTransaction = async (transaction: Transaction) => {
           return w;
         });
       });
-      setAllTransactions(prev => [...prev, transaction]);
+      setAllTransactions(prev => [...prev, { ...transaction, profileMode: transaction.profileMode || mode }]);
       return;
     }
 
     try {
-      const snakeCasePayload = {
+      const payload = {
         type: transaction.type,
         category: transaction.category,
         amount: transaction.amount,
@@ -720,13 +722,10 @@ const addTransaction = async (transaction: Transaction) => {
         from_wallet_id: transaction.fromWalletId,
         to_wallet_id: transaction.toWalletId,
         debt_id: transaction.debtId,
+        profile_mode: transaction.profileMode || mode,
       };
       
-      const { data, error } = await supabase
-        .from("transactions")
-        .insert(snakeCasePayload)
-        .select()
-        .single();
+      const { data, error } = await supabase.from("transactions").insert(payload).select().single();
 
       if (error) {
         console.error("Failed to insert transaction:", error.message);
@@ -762,7 +761,7 @@ const addTransaction = async (transaction: Transaction) => {
         });
       });
 
-      const finalTransaction = { ...transaction, id: data.id };
+      const finalTransaction = { ...transaction, id: data.id, profileMode: payload.profile_mode };
       setAllTransactions(prev => [...prev, finalTransaction]);
     } catch (e) {
       console.error("Failed to add transaction:", e);
@@ -836,7 +835,6 @@ const addTransaction = async (transaction: Transaction) => {
     }
 
     setAllWallets(prevWallets => {
-      // 1. Reverse old
       let reversed = prevWallets.map(w => {
         if (oldTx.type === "income" && oldTx.toWalletId === w.id) return { ...w, balance: w.balance - oldTx.amount };
         if (oldTx.type === "expense" && oldTx.fromWalletId === w.id) return { ...w, balance: w.balance + oldTx.amount };
@@ -847,7 +845,6 @@ const addTransaction = async (transaction: Transaction) => {
         return w;
       });
 
-      // 2. Apply new
       const newTx = { ...oldTx, ...updatedData };
       return reversed.map(w => {
         let finalBal = w.balance;
@@ -857,7 +854,6 @@ const addTransaction = async (transaction: Transaction) => {
           if (newTx.fromWalletId === w.id) finalBal = w.balance - newTx.amount;
           if (newTx.toWalletId === w.id) finalBal = w.balance + newTx.amount;
         }
-        
         if(finalBal !== w.balance) syncWalletBalance(w.id, finalBal);
         return { ...w, balance: finalBal };
       });
@@ -866,9 +862,9 @@ const addTransaction = async (transaction: Transaction) => {
     setAllTransactions(prev => prev.map(t => t.id === id ? { ...oldTx, ...updatedData } : t));
   };
 
- const addProduct = async (product: Omit<Product, "id">) => {
+  const addProduct = async (product: Omit<Product, "id">) => {
     if (!supabase) {
-      const newProduct: Product = { ...product, id: Date.now().toString() };
+      const newProduct: Product = { ...product, id: Date.now().toString(), profileMode: mode };
       setProducts(prev => [...prev, newProduct]);
       return;
     }
@@ -883,6 +879,7 @@ const addTransaction = async (transaction: Transaction) => {
         stock: product.stock, 
         status: product.status, 
         expired_date: product.expiredDate,
+        profile_mode: mode // Otomatis disuntikkan!
       };
       
       const { data, error } = await supabase.from("products").insert(payload).select().single();
@@ -895,14 +892,10 @@ const addTransaction = async (transaction: Transaction) => {
       if (data) {
         const newProduct: Product = {
           id: data.id, 
-          barcode: data.barcode,
-          name: data.name,
-          category: data.category,
-          costPrice: Number(data.cost_price),
-          sellingPrice: Number(data.selling_price),
-          stock: Number(data.stock),
-          status: data.status,
-          expiredDate: data.expired_date,
+          barcode: data.barcode, name: data.name, category: data.category,
+          costPrice: Number(data.cost_price), sellingPrice: Number(data.selling_price),
+          stock: Number(data.stock), status: data.status, expiredDate: data.expired_date,
+          profileMode: data.profile_mode
         };
         setProducts(prev => [...prev, newProduct]);
       }
@@ -911,7 +904,7 @@ const addTransaction = async (transaction: Transaction) => {
     }
   };
 
- const editProduct = async (productId: string, updates: Partial<Product>) => {
+  const editProduct = async (productId: string, updates: Partial<Product>) => {
     try {
       if (supabase) {
         const payload: any = {};
@@ -924,21 +917,13 @@ const addTransaction = async (transaction: Transaction) => {
         if (updates.status !== undefined) payload.status = updates.status;
         if (updates.expiredDate !== undefined) payload.expired_date = updates.expiredDate;
 
-        // Eksekusi ke Supabase
         const { error } = await supabase.from("products").update(payload).eq("id", productId);
-        
-        if (error) {
-          console.error("Supabase Update Error:", error);
-          throw error; // Lempar error agar ditangkap catch block
-        }
+        if (error) throw error; 
       }
-
-      // HANYA update state lokal jika database berhasil diupdate
       setProducts(prev => prev.map(p => (p.id === productId ? { ...p, ...updates } : p)));
     } catch (error: any) {
       console.error("Gagal melakukan edit produk:", error);
-      alert("⚠️ Gagal menyimpan ke Database: " + (error.message || "Cek koneksi atau kebijakan RLS"));
-      // Kita lempar error lagi agar fungsi pemanggil (di page.tsx) tahu kalau ini gagal
+      alert("⚠️ Gagal menyimpan ke Database: " + (error.message || "Cek koneksi"));
       throw error;
     }
   };
@@ -961,9 +946,9 @@ const addTransaction = async (transaction: Transaction) => {
     setInvestments(prev => prev.map(inv => (inv.id === id ? { ...inv, ...updatedData } : inv)));
   };
 
- const addDebt = async (debt: Omit<Debt, "id" | "status">) => {
+  const addDebt = async (debt: Omit<Debt, "id" | "status">) => {
     if (!supabase) {
-      const newDebt: Debt = { ...debt, id: Date.now().toString(), status: "unpaid" };
+      const newDebt: Debt = { ...debt, id: Date.now().toString(), status: "unpaid", profileMode: mode };
       setAllDebts(prev => [...prev, newDebt]);
       return;
     }
@@ -975,6 +960,7 @@ const addTransaction = async (transaction: Transaction) => {
         amount: debt.amount, 
         status: "unpaid", 
         notes: debt.notes,
+        profile_mode: mode // Otomatis disuntikkan!
       };
       
       const { data, error } = await supabase.from("debts").insert(payload).select().single();
@@ -987,12 +973,9 @@ const addTransaction = async (transaction: Transaction) => {
 
       if (data) {
         const newDebt: Debt = {
-          id: data.id, 
-          personName: data.person_name,
-          type: data.type,
-          status: data.status,
-          amount: Number(data.amount),
-          notes: data.notes,
+          id: data.id, personName: data.person_name, type: data.type,
+          status: data.status, amount: Number(data.amount), notes: data.notes,
+          profileMode: data.profile_mode
         };
         setAllDebts(prev => [...prev, newDebt]);
       }
@@ -1006,17 +989,13 @@ const addTransaction = async (transaction: Transaction) => {
     setAllDebts(prev => prev.filter(d => d.id !== debtId));
   };
 
-// ==========================================
-  // FUNGSI PELUNASAN HUTANG/PIUTANG
-  // ==========================================
   const settleDebt = async (debtId: string, walletId: string) => {
     const debt = allDebts.find(d => d.id === debtId);
     if (!debt) return;
 
     try {
       if (supabase) {
-        // 1. Siapkan data transaksi pelunasan untuk dikirim ke DB
-        const snakeCasePayload = {
+        const payload = {
           type: "transfer",
           category: debt.type === "receivable" ? "Debt Settlement / Bayar Piutang" : "Debt Payment / Bayar Hutang",
           amount: debt.amount,
@@ -1026,35 +1005,25 @@ const addTransaction = async (transaction: Transaction) => {
           to_wallet_id: debt.type === "receivable" ? walletId : null,
           from_wallet_id: debt.type === "payable" ? walletId : null,
           debt_id: debtId, 
+          profile_mode: mode
         };
 
-        // 2. Simpan transaksi ke Supabase terlebih dahulu
-        const { data: txData, error: txError } = await supabase.from("transactions").insert(snakeCasePayload).select().single();
+        const { data: txData, error: txError } = await supabase.from("transactions").insert(payload).select().single();
         if (txError) throw txError; 
 
-        // 3. Update status hutang menjadi "paid" di Supabase
         const { error: debtError } = await supabase.from("debts").update({ status: "paid" }).eq("id", debtId);
         if (debtError) throw debtError;
 
-        // 4. Update saldo dompet di Supabase
         const wallet = allWallets.find(w => w.id === walletId);
         if (wallet) {
           const newBal = debt.type === "payable" ? wallet.balance - debt.amount : wallet.balance + debt.amount;
           await supabase.from("wallets").update({ balance: newBal }).eq("id", walletId);
         }
 
-        // --- JIKA SEMUA LANGKAH DATABASE SUKSES, BARU UBAH TAMPILAN LAYAR ---
         setAllTransactions(prev => [...prev, {
-          id: txData.id,
-          type: "transfer",
-          category: snakeCasePayload.category,
-          amount: snakeCasePayload.amount,
-          adminFee: 0,
-          date: snakeCasePayload.date,
-          notes: snakeCasePayload.notes,
-          toWalletId: snakeCasePayload.to_wallet_id,
-          fromWalletId: snakeCasePayload.from_wallet_id,
-          debtId: snakeCasePayload.debt_id,
+          id: txData.id, type: "transfer", category: payload.category, amount: payload.amount,
+          adminFee: 0, date: payload.date, notes: payload.notes, toWalletId: payload.to_wallet_id,
+          fromWalletId: payload.from_wallet_id, debtId: payload.debt_id, profileMode: payload.profile_mode
         }]);
       }
 
@@ -1078,14 +1047,14 @@ const addTransaction = async (transaction: Transaction) => {
 
   const addCategory = async (category: Omit<Category, "id">) => {
     if (supabase) {
-      const payload = { name: category.name, type: category.type, description: category.description };
+      const payload = { name: category.name, type: category.type, description: category.description, profile_mode: mode };
       const { data, error } = await supabase.from("categories").insert(payload).select().single();
       if (!error && data) {
-        setCategories(prev => [...prev, { id: data.id, name: data.name, type: data.type, description: data.description }]);
+        setCategories(prev => [...prev, { id: data.id, name: data.name, type: data.type, description: data.description, profileMode: data.profile_mode }]);
         return;
       }
     }
-    setCategories(prev => [...prev, { ...category, id: Date.now().toString() }]);
+    setCategories(prev => [...prev, { ...category, id: Date.now().toString(), profileMode: mode }]);
   };
 
   const deleteCategory = async (id: string) => {
@@ -1106,14 +1075,14 @@ const addTransaction = async (transaction: Transaction) => {
 
   const addWallet = async (wallet: Omit<Wallet, "id">) => {
     if (supabase) {
-      const payload = { name: wallet.name, type: wallet.type, wallet_type: wallet.walletType, balance: wallet.balance };
+      const payload = { name: wallet.name, type: wallet.type, wallet_type: wallet.walletType, balance: wallet.balance, profile_mode: mode };
       const { data, error } = await supabase.from("wallets").insert(payload).select().single();
       if (!error && data) {
-        setAllWallets(prev => [...prev, { id: data.id, name: data.name, type: data.type, walletType: data.wallet_type, balance: Number(data.balance) }]);
+        setAllWallets(prev => [...prev, { id: data.id, name: data.name, type: data.type, walletType: data.wallet_type, balance: Number(data.balance), profileMode: data.profile_mode }]);
         return;
       }
     }
-    setAllWallets(prev => [...prev, { ...wallet, id: Date.now().toString() }]);
+    setAllWallets(prev => [...prev, { ...wallet, id: Date.now().toString(), profileMode: mode }]);
   };
 
   const editWallet = async (id: string, updates: Partial<Wallet>) => {
@@ -1134,20 +1103,22 @@ const addTransaction = async (transaction: Transaction) => {
   };
 
   const value = {
-    wallets: filteredWallets, // PERBAIKAN: Hanya kirim yang lolos filter
-    setWallets: setAllWallets, // Tetap gunakan setter utama (all) agar tidak merusak fungsi dalam
+    wallets: filteredWallets, 
+    setWallets: setAllWallets, 
     addWallet, editWallet, deleteWallet,
     
-    transactions: filteredTransactions, // PERBAIKAN: Hanya kirim yang lolos filter
+    transactions: filteredTransactions, 
     setTransactions: setAllTransactions, 
     
-    products, setProducts,
+    products: filteredProducts,
+    setProducts,
+    
     investments, setInvestments,
     
-    debts: filteredDebts, // PERBAIKAN: Mengirim hutang yang terfilter (meski saat ini semua)
+    debts: filteredDebts, 
     setDebts: setAllDebts,
     
-    categories,
+    categories: filteredCategories,
     goldPrice, setGoldPrice,
     addCategory, deleteCategory, editCategory,
     handleTransfer, handleBankTransferService, handleCashWithdrawalService,
@@ -1159,7 +1130,7 @@ const addTransaction = async (transaction: Transaction) => {
     addDebt, deleteDebt, settleDebt,
     selectedMonth, setSelectedMonth,
     selectedYear, setSelectedYear,
-    allWalletsRaw: allWallets // Sengaja diekspor jika ada komponen tertentu (seperti menu Settings) yang butuh melihat semuanya
+    allWalletsRaw: allWallets
   };
 
   return <FinanceContext.Provider value={value}>{children}</FinanceContext.Provider>;

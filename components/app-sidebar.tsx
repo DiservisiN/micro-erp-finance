@@ -36,10 +36,17 @@ export function AppSidebar() {
 
   // LOGIKA PINTAR: Menyaring menu yang tampil
   const visibleLinks = navLinks.filter((link) => {
-    // 1. Sembunyikan menu Investments jika sedang di mode Business
-    if (mode === "business" && link.id === "investments") return false;
+    // 1. Sembunyikan POS dan Repairs jika sedang di mode Personal
+    if (mode === "personal" && (link.id === "pos" || link.id === "repairs")) {
+        return false;
+    }
+
+    // 2. Sembunyikan menu Investments jika sedang di mode Business
+    if (mode === "business" && link.id === "investments") {
+        return false;
+    }
     
-    // 2. Cek pengaturan visibilitas dari halaman Settings
+    // 3. Cek pengaturan visibilitas dari halaman Settings (Fitur Lama)
     const menuItem = menuItems.find((m) => m.id === link.id);
     return menuItem ? menuItem.visible : true;
   });

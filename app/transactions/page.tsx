@@ -19,11 +19,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Plus, Search, Pencil, Trash2, Receipt, FolderOpen } from "lucide-react";
+import { Plus, Search, Trash2, Receipt, FolderOpen } from "lucide-react";
 
 import { useFinanceContext } from "@/context/FinanceContext";
+import { useAppContext } from "@/context/AppContext"; // Import AppContext
 import { formatRupiah } from "@/lib/utils";
 
+// Tambahkan profileMode (opsional) agar TypeScript tidak error
 type Transaction = {
   id: string;
   type: string;
@@ -36,6 +38,7 @@ type Transaction = {
   fromWalletId?: string | null;
   toWalletId?: string | null;
   debtId?: string | null;
+  profileMode?: string; 
 };
 
 // ==========================================
@@ -43,6 +46,8 @@ type Transaction = {
 // ==========================================
 function ExpensesForm({ onSuccess }: { onSuccess: () => void }) {
   const { wallets, categories, addTransaction } = useFinanceContext();
+  const { mode } = useAppContext(); // Ambil mode yang sedang aktif
+
   const expenseCategories = categories.filter(cat => cat.type === 'expense');
 
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -83,7 +88,8 @@ function ExpensesForm({ onSuccess }: { onSuccess: () => void }) {
       return;
     }
 
-    const newTransaction = {
+    // Sisipkan profileMode saat membuat transaksi baru
+    const newTransaction: Transaction = {
       id: Date.now().toString(),
       date: expenseDate,
       type: "expense",
@@ -91,9 +97,10 @@ function ExpensesForm({ onSuccess }: { onSuccess: () => void }) {
       amount: parsedAmount,
       fromWalletId: selectedWallet.id,
       notes: expenseDescription,
+      profileMode: mode, 
     };
     
-    await addTransaction(newTransaction as Transaction);
+    await addTransaction(newTransaction);
 
     toast.success("Expense recorded successfully");
     setIsSubmitting(false);
